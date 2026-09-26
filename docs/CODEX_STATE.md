@@ -1,14 +1,14 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-27（Phase 1 · P1-1 / P1-2 已验收；P1-3 代码就绪待验证）
+> 最后更新：2026-09-27（Phase 1 · P1-1 ~ P1-5 已完成并验收；下一步 P1-6 前端）
 > **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
 
 ## 1. 一句话状态
 
-**Phase 1 进行中：P1-1（骨架）、P1-2（Go 工具链 + 后端可编译）已完成并实测通过。**
-下一项 P1-3 需要 PostgreSQL / Redis 就绪（BOSS 执行方案 A 的安装命令）。
+**P1-1 ~ P1-5 全部完成并验收：骨架、Go 工具链、PG/Redis 连接、数据层（迁移+仓储）、项目管理 API（含 OpenAPI + Swagger UI）。**
+后端现在可以真实读写 PostgreSQL 里的工程数据；下一步 P1-6 做前端骨架与项目管理页。
 
 ---
 
@@ -29,11 +29,10 @@
 
 ## 3. 正在进行
 
-**P1-1 / P1-2 已验收。P1-3 代码写完并编译通过，但跑不起来——PostgreSQL / Redis 装好了却没启动。**
+**P1-1 ~ P1-5 全部完成。** 当前卡口只剩前端（P1-6）。
 
-> 现状：`psql 15.19` / `redis 7.0.15` 已安装，`pg_lsclusters` 显示 `15 main 5432 down`，
-> `systemctl is-active` 均为 `inactive`；两个服务都是 `enabled`（开机自启已配好），只是当下没启动。
-> 非 root 启动会报 `Interactive authentication required`，需要 BOSS 执行一次 root 启动。
+运行现状：PostgreSQL 15.19（集群 `15 main 5432 online`）与 Redis 7.0.15 均 active；
+业务账号 `novamind` 可登录；迁移版本 = 1（dirty=false）；`projects` 表 0 行（测试不残留）。
 
 ---
 
@@ -46,9 +45,9 @@
 |---|---|---|---|
 | ~~P1-1~~ ✅ | 仓库骨架 | `backend/ cmd+internal+migrations`、`prompts/`、`scripts/`、`docker/`、`.gitignore`、`README.md` | 目录与规格书 §50 一致；已提交 `0bc38a7` |
 | ~~P1-2~~ ✅ | Go 工具链与后端可编译 | `~/.local/go`（go1.26.8）+ `backend/go.mod` + `cmd/server/main.go` | `go build`/`go vet`/`gofmt` 通过；实测 health 200、404 统一包、trace_id 贯通 |
-| P1-3 | 配置与基础设施层 | `internal/infra`（Postgres 连接池 + Redis 客户端 + 健康检查）+ 接入 main | **代码就绪、编译通过；待服务启动后实测 health 显示 postgres/redis = ok** |
-| P1-4 | 数据层 | `projects` 表迁移（`0001_create_projects` 已写）+ `cmd/migrate` + `repository.ProjectRepo` | 迁移能从零重建；重复执行不报错；repo 单测通过 |
-| P1-5 | 项目管理 API | `GET/POST/GET:id/PUT:id/DELETE:id /api/v1/projects` + 统一响应/错误码 + 分页 + OpenAPI 文档 | API 测试全绿；`/swagger` 可访问 |
+| ~~P1-3~~ ✅ | 配置与基础设施层 | `internal/infra`（Postgres 连接池 + Redis 客户端 + 健康检查）+ 接入 main | 实测 health：`postgres=ok`、`redis=ok` |
+| ~~P1-4~~ ✅ | 数据层 | `projects` 迁移 + `cmd/migrate`(up/down/down-all/version/force) + `repository.ProjectRepo` | up 幂等、down 可回滚、可重建；13 个测试全绿；测试不污染库 |
+| ~~P1-5~~ ✅ | 项目管理 API | 5 端点 + 统一响应/错误码 + 分页 + OpenAPI + Swagger UI | 10 项端到端冒烟全过；防漂移测试守住文档与代码一致 |
 | P1-6 | 前端骨架 | Vite+React+TS+AntD+Zustand 工程 + 按 PRODUCT_SPEC §8 的空白路由 + `src/api` 客户端 + **项目管理页可增删改查** | 浏览器里能建项目→列表→改→删 |
 | P1-7 | 测试与收尾 | 后端 unit/service/API 测试、前端组件测试、`docs/CHANGELOG.md`、更新本文件 | 全部测试通过；三份文档状态刷新 |
 
@@ -61,14 +60,15 @@
 
 | 编号 | 问题 | 结论 | 状态 |
 |---|---|---|---|
-| P1 | 本地无 PostgreSQL / Redis，怎么装？ | **方案 A**：BOSS 执行 `sudo apt-get update && sudo apt-get install -y postgresql redis-server` | 已定，待 BOSS 执行 |
+| P1 | 本地无 PostgreSQL / Redis，怎么装？ | **方案 A**：BOSS 已装 PostgreSQL 15.19 + Redis 7.0.15，并用 `scripts/setup-local-db.sh` 建好账号与库 | ✅ 已完成 |
 | P2 | 项目目录位置 | **`/lzcapp/document/codex/novamindv2/`**（与 v1 平级），已迁移完成 | 已定 |
 | P3 | v1（`novamind-pro`）是否复用 | **不复用，全部重新做**；v1 只作为产品交互参考，一行不动 | 已定 |
 
 其他已知限制：
 
 * 本地无 Docker → `docker-compose.yml` 只能作为部署/CI 产物，本地验收必须不依赖它。
-* 系统 Go 1.19.8 偏旧，最新 Gin/GORM 依赖链要求更高版本 → 计划装 go1.24.x 到 `~/.local/go`，不动系统。
+* 系统 Go 1.19.8 偏旧 → 已装 **Go 1.26.8** 到 `~/.local/go`，项目专用，系统不动。
+* 依赖拉取偶发 TLS 超时 → 使用 `GOPROXY=https://goproxy.cn,direct`（已在开发脚本中说明）。
 
 ---
 
@@ -76,8 +76,9 @@
 
 | 子系统 | 状态 |
 |---|---|
-| 后端 | **骨架完成**（P1-1/P1-2）：config / domain.Project / api（统一响应+中间件+health）/ cmd/server；gin v1.12.0 + uuid v1.6.0 |
-| 数据库 | 未开始（无库、无迁移） |
+| 后端 | **P1-5 完成**：config / infra / domain / repository / service / api 六层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4 |
+| 数据库 | **P1-4 完成**：`projects` 表 + `schema_migrations`（版本 1）；迁移可 up/down/重建 |
+| API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
 | 前端 | 未开始（0 行） |
 | AI 模型 | 未接入；Phase 1 只做 Model Gateway 骨架与配置表，不接真实 Key（真实接入在 Phase 3） |
 | Prompt 库 | 目录规划完成，模板未写 |
@@ -108,3 +109,6 @@
 | 2026-09-27 | P1-2 完成：Go 1.26.8 装到 `~/.local/go`；后端骨架编译/vet/gofmt 通过；实测 `/api/v1/health` 200、统一 404、trace_id 贯通 |
 | 2026-09-27 | BOSS 执行方案 A：PostgreSQL 15.19 与 Redis 7.0.15 已安装（服务 enabled 但未启动） |
 | 2026-09-27 | P1-3 代码落地：`internal/infra` 的 Postgres/Redis 连接与健康检查，接入 main；编译/vet 通过。另写入 P1-4 迁移 `0001_create_projects` |
+| 2026-09-27 | P1-3 实测通过：health 返回 `postgres=ok` / `redis=ok`（BOSS 启动服务 + 执行 `scripts/setup-local-db.sh`） |
+| 2026-09-27 | P1-4 完成：迁移执行器 `cmd/migrate`、`repository.ProjectRepo`；验证 up 幂等 / down 回滚 / 重建；domain+repository 测试全绿且不污染库 |
+| 2026-09-27 | P1-5 完成：servcie+api 层、5 个端点、错误码翻译、DTO；OpenAPI 3.0.3 规范 + 内嵌 Swagger UI + 防漂移测试（含反向用例）；10 项端到端冒烟全过 |

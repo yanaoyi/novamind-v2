@@ -14,11 +14,20 @@ import (
 	"github.com/yanaoyi/novamindv2/backend/internal/api"
 	"github.com/yanaoyi/novamindv2/backend/internal/config"
 	"github.com/yanaoyi/novamindv2/backend/internal/infra"
+	"github.com/yanaoyi/novamindv2/backend/internal/repository"
+	"github.com/yanaoyi/novamindv2/backend/internal/service"
 )
 
 // version 由构建时注入：go build -ldflags "-X main.version=..."
 var version = "0.1.0-dev"
 
+// @title			NovaMind API
+// @version		0.1.0
+// @description	NovaMind V2 后端 API：原著分析 → 二创设计 → 写作 → 一致性检查。所有响应统一为 {data, error, trace_id}。
+// @BasePath		/api/v1
+// @schemes		http
+// @accept			json
+// @produce		json
 func main() {
 	if err := run(); err != nil {
 		slog.Error("服务退出", slog.Any("error", err))
@@ -39,6 +48,7 @@ func run() error {
 		Started: time.Now(),
 	}
 
+	var projects *service.ProjectService
 	// PostgreSQL：连接失败即启动失败（配置了就必须可用，避免"假装健康"）
 	if cfg.DatabaseURL == "" {
 		logger.Warn("DATABASE_URL 未配置，跳过 PostgreSQL 连接")
@@ -49,6 +59,7 @@ func run() error {
 		}
 		defer func() { _ = pg.Close() }()
 		deps.Postgres = pg.Health
+		projects = service.NewProjectService(repository.NewProjectRepo(pg.DB))
 		logger.Info("PostgreSQL 已连接")
 	}
 
@@ -65,7 +76,7 @@ func run() error {
 		logger.Info("Redis 已连接")
 	}
 
-	srv := api.NewServer(cfg, logger, deps)
+	srv := api.NewServer(cfg, logger, deps, projects)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

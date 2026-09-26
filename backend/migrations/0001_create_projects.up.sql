@@ -2,8 +2,8 @@
 -- 工程表（规格书 §7.1、§51）。
 -- 约定：UUID 主键、created_at/updated_at、软删除 deleted_at、枚举用 CHECK 约束。
 -- 本迁移必须可重复执行：使用 IF NOT EXISTS 与约束判空。
-
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- 说明：主键默认值使用 gen_random_uuid()，PG 13+ 已内置，无需 pgcrypto 扩展，
+--       因此业务账号（非超级用户）也能执行本迁移。
 
 CREATE TABLE IF NOT EXISTS projects (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -48,6 +48,8 @@ var (
 	ErrProjectNameTooLong  = errors.New("项目名称不能超过 200 个字符")
 	ErrProjectTypeInvalid  = errors.New("项目类型非法")
 	ErrProjectStatusBad    = errors.New("项目状态非法")
+	// ErrProjectNotFound 由 repository 在查不到记录时返回，api 层翻译为 404。
+	ErrProjectNotFound = errors.New("项目不存在")
 )
 
 // Project 是工程实体。

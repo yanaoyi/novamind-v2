@@ -1,0 +1,291 @@
+openapi: 3.0.3
+info:
+  title: NovaMind API
+  version: 0.1.0
+  description: |
+    NovaMind V2 后端 API。所有响应统一为 `{ data, error, trace_id }`：
+    - 成功：`data` 有值、`error` 为 null
+    - 失败：`data` 为 null、`error` 含 `code` / `message`
+    `trace_id` 与响应头 `X-Request-Id` 一致，可用于排查日志。
+servers:
+  - url: /api/v1
+    description: 当前服务
+tags:
+  - name: system
+    description: 系统与健康检查
+  - name: projects
+    description: 工程管理（原著 / 二创）
+paths:
+  /openapi.yaml:
+    get:
+      tags: [system]
+      summary: OpenAPI 规范
+      description: 返回本服务的 OpenAPI 3.0 规范；Swagger UI 位于 `/swagger/index.html`。
+      responses:
+        "200":
+          description: 规范文件（YAML）
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /health:
+    get:
+      tags: [system]
+      summary: 健康检查
+      description: 返回服务状态与各依赖（PostgreSQL / Redis）的真实连通性。
+      responses:
+        "200":
+          description: 全部依赖正常
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/HealthReport"
+        "503":
+          description: 存在不健康的依赖（degraded）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /projects:
+    get:
+      tags: [projects]
+      summary: 工程列表
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+        - name: type
+          in: query
+          schema: { type: string, enum: [ORIGINAL, CREATIVE] }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, ACTIVE, ARCHIVED] }
+        - name: keyword
+          in: query
+          description: 按名称模糊匹配
+          schema: { type: string }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ProjectList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags: [projects]
+      summary: 创建工程
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectCreateRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /projects/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [projects]
+      summary: 工程详情
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Project"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [projects]
+      summary: 更新工程
+      description: 更新名称 / 简介 / 状态。工程类型（type）创建后不可变更。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdateRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [projects]
+      summary: 删除工程
+      description: 软删除（写 deleted_at），不物理删除数据。
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted: { type: boolean, example: true }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  responses:
+    BadRequest:
+      description: 参数不合法
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+  schemas:
+    Envelope:
+      type: object
+      required: [data, error, trace_id]
+      properties:
+        data:
+          nullable: true
+          description: 成功时的业务数据；失败时为 null
+        error:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/APIError"
+        trace_id:
+          type: string
+          description: 与响应头 X-Request-Id 一致
+    APIError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: PROJECT_NOT_FOUND
+        message:
+          type: string
+          example: 项目不存在
+        details:
+          type: object
+          additionalProperties: true
+          nullable: true
+    Project:
+      type: object
+      required: [id, name, type, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 200, example: 人间真相 }
+        description: { type: string, example: 六个普通人的群像故事 }
+        type:
+          type: string
+          enum: [ORIGINAL, CREATIVE]
+          description: ORIGINAL=原著工程，CREATIVE=二创工程；创建后不可变更
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProjectList:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        page_size: { type: integer }
+    ProjectCreateRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, maxLength: 200, example: 人间真相 }
+        description: { type: string, example: 六个普通人的群像故事 }
+        type: { type: string, enum: [ORIGINAL, CREATIVE], example: CREATIVE }
+    ProjectUpdateRequest:
+      type: object
+      description: 缺省字段保持不变
+      properties:
+        name: { type: string, maxLength: 200 }
+        description: { type: string }
+        status: { type: string, enum: [DRAFT, ACTIVE, ARCHIVED] }
+    HealthReport:
+      type: object
+      required: [status, version, env, uptime_sec, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        version: { type: string, example: 0.1.0-dev }
+        env: { type: string, example: development }
+        uptime_sec: { type: integer, format: int64 }
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status: { type: string, enum: [ok, error, not_configured] }
+              detail: { type: string }

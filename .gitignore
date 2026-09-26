@@ -1,0 +1,37 @@
+# 依赖与构建产物
+node_modules/
+dist/
+.next/
+backend/bin/
+*.exe
+
+# 环境与密钥（严禁提交）
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# 运行时数据
+data/
+uploads/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Go
+go.work
+go.work.sum
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 测试与覆盖率
+coverage.out
+coverage.html
+.test-dist/
+tsconfig.tsbuildinfo

@@ -1,6 +1,6 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-27（Phase 1 · P1-1 / P1-2 已完成并通过验收）
+> 最后更新：2026-09-27（Phase 1 · P1-1 / P1-2 已验收；P1-3 代码就绪待验证）
 > **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
@@ -29,8 +29,11 @@
 
 ## 3. 正在进行
 
-**P1-1 仓库骨架、P1-2 Go 工具链与后端可编译 —— 已完成并验收。**
-**P1-3 起需要 PostgreSQL / Redis 就绪**（BOSS 执行方案 A 安装命令后即可继续）。
+**P1-1 / P1-2 已验收。P1-3 代码写完并编译通过，但跑不起来——PostgreSQL / Redis 装好了却没启动。**
+
+> 现状：`psql 15.19` / `redis 7.0.15` 已安装，`pg_lsclusters` 显示 `15 main 5432 down`，
+> `systemctl is-active` 均为 `inactive`；两个服务都是 `enabled`（开机自启已配好），只是当下没启动。
+> 非 root 启动会报 `Interactive authentication required`，需要 BOSS 执行一次 root 启动。
 
 ---
 
@@ -43,8 +46,8 @@
 |---|---|---|---|
 | ~~P1-1~~ ✅ | 仓库骨架 | `backend/ cmd+internal+migrations`、`prompts/`、`scripts/`、`docker/`、`.gitignore`、`README.md` | 目录与规格书 §50 一致；已提交 `0bc38a7` |
 | ~~P1-2~~ ✅ | Go 工具链与后端可编译 | `~/.local/go`（go1.26.8）+ `backend/go.mod` + `cmd/server/main.go` | `go build`/`go vet`/`gofmt` 通过；实测 health 200、404 统一包、trace_id 贯通 |
-| P1-3 | 配置与基础设施层 | 配置加载（env）+ PG 连接池 + Redis 连接 + 结构化日志（含 trace_id）+ `/api/v1/health`（报告 DB/Redis 状态） | `curl /api/v1/health` 返回各依赖真实状态 |
-| P1-4 | 数据层 | `projects` 表迁移（UUID、created_at/updated_at、软删除）+ `domain.Project` + `repository.ProjectRepo` | 迁移能从零重建；重复执行不报错；repo 单测通过 |
+| P1-3 | 配置与基础设施层 | `internal/infra`（Postgres 连接池 + Redis 客户端 + 健康检查）+ 接入 main | **代码就绪、编译通过；待服务启动后实测 health 显示 postgres/redis = ok** |
+| P1-4 | 数据层 | `projects` 表迁移（`0001_create_projects` 已写）+ `cmd/migrate` + `repository.ProjectRepo` | 迁移能从零重建；重复执行不报错；repo 单测通过 |
 | P1-5 | 项目管理 API | `GET/POST/GET:id/PUT:id/DELETE:id /api/v1/projects` + 统一响应/错误码 + 分页 + OpenAPI 文档 | API 测试全绿；`/swagger` 可访问 |
 | P1-6 | 前端骨架 | Vite+React+TS+AntD+Zustand 工程 + 按 PRODUCT_SPEC §8 的空白路由 + `src/api` 客户端 + **项目管理页可增删改查** | 浏览器里能建项目→列表→改→删 |
 | P1-7 | 测试与收尾 | 后端 unit/service/API 测试、前端组件测试、`docs/CHANGELOG.md`、更新本文件 | 全部测试通过；三份文档状态刷新 |
@@ -103,3 +106,5 @@
 | 2026-09-27 | 三项决策拍板：P1=A（BOSS 装 PG/Redis）、P2=目录移至 `codex/novamindv2/`（与 v1 平级）、P3=不复用 v1 代码。Phase 1 开工 |
 | 2026-09-27 | P1-1 仓库骨架完成（目录对齐规格书 §50，Git 首提交 `0bc38a7`） |
 | 2026-09-27 | P1-2 完成：Go 1.26.8 装到 `~/.local/go`；后端骨架编译/vet/gofmt 通过；实测 `/api/v1/health` 200、统一 404、trace_id 贯通 |
+| 2026-09-27 | BOSS 执行方案 A：PostgreSQL 15.19 与 Redis 7.0.15 已安装（服务 enabled 但未启动） |
+| 2026-09-27 | P1-3 代码落地：`internal/infra` 的 Postgres/Redis 连接与健康检查，接入 main；编译/vet 通过。另写入 P1-4 迁移 `0001_create_projects` |

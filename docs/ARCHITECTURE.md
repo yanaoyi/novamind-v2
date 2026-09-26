@@ -35,6 +35,7 @@ novamindv2/
 │   │   ├── api/               # HTTP handler、路由、中间件、DTO
 │   │   ├── config/            # 配置加载（env）
 │   │   ├── domain/            # 实体、枚举、领域规则（无外部依赖）
+│   │   ├── infra/             # 基础设施连接：PostgreSQL / Redis（只做连接与健康）
 │   │   ├── repository/        # 数据访问（GORM）
 │   │   ├── service/           # 业务编排
 │   │   ├── agent/             # 7 个 Agent 的实现

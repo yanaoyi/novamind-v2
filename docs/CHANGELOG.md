@@ -22,4 +22,17 @@
 
 ### 待办（下一步）
 
-- P1-3 配置与基础设施层：PostgreSQL 连接池、Redis 连接、真实健康检查 —— **阻塞于本机安装 PG/Redis（BOSS 执行方案 A）**
+- P1-3 配置与基础设施层：代码已完成（`internal/infra`），**阻塞于本机 PostgreSQL/Redis 服务未启动**
+
+### 2026-09-27 · P1-3 基础设施连接（代码就绪，待实测）
+
+- 新增 `internal/infra/postgres.go`：GORM + pgx 连接池，连接参数（最大连接 20 / 空闲 5 / 空闲超时 10m / 寿命 1h），带 3 次重试的连通性探测，`Health()` 供健康检查
+- 新增 `internal/infra/redis.go`：go-redis v9 客户端 + 重试探测 + `Health()`
+- `cmd/server` 接入：配置了就连（连不上直接启动失败，不"假装健康"）；未配置则跳过并告警
+- `backend/.env`（本机开发配置，已被 .gitignore 忽略）
+- 依赖新增：gorm v1.31.2、gorm.io/driver/postgres v1.6.3、redis/go-redis/v9 v9.22.0
+- 迁移 `0001_create_projects.up/down.sql`：UUID 主键、枚举 CHECK、软删除、4 个部分索引，可重复执行（`IF NOT EXISTS`）
+
+### 待办（下一步）
+
+- P1-3 实测：待 PostgreSQL / Redis 服务启动后，确认 `/api/v1/health` 中 postgres/redis = ok

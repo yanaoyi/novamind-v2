@@ -13,6 +13,7 @@ import (
 
 	"github.com/yanaoyi/novamindv2/backend/internal/api"
 	"github.com/yanaoyi/novamindv2/backend/internal/config"
+	"github.com/yanaoyi/novamindv2/backend/internal/infra"
 )
 
 // version 由构建时注入：go build -ldflags "-X main.version=..."
@@ -32,12 +33,39 @@ func run() error {
 	}
 	logger := newLogger(cfg)
 
-	srv := api.NewServer(cfg, logger, api.HealthDeps{
+	deps := api.HealthDeps{
 		Version: version,
 		Env:     cfg.AppEnv,
 		Started: time.Now(),
-		// PostgreSQL / Redis 检查函数在 P1-3 注入
-	})
+	}
+
+	// PostgreSQL：连接失败即启动失败（配置了就必须可用，避免"假装健康"）
+	if cfg.DatabaseURL == "" {
+		logger.Warn("DATABASE_URL 未配置，跳过 PostgreSQL 连接")
+	} else {
+		pg, err := infra.NewPostgres(context.Background(), cfg.DatabaseURL, cfg.LogLevel == "debug")
+		if err != nil {
+			return err
+		}
+		defer func() { _ = pg.Close() }()
+		deps.Postgres = pg.Health
+		logger.Info("PostgreSQL 已连接")
+	}
+
+	// Redis
+	if cfg.RedisAddr == "" {
+		logger.Warn("REDIS_ADDR 未配置，跳过 Redis 连接")
+	} else {
+		rdb, err := infra.NewRedis(context.Background(), cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rdb.Close() }()
+		deps.Redis = rdb.Health
+		logger.Info("Redis 已连接")
+	}
+
+	srv := api.NewServer(cfg, logger, deps)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

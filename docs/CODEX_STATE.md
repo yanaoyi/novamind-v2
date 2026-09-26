@@ -1,13 +1,14 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-27（Phase 0 结束 · 三项决策已定 · Phase 1 开工）
+> 最后更新：2026-09-27（Phase 1 · P1-1 / P1-2 已完成并通过验收）
 > **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
 
 ## 1. 一句话状态
 
-**Phase 0 完成，Phase 1 进行中。** 三项决策已拍板（见 §5），项目落在 `codex/novamindv2/`，按规格书全新实现，不复用 v1 代码。
+**Phase 1 进行中：P1-1（骨架）、P1-2（Go 工具链 + 后端可编译）已完成并实测通过。**
+下一项 P1-3 需要 PostgreSQL / Redis 就绪（BOSS 执行方案 A 的安装命令）。
 
 ---
 
@@ -20,13 +21,16 @@
 | 环境勘查 | Go 1.19.8（系统）/ Node v22.18.0 / npm 10.9.3 / Python 3.11.2；**无 PostgreSQL、无 Redis、无 Docker**；sudo 需密码；网络可达 Go/npm 源；磁盘剩 1.1T |
 | 目录建立 | 最终位置 `codex/novamindv2/`（与 v1 平级），`docs/` 已建 |
 | 治理文档 | `PRODUCT_SPEC.md`、`ARCHITECTURE.md`、本文件 已落盘 |
+| 仓库骨架（P1-1） | 目录结构对齐规格书 §50；`.gitignore` / `README.md` / `scripts/dev-env.sh` 就位；Git 仓库已初始化，首提交 `0bc38a7` |
+| Go 工具链（P1-2） | Go **1.26.8** 装在 `~/.local/go`（系统 1.19.8 不动） |
+| 后端骨架（P1-2） | `config` / `domain.Project` / `api`（统一响应+中间件+健康检查）/ `cmd/server`；`go build`+`go vet`+`gofmt` 全通过；服务实测 200 与统一 404 正常 |
 
 ---
 
 ## 3. 正在进行
 
-**Phase 1 进行中**：P1-1 仓库骨架、P1-2 Go 工具链与后端可编译。
-P1-3 起需要 PostgreSQL / Redis 就绪（BOSS 执行方案 A 安装）。
+**P1-1 仓库骨架、P1-2 Go 工具链与后端可编译 —— 已完成并验收。**
+**P1-3 起需要 PostgreSQL / Redis 就绪**（BOSS 执行方案 A 安装命令后即可继续）。
 
 ---
 
@@ -37,8 +41,8 @@ P1-3 起需要 PostgreSQL / Redis 就绪（BOSS 执行方案 A 安装）。
 
 | # | 任务 | 交付物 | 验收方式 |
 |---|---|---|---|
-| P1-1 | 仓库骨架 | `backend/ cmd+internal+migrations`、`frontend/`、`prompts/`、`scripts/`、`docker/`、`docker-compose.yml`、`.gitignore`、`README.md` | 目录与规格书 §50 一致；`git status` 干净 |
-| P1-2 | Go 工具链与后端可编译 | `~/.local/go`（go1.24.x）+ `backend/go.mod` + `cmd/server/main.go` | `go build ./...` 通过；进程能起并响应 |
+| ~~P1-1~~ ✅ | 仓库骨架 | `backend/ cmd+internal+migrations`、`prompts/`、`scripts/`、`docker/`、`.gitignore`、`README.md` | 目录与规格书 §50 一致；已提交 `0bc38a7` |
+| ~~P1-2~~ ✅ | Go 工具链与后端可编译 | `~/.local/go`（go1.26.8）+ `backend/go.mod` + `cmd/server/main.go` | `go build`/`go vet`/`gofmt` 通过；实测 health 200、404 统一包、trace_id 贯通 |
 | P1-3 | 配置与基础设施层 | 配置加载（env）+ PG 连接池 + Redis 连接 + 结构化日志（含 trace_id）+ `/api/v1/health`（报告 DB/Redis 状态） | `curl /api/v1/health` 返回各依赖真实状态 |
 | P1-4 | 数据层 | `projects` 表迁移（UUID、created_at/updated_at、软删除）+ `domain.Project` + `repository.ProjectRepo` | 迁移能从零重建；重复执行不报错；repo 单测通过 |
 | P1-5 | 项目管理 API | `GET/POST/GET:id/PUT:id/DELETE:id /api/v1/projects` + 统一响应/错误码 + 分页 + OpenAPI 文档 | API 测试全绿；`/swagger` 可访问 |
@@ -69,7 +73,7 @@ P1-3 起需要 PostgreSQL / Redis 就绪（BOSS 执行方案 A 安装）。
 
 | 子系统 | 状态 |
 |---|---|
-| 后端 | 未开始（0 行） |
+| 后端 | **骨架完成**（P1-1/P1-2）：config / domain.Project / api（统一响应+中间件+health）/ cmd/server；gin v1.12.0 + uuid v1.6.0 |
 | 数据库 | 未开始（无库、无迁移） |
 | 前端 | 未开始（0 行） |
 | AI 模型 | 未接入；Phase 1 只做 Model Gateway 骨架与配置表，不接真实 Key（真实接入在 Phase 3） |
@@ -97,3 +101,5 @@ P1-3 起需要 PostgreSQL / Redis 就绪（BOSS 执行方案 A 安装）。
 |---|---|
 | 2026-09-27 | Phase 0 完成：通读规格书、勘查 v1 与环境、建立 `novamindv2/`、落盘三份治理文档；提出 Phase 1 计划与 3 项待决策 |
 | 2026-09-27 | 三项决策拍板：P1=A（BOSS 装 PG/Redis）、P2=目录移至 `codex/novamindv2/`（与 v1 平级）、P3=不复用 v1 代码。Phase 1 开工 |
+| 2026-09-27 | P1-1 仓库骨架完成（目录对齐规格书 §50，Git 首提交 `0bc38a7`） |
+| 2026-09-27 | P1-2 完成：Go 1.26.8 装到 `~/.local/go`；后端骨架编译/vet/gofmt 通过；实测 `/api/v1/health` 200、统一 404、trace_id 贯通 |

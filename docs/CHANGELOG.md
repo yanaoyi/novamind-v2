@@ -78,3 +78,11 @@
 ### 待办（下一步：Phase 2）
 
 - Phase 2 原著系统：文件上传、文本解析、章节识别，以及 OriginalWork / OriginalChapter / OriginalCharacter / World / Timeline / Plot
+
+### 2026-09-27 · 运行方式修正（懒猫服务发布）
+
+- 问题：用一次性命令 `npm run dev &` 启的服务，工具会话一结束就被回收，懒猫微服报
+  `upstream http://127.0.0.1:5173 is not accepting connections`
+- 修复：新增 `scripts/dev-up.sh`（`setsid` + PID 文件 + 就绪检查）与 `scripts/dev-down.sh`；
+  前端 `vite.config.ts` 改为 `host: true`（监听 `0.0.0.0:5173`，代理能连上）+ `strictPort`
+- 验证：新会话复查，后端 PID 的 PPID = 1（已脱离会话），端口 `*:5173` / `127.0.0.1:8080` 正常，三条链路均 200

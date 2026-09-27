@@ -33,14 +33,21 @@ source scripts/dev-env.sh     # 把 ~/.local/go/bin 放到 PATH 最前
 
 ## 启动
 
-两条命令（各自一个终端）：
+**推荐**（后台运行、关掉终端也不会被杀，含就绪检查）：
 
 ```bash
-bash scripts/dev-backend.sh     # 后端 → http://127.0.0.1:8080
-bash scripts/dev-frontend.sh    # 前端 → http://127.0.0.1:5173
+bash scripts/dev-up.sh      # 启动前后端
+bash scripts/dev-down.sh    # 停止
+tail -f .run/backend.log    # 看日志（前端是 .run/frontend.log）
 ```
 
+也可以各开一个终端跑 `bash scripts/dev-backend.sh` / `bash scripts/dev-frontend.sh`（前台模式，方便看实时输出）。
+
 打开 **http://127.0.0.1:5173** 即可使用；前端开发服务器把 `/api` 代理到后端 8080，无需处理跨域。
+前端监听 `0.0.0.0:5173`（懒猫微服把服务发布出去时，代理需要能连上）。
+
+> 注意：不要用 `npm run dev &` 这种一次性写法——会话一结束进程就会被回收，
+> 懒猫那边会报 "upstream is not accepting connections"。用 `scripts/dev-up.sh`（内部用 `setsid` 脱离会话）。
 
 常用地址：
 

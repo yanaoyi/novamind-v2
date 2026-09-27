@@ -4,8 +4,11 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '127.0.0.1',
+    // 绑 0.0.0.0：懒猫微服把服务发布出去时，代理从容器内/外连都可能，
+    // 只绑 127.0.0.1 会出现 "upstream is not accepting connections" 之类的问题。
+    host: true,
     port: 5173,
+    strictPort: true,
     // 开发时把 /api 代理到后端，避免跨域配置
     proxy: {
       '/api': {

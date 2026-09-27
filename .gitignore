@@ -35,3 +35,6 @@ coverage.out
 coverage.html
 .test-dist/
 tsconfig.tsbuildinfo
+
+# 本地运行时（PID、日志、临时二进制）
+.run/

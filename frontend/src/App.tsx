@@ -8,6 +8,8 @@ import ChapterReaderPage from './pages/original/ChapterReaderPage'
 import OriginalCharactersPage from './pages/original/OriginalCharactersPage'
 import OriginalChaptersPage from './pages/original/OriginalChaptersPage'
 import OriginalOverviewPage from './pages/original/OriginalOverviewPage'
+import OriginalPlotPage from './pages/original/OriginalPlotPage'
+import OriginalTimelinePage from './pages/original/OriginalTimelinePage'
 import OriginalWorldPage from './pages/original/OriginalWorldPage'
 
 const { Header, Sider, Content } = Layout
@@ -115,10 +117,21 @@ export default function App() {
             <Route path="/original/world" element={<OriginalWorldPage key="world" defaultTab="rules" />} />
             <Route path="/original/locations" element={<OriginalWorldPage key="locations" defaultTab="locations" />} />
             <Route path="/original/factions" element={<OriginalWorldPage key="factions" defaultTab="factions" />} />
+            <Route path="/original/timeline" element={<OriginalTimelinePage />} />
+            <Route path="/original/plot" element={<OriginalPlotPage />} />
 
             {ORIGINAL_PAGES.filter(
               (p) =>
-                !['overview', 'chapters', 'characters', 'world', 'locations', 'factions'].includes(p.path),
+                ![
+                  'overview',
+                  'chapters',
+                  'characters',
+                  'world',
+                  'locations',
+                  'factions',
+                  'timeline',
+                  'plot',
+                ].includes(p.path),
             ).map((p) => (
               <Route
                 key={p.path}

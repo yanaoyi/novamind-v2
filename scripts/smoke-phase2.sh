@@ -49,6 +49,10 @@ PID=""
 CPID=""
 OID=""
 cleanup() {
+  [ -n "$OID" ] && psqlq "delete from timeline_events where timeline_id in (select id from original_timelines where original_work_id='$OID')" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from original_timelines where original_work_id='$OID'" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from plot_arcs where original_work_id='$OID'" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from original_events where original_work_id='$OID'" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from factions where world_id in (select id from original_worlds where original_work_id='$OID')" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from locations where world_id in (select id from original_worlds where original_work_id='$OID')" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from world_rules where world_id in (select id from original_worlds where original_work_id='$OID')" >/dev/null 2>&1
@@ -189,6 +193,45 @@ check "世界统计-势力" "1" "$(echo "$SUMMARY" | python3 -c 'import sys,json
 check "更新规则重要度" "4" "$(curl -sf -X PUT "$API/world-rules/$RID_W" -H 'Content-Type: application/json' -d '{"name":"灵力不可凭空产生","category":"力量体系","importance":4}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["importance"])')"
 check "删除势力（应 200）" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API/factions/$FACTION")"
 check "删除后势力数" "0" "$(curl -sf "$API/original/$OID/world" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["faction_count"])')"
+
+# ---------- 10. 事件 / 时间线 / 剧情弧 ----------
+echo "== 10. 事件 / 时间线 / 剧情弧"
+EVENT=$(curl -sf -X POST "$API/original/$OID/events" -H 'Content-Type: application/json' -d "{
+  \"title\":\"母亲的意外\",\"description\":\"糖厂夜里的那场火\",
+  \"chapter_no\":3,\"time_order\":10,\"participants\":[\"$CID_A\"],
+  \"location_text\":\"老糖厂\",\"consequences\":\"林默决定回江城\",\"importance\":5}")
+EID=$(echo "$EVENT" | getid)
+check "新增事件" "36" "${#EID}"
+check "事件重要度" "5" "$(echo "$EVENT" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["importance"])')"
+check "事件参与者" "1" "$(echo "$EVENT" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["data"]["participants"]))')"
+check "事件章节号" "3" "$(echo "$EVENT" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["chapter_no"])')"
+check "跨原著参与者（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/events" -H 'Content-Type: application/json' -d "{\"title\":\"越界事件\",\"participants\":[\"$CID_C\"]}")"
+check "空标题（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/events" -H 'Content-Type: application/json' -d '{"title":"   "}')"
+check "事件列表 total" "1" "$(curl -sf "$API/original/$OID/events" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+
+check "初始时间线条目" "0" "$(curl -sf "$API/original/$OID/timeline" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["data"]["entries"]))')"
+ORDERED=$(curl -sf -X PUT "$API/original/$OID/timeline" -H 'Content-Type: application/json' \
+  -d "{\"items\":[{\"event_id\":\"$EID\",\"time_label\":\"三年前·梅雨季\",\"duration\":\"两天\"}]}")
+check "加入时间线" "1" "$(echo "$ORDERED" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["data"]["entries"]))')"
+check "时间标签" "三年前·梅雨季" "$(echo "$ORDERED" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["entries"][0]["time_label"])')"
+check "条目序号从 1 开始" "1" "$(echo "$ORDERED" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["entries"][0]["sequence"])')"
+check "重复设置（幂等）" "1" "$(curl -sf -X PUT "$API/original/$OID/timeline" -H 'Content-Type: application/json' -d "{\"items\":[{\"event_id\":\"$EID\"}]}" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["data"]["entries"]))')"
+# 先在另一部原著里造一个事件，再尝试把它排进本原著的时间线
+EID2=$(curl -sf -X POST "$API/original/$OID2/events" -H 'Content-Type: application/json' -d '{"title":"异界事件"}' | getid)
+check "把别原著的事件排进时间线（应 404）" "404" "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$API/original/$OID/timeline" -H 'Content-Type: application/json' -d "{\"items\":[{\"event_id\":\"$EID2\"}]}")"
+
+ARC=$(curl -sf -X POST "$API/original/$OID/plot-arcs" -H 'Content-Type: application/json' \
+  -d "{\"type\":\"main\",\"title\":\"老城改造之争\",\"summary\":\"从母亲意外到真相揭开\",\"start_event_id\":\"$EID\"}")
+AID=$(echo "$ARC" | getid)
+check "新增剧情弧" "36" "${#AID}"
+check "剧情弧类型" "main" "$(echo "$ARC" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["type"])')"
+check "非法剧情弧类型（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/plot-arcs" -H 'Content-Type: application/json' -d '{"title":"坏线","type":"bogus"}')"
+check "剧情弧列表 total" "1" "$(curl -sf "$API/original/$OID/plot-arcs" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+check "更新剧情弧标题" "老城改造之争（修订）" "$(curl -sf -X PUT "$API/plot-arcs/$AID" -H 'Content-Type: application/json' -d '{"title":"老城改造之争（修订）","type":"main"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["title"])')"
+check "删除剧情弧（应 200）" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API/plot-arcs/$AID")"
+
+check "删除事件（应 200）" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API/events/$EID")"
+check "事件删除后时间线条目清空" "0" "$(curl -sf "$API/original/$OID/timeline" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["data"]["entries"]))')"
 
 # 清理第二部原著
 psqlq "delete from character_relationships where original_work_id='$OID2'" >/dev/null 2>&1

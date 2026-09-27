@@ -339,3 +339,91 @@ export interface ListOf<T> {
   items: T[]
   total: number
 }
+
+// ---------- 事件 / 时间线 / 剧情弧 ----------
+
+export interface OriginalEvent {
+  id: string
+  original_work_id: string
+  title: string
+  description: string
+  chapter_no: number | null
+  time_order: number
+  participants: string[]
+  location_id: string | null
+  location_text: string
+  consequences: string
+  importance: number
+  source: CharacterSource
+  created_at: string
+  updated_at: string
+}
+
+export interface EventInput {
+  title: string
+  description?: string
+  chapter_no?: number | null
+  time_order?: number
+  participants?: string[]
+  location_id?: string | null
+  location_text?: string
+  consequences?: string
+  importance?: number
+}
+
+export interface EventList {
+  items: OriginalEvent[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface TimelineItem {
+  event_id: string
+  time_label?: string
+  duration?: string
+}
+
+export interface TimelineEntry {
+  sequence: number
+  time_label: string
+  duration: string
+  event: OriginalEvent
+}
+
+export interface Timeline {
+  id: string
+  name: string
+  description: string
+  entries: TimelineEntry[]
+}
+
+export type PlotArcType = 'main' | 'subplot' | 'character_arc' | 'relationship_arc' | 'world_arc'
+
+export const PLOT_ARC_LABELS: Record<PlotArcType, string> = {
+  main: '主线',
+  subplot: '支线',
+  character_arc: '人物线',
+  relationship_arc: '感情线',
+  world_arc: '世界线',
+}
+
+export interface PlotArc {
+  id: string
+  original_work_id: string
+  type: PlotArcType
+  title: string
+  summary: string
+  start_event_id: string | null
+  end_event_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PlotArcInput {
+  type?: PlotArcType
+  title: string
+  summary?: string
+  start_event_id?: string | null
+  end_event_id?: string | null
+}

@@ -911,6 +911,265 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /original/{id}/events:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [events]
+      summary: 事件列表
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 100, maximum: 500 }
+        - name: keyword
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/EventList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [events]
+      summary: 新增事件
+      description: participants 与 location_id 必须属于同一部原著，否则 400。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /events/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [events]
+      summary: 事件详情
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Event"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [events]
+      summary: 更新事件
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [events]
+      summary: 删除事件
+      description: 同时移除该事件在时间线上的条目。
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/timeline:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [timeline]
+      summary: 时间线详情
+      description: 按顺序返回条目（含事件本体）；时间线不存在时自动创建空时间线。
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Timeline"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [timeline]
+      summary: 设置时间线顺序
+      description: 整体替换时间线条目（幂等）：传入顺序即最终顺序，未传入的事件会被移出时间线。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineOrderRequest"
+      responses:
+        "200":
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Timeline"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /original/{id}/plot-arcs:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [plot]
+      summary: 剧情弧列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlotArcList"
+    post:
+      tags: [plot]
+      summary: 新增剧情弧
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlotArcRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlotArc"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /plot-arcs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [plot]
+      summary: 更新剧情弧
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlotArcRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlotArc"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [plot]
+      summary: 删除剧情弧
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   responses:
     BadRequest:
@@ -1295,4 +1554,106 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Faction"
+        total: { type: integer }
+    EventRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, maxLength: 200, example: 母亲的意外 }
+        description: { type: string }
+        chapter_no: { type: integer, nullable: true, minimum: 1 }
+        time_order: { type: integer, description: 手工排序号，越小越靠前 }
+        participants: { type: array, items: { type: string, format: uuid } }
+        location_id: { type: string, format: uuid, nullable: true }
+        location_text: { type: string, example: 老糖厂 }
+        consequences: { type: string, example: 林默决定回江城 }
+        importance: { type: integer, minimum: 1, maximum: 5, default: 3 }
+    Event:
+      allOf:
+        - $ref: "#/components/schemas/EventRequest"
+        - type: object
+          required: [id, original_work_id, source, created_at, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            original_work_id: { type: string, format: uuid }
+            source: { type: string, enum: [MANUAL, AI] }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    EventList:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        page_size: { type: integer }
+    TimelineItem:
+      type: object
+      required: [event_id]
+      properties:
+        event_id: { type: string, format: uuid }
+        time_label: { type: string, example: 三年前·梅雨季 }
+        duration: { type: string, example: 两天 }
+    TimelineOrderRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: 数组顺序即时间线顺序
+          items:
+            $ref: "#/components/schemas/TimelineItem"
+    TimelineEntry:
+      allOf:
+        - $ref: "#/components/schemas/TimelineItem"
+        - type: object
+          required: [sequence, event]
+          properties:
+            sequence: { type: integer, minimum: 1 }
+            event:
+              $ref: "#/components/schemas/Event"
+    Timeline:
+      type: object
+      required: [id, name, entries]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEntry"
+    PlotArcRequest:
+      type: object
+      required: [title]
+      properties:
+        type:
+          type: string
+          enum: [main, subplot, character_arc, relationship_arc, world_arc]
+          default: main
+        title: { type: string, maxLength: 200, example: 老城改造之争 }
+        summary: { type: string }
+        start_event_id: { type: string, format: uuid, nullable: true }
+        end_event_id: { type: string, format: uuid, nullable: true }
+    PlotArc:
+      allOf:
+        - $ref: "#/components/schemas/PlotArcRequest"
+        - type: object
+          required: [id, original_work_id, created_at, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            original_work_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    PlotArcList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlotArc"
         total: { type: integer }

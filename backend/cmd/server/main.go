@@ -88,6 +88,14 @@ func run() error {
 		repository.NewOriginalWorldRepo(pg.DB),
 		originalRepo,
 	)
+	characterRepo := repository.NewOriginalCharacterRepo(pg.DB)
+	worldRepo := repository.NewOriginalWorldRepo(pg.DB)
+	events := service.NewOriginalEventService(
+		repository.NewOriginalEventRepo(pg.DB),
+		originalRepo,
+		characterRepo,
+		worldRepo,
+	)
 
 	// Redis
 	if cfg.RedisAddr == "" {
@@ -102,7 +110,7 @@ func run() error {
 		logger.Info("Redis 已连接")
 	}
 
-	srv := api.NewServer(cfg, logger, deps, projects, originals, characters, worlds)
+	srv := api.NewServer(cfg, logger, deps, projects, originals, characters, worlds, events)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

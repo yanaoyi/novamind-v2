@@ -289,6 +289,10 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "LOCATION_NOT_FOUND", true
 	case errors.Is(err, domain.ErrFactionNotFound):
 		return http.StatusNotFound, "FACTION_NOT_FOUND", true
+	case errors.Is(err, domain.ErrEventNotFound):
+		return http.StatusNotFound, "EVENT_NOT_FOUND", true
+	case errors.Is(err, domain.ErrPlotArcNotFound):
+		return http.StatusNotFound, "PLOT_ARC_NOT_FOUND", true
 	case errors.Is(err, domain.ErrOriginalAlreadyExists),
 		errors.Is(err, domain.ErrCharacterDuplicate),
 		errors.Is(err, domain.ErrRelationDuplicate),
@@ -317,6 +321,13 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrLocationSelfParent),
 		errors.Is(err, domain.ErrLocationCycle),
 		errors.Is(err, domain.ErrFactionNameEmpty),
+		errors.Is(err, domain.ErrEventTitleEmpty),
+		errors.Is(err, domain.ErrEventImportance),
+		errors.Is(err, domain.ErrEventChapterNo),
+		errors.Is(err, domain.ErrEventParticipant),
+		errors.Is(err, domain.ErrTimelineOrderBad),
+		errors.Is(err, domain.ErrPlotArcTitleEmpty),
+		errors.Is(err, domain.ErrPlotArcTypeInvalid),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

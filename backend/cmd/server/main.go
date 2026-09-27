@@ -142,6 +142,8 @@ func run() error {
 		projectRepo,
 		originalRepo,
 		characterRepo,
+		repository.NewOriginalWorldRepo(pg.DB),
+		repository.NewOriginalEventRepo(pg.DB),
 	)
 
 	// Redis

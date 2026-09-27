@@ -369,6 +369,30 @@ PUT|DELETE     /plot-arcs/{id}
 - 端到端冒烟 `scripts/smoke-phase4.sh`：**33 项全过** —— 建原著人物（带 DNA）→ 建二创作品 → 按权重继承（逐一核对 72 / 64 / 12 / 0 四个派生结果）→ 回读继承权重 → 融合并核对维度归属 → 映射 4 条（2 继承 + 2 融合）→ 原创人物无来源 → 5 类错误场景（跨原著继承 400、全 0 权重 400、单来源融合 400、同工程重复建二创 409、给原著工程建二创 400）→ **锁定后拒绝被重新继承（409），解锁后重新继承权重重新算成 45**
 - **冒烟抓到并修复一个静默数据错误**：GORM 对带 `default` 标签的字段会把零值从 INSERT 里省略、交给数据库默认值 —— 继承权重里的「能力 0」（表示不继承）被默认值 100 顶替成「完全继承」。去掉该标签后 0 忠实落库
 
+### 2026-09-27 · P4-2 二创世界 + P4-3 分叉点与二创时间线
+
+**数据模型**（迁移 `0010`）
+
+| 表 | 说明 |
+|---|---|
+| `creative_worlds` | 二创世界：继承模式 `FULL` / `PARTIAL` / `MODIFIED` / `NEW`，指向来源世界 |
+| `creative_world_rules` | 二创世界规则：状态 `INHERITED` / `MODIFIED` / `REMOVED` / `NEW`，保留 `source_rule_id` 追溯 |
+| `divergence_points` | 分叉点：指向原著事件或章节 + 时间标签与说明 |
+| `creative_timeline_events` | 二创时间线：`INHERITED` / `MODIFIED` / `NEW` / `REMOVED`，记录来源原著事件 |
+
+**关键设计**
+
+1. **继承世界时整套带规则**：`FULL` / `PARTIAL` 会把原著规则逐条复制成 `INHERITED`；`MODIFIED` / `NEW` 先建空世界，由作者自己填。
+2. **"删除"继承规则不是物理删除**：在二创里删掉一条原著规则时标记为 `REMOVED` 并写映射（`REMOVED`），这样"作者决定不要这条设定"本身也是可追溯的信息；纯新增的规则才真删。
+3. **分叉点必须指向本原著**：设置分叉点时会校验事件属于该二创作品所依据的原著，跨原著直接 400。
+4. **时间线按分叉点自动切分**：`POST /creative/{id}/timeline/build` 把**分叉点（含）之前**的原著事件按序继承为 `INHERITED`，分叉点之后的不继承（留给二创自己写）；**重新构建不会覆盖作者已有的二创新事件**（它们被保留在末尾）。
+
+**API**（11 个）：`GET|PUT /creative/{id}/world`、`POST /creative/{id}/world/inherit`、`POST /creative/{id}/world/rules`、`PUT|DELETE /creative-world-rules/{id}`、`GET|PUT /creative/{id}/divergence`、`GET|PUT /creative/{id}/timeline`、`POST /creative/{id}/timeline/build`
+
+**验证**：端到端冒烟 `scripts/smoke-phase4b.sh` **32 项全过** —— 继承世界（规则 2 条 INHERITED）→ 改 1 条（MODIFIED）/ 新增 1 条（NEW）/ 删 1 条（REMOVED，且仍在列表里可追溯、统计 `1,1,1`）→ 分叉点（含"没指向"400 与跨原著 400）→ 自动构建时间线（只继承分叉点及之前 2 条，分叉点之后的"真相揭开"未被继承）→ 手工追加二创新事件后重新构建（**总数 3、二创事件被保留在末尾**）→ 映射覆盖世界/事件/规则删除三类
+
+**冒烟抓到并修复两个真 bug**：① 世界还没建时 `/creative/{id}/world` 空指针 → 500（改为返回空壳）；② 时间线继承时写入映射用了内存里的空 ID（真实 ID 由替换操作生成）→ SQL 报"无效的 uuid"，改为**回读后按来源事件 ID 匹配真实条目 ID**；另外把"查不存在的二创作品"从 200 空壳改成 404
+
 ### 2026-09-27 · P3-3 分析流水线 + AI 提案与作者审核（Phase 3 核心）
 
 **把规格书 §52 那条红线做成了数据库事实**：AI 产出**只写入 `analysis_proposals` 提案表**，作者审核通过后才写进原著正式表；两者在同一事务内完成，不存在"审核过了但没写进去"或反之的中间态。

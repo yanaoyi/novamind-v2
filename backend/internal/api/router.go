@@ -126,6 +126,21 @@ func (s *Server) Router() *gin.Engine {
 			creative.POST("/:id/characters/new", s.createNewCreativeCharacter)
 			creative.POST("/:id/characters/fuse", s.fuseCreativeCharacters)
 			creative.GET("/:id/mappings", s.listCreativeMappings)
+			// 二创世界 / 分叉点 / 二创时间线（规格书 §21-§25）
+			creative.GET("/:id/world", s.getCreativeWorld)
+			creative.PUT("/:id/world", s.updateCreativeWorld)
+			creative.POST("/:id/world/inherit", s.inheritCreativeWorld)
+			creative.POST("/:id/world/rules", s.createCreativeWorldRule)
+			creative.GET("/:id/divergence", s.getDivergence)
+			creative.PUT("/:id/divergence", s.setDivergence)
+			creative.GET("/:id/timeline", s.getCreativeTimeline)
+			creative.PUT("/:id/timeline", s.setCreativeTimeline)
+			creative.POST("/:id/timeline/build", s.buildCreativeTimeline)
+		}
+		creativeWorldRules := v1.Group("/creative-world-rules")
+		{
+			creativeWorldRules.PUT("/:id", s.updateCreativeWorldRule)
+			creativeWorldRules.DELETE("/:id", s.deleteCreativeWorldRule)
 		}
 		creativeCharacters := v1.Group("/creative-characters")
 		{

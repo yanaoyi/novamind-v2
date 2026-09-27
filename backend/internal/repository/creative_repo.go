@@ -466,6 +466,386 @@ func (r *CreativeRepo) DeleteMapping(ctx context.Context, id string) error {
 
 // ---------- 转换 ----------
 
+// ---------- 二创世界 / 规则 / 分叉点 / 时间线 ----------
+
+type creativeWorldModel struct {
+	ID              string         `gorm:"column:id;type:uuid;primaryKey"`
+	CreativeWorkID  string         `gorm:"column:creative_work_id;type:uuid;not null"`
+	SourceWorldID   *string        `gorm:"column:source_world_id;type:uuid"`
+	InheritanceMode string         `gorm:"column:inheritance_mode;size:10;not null"`
+	Name            string         `gorm:"column:name;size:200;not null;default:''"`
+	Description     string         `gorm:"column:description;not null;default:''"`
+	CreatedAt       time.Time      `gorm:"column:created_at;not null"`
+	UpdatedAt       time.Time      `gorm:"column:updated_at;not null"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index"`
+}
+
+func (creativeWorldModel) TableName() string { return "creative_worlds" }
+
+type creativeWorldRuleModel struct {
+	ID              string         `gorm:"column:id;type:uuid;primaryKey"`
+	CreativeWorldID string         `gorm:"column:creative_world_id;type:uuid;not null"`
+	SourceRuleID    *string        `gorm:"column:source_rule_id;type:uuid"`
+	Status          string         `gorm:"column:status;size:12;not null"`
+	Category        string         `gorm:"column:category;size:60;not null;default:''"`
+	Name            string         `gorm:"column:name;size:200;not null"`
+	Description     string         `gorm:"column:description;not null;default:''"`
+	Importance      int            `gorm:"column:importance;not null"`
+	CreatedAt       time.Time      `gorm:"column:created_at;not null"`
+	UpdatedAt       time.Time      `gorm:"column:updated_at;not null"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index"`
+}
+
+func (creativeWorldRuleModel) TableName() string { return "creative_world_rules" }
+
+type divergenceModel struct {
+	ID                string         `gorm:"column:id;type:uuid;primaryKey"`
+	CreativeWorkID    string         `gorm:"column:creative_work_id;type:uuid;not null"`
+	OriginalChapterID *string        `gorm:"column:original_chapter_id;type:uuid"`
+	OriginalEventID   *string        `gorm:"column:original_event_id;type:uuid"`
+	TimeLabel         string         `gorm:"column:time_label;size:120;not null;default:''"`
+	Description       string         `gorm:"column:description;not null;default:''"`
+	CreatedAt         time.Time      `gorm:"column:created_at;not null"`
+	UpdatedAt         time.Time      `gorm:"column:updated_at;not null"`
+	DeletedAt         gorm.DeletedAt `gorm:"column:deleted_at;index"`
+}
+
+func (divergenceModel) TableName() string { return "divergence_points" }
+
+type creativeTimelineModel struct {
+	ID                    string         `gorm:"column:id;type:uuid;primaryKey"`
+	CreativeWorkID        string         `gorm:"column:creative_work_id;type:uuid;not null"`
+	SourceOriginalEventID *string        `gorm:"column:source_original_event_id;type:uuid"`
+	Status                string         `gorm:"column:status;size:12;not null"`
+	Sequence              int            `gorm:"column:sequence;not null"`
+	TimeLabel             string         `gorm:"column:time_label;size:120;not null;default:''"`
+	Title                 string         `gorm:"column:title;size:200;not null"`
+	Description           string         `gorm:"column:description;not null;default:''"`
+	CreatedAt             time.Time      `gorm:"column:created_at;not null"`
+	UpdatedAt             time.Time      `gorm:"column:updated_at;not null"`
+	DeletedAt             gorm.DeletedAt `gorm:"column:deleted_at;index"`
+}
+
+func (creativeTimelineModel) TableName() string { return "creative_timeline_events" }
+
+// UpsertWorld 创建/更新二创世界（一个二创作品一个世界）。
+func (r *CreativeRepo) UpsertWorld(ctx context.Context, w *domain.CreativeWorld) error {
+	if _, err := uuid.Parse(w.CreativeWorkID); err != nil {
+		return domain.ErrCreativeNotFound
+	}
+	var existing creativeWorldModel
+	err := r.db.WithContext(ctx).First(&existing, "creative_work_id = ?", w.CreativeWorkID).Error
+	now := time.Now().UTC()
+
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		id, genErr := uuid.NewV7()
+		if genErr != nil {
+			return fmt.Errorf("生成二创世界 ID 失败: %w", genErr)
+		}
+		w.ID = id.String()
+		w.CreatedAt, w.UpdatedAt = now, now
+		m := creativeWorldModel{
+			ID: w.ID, CreativeWorkID: w.CreativeWorkID, SourceWorldID: w.SourceWorldID,
+			InheritanceMode: string(w.InheritanceMode), Name: w.Name, Description: w.Description,
+			CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt,
+		}
+		if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
+			if isForeignKeyViolation(err) {
+				return domain.ErrCreativeNotFound
+			}
+			return fmt.Errorf("创建二创世界失败: %w", err)
+		}
+		return nil
+	case err != nil:
+		return fmt.Errorf("查询二创世界失败: %w", err)
+	}
+
+	updates := map[string]any{
+		"inheritance_mode": string(w.InheritanceMode),
+		"name":             w.Name,
+		"description":      w.Description,
+		"updated_at":       now,
+	}
+	if w.SourceWorldID != nil {
+		updates["source_world_id"] = *w.SourceWorldID
+	}
+	if err := r.db.WithContext(ctx).Model(&creativeWorldModel{}).Where("id = ?", existing.ID).Updates(updates).Error; err != nil {
+		return fmt.Errorf("更新二创世界失败: %w", err)
+	}
+	w.ID = existing.ID
+	w.CreatedAt = existing.CreatedAt
+	w.UpdatedAt = now
+	return nil
+}
+
+// GetWorld 按二创作品取世界。
+func (r *CreativeRepo) GetWorld(ctx context.Context, creativeWorkID string) (*domain.CreativeWorld, error) {
+	if _, err := uuid.Parse(creativeWorkID); err != nil {
+		return nil, domain.ErrCreativeWorldNotFound
+	}
+	var m creativeWorldModel
+	if err := r.db.WithContext(ctx).First(&m, "creative_work_id = ?", creativeWorkID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrCreativeWorldNotFound
+		}
+		return nil, fmt.Errorf("查询二创世界失败: %w", err)
+	}
+	w := domain.CreativeWorld{
+		ID: m.ID, CreativeWorkID: m.CreativeWorkID, SourceWorldID: m.SourceWorldID,
+		InheritanceMode: domain.WorldInheritanceMode(m.InheritanceMode),
+		Name:            m.Name, Description: m.Description,
+		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+	}
+	return &w, nil
+}
+
+// GetWorkIDByCreativeWorld 由二创世界反查它所属的二创作品。
+func (r *CreativeRepo) GetWorkIDByCreativeWorld(ctx context.Context, creativeWorldID string) (string, error) {
+	if _, err := uuid.Parse(creativeWorldID); err != nil {
+		return "", domain.ErrCreativeWorldNotFound
+	}
+	var m creativeWorldModel
+	if err := r.db.WithContext(ctx).Select("id, creative_work_id").
+		First(&m, "id = ?", creativeWorldID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", domain.ErrCreativeWorldNotFound
+		}
+		return "", fmt.Errorf("反查二创作品失败: %w", err)
+	}
+	return m.CreativeWorkID, nil
+}
+
+// CreateWorldRule 新增二创世界规则。
+func (r *CreativeRepo) CreateWorldRule(ctx context.Context, rule *domain.CreativeWorldRule) error {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("生成二创规则 ID 失败: %w", err)
+	}
+	rule.ID = id.String()
+	now := time.Now().UTC()
+	rule.CreatedAt, rule.UpdatedAt = now, now
+	m := creativeWorldRuleModel{
+		ID: rule.ID, CreativeWorldID: rule.CreativeWorldID, SourceRuleID: rule.SourceRuleID,
+		Status: string(rule.Status), Category: rule.Category, Name: rule.Name,
+		Description: rule.Description, Importance: rule.Importance,
+		CreatedAt: rule.CreatedAt, UpdatedAt: rule.UpdatedAt,
+	}
+	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
+		if isUniqueViolation(err) {
+			return domain.ErrCreativeWorldRuleDup
+		}
+		if isForeignKeyViolation(err) {
+			return domain.ErrCreativeWorldNotFound
+		}
+		return fmt.Errorf("创建二创规则失败: %w", err)
+	}
+	return nil
+}
+
+// ListWorldRules 列出二创世界规则。
+func (r *CreativeRepo) ListWorldRules(ctx context.Context, creativeWorldID string) ([]domain.CreativeWorldRule, error) {
+	var models []creativeWorldRuleModel
+	if err := r.db.WithContext(ctx).Where("creative_world_id = ?", creativeWorldID).
+		Order("importance DESC, created_at ASC").Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("查询二创规则失败: %w", err)
+	}
+	out := make([]domain.CreativeWorldRule, 0, len(models))
+	for _, m := range models {
+		out = append(out, toDomainCreativeWorldRule(m))
+	}
+	return out, nil
+}
+
+// GetWorldRule 取二创规则。
+func (r *CreativeRepo) GetWorldRule(ctx context.Context, id string) (*domain.CreativeWorldRule, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, domain.ErrCreativeWorldRuleNotFound
+	}
+	var m creativeWorldRuleModel
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrCreativeWorldRuleNotFound
+		}
+		return nil, fmt.Errorf("查询二创规则失败: %w", err)
+	}
+	rule := toDomainCreativeWorldRule(m)
+	return &rule, nil
+}
+
+// UpdateWorldRule 更新二创规则。
+func (r *CreativeRepo) UpdateWorldRule(ctx context.Context, rule *domain.CreativeWorldRule) error {
+	now := time.Now().UTC()
+	res := r.db.WithContext(ctx).Model(&creativeWorldRuleModel{}).Where("id = ?", rule.ID).Updates(map[string]any{
+		"status": string(rule.Status), "category": rule.Category, "name": rule.Name,
+		"description": rule.Description, "importance": rule.Importance, "updated_at": now,
+	})
+	if res.Error != nil {
+		if isUniqueViolation(res.Error) {
+			return domain.ErrCreativeWorldRuleDup
+		}
+		return fmt.Errorf("更新二创规则失败: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		if _, err := r.GetWorldRule(ctx, rule.ID); err != nil {
+			return err
+		}
+	}
+	rule.UpdatedAt = now
+	return nil
+}
+
+// DeleteWorldRule 软删除二创规则。
+func (r *CreativeRepo) DeleteWorldRule(ctx context.Context, id string) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return domain.ErrCreativeWorldRuleNotFound
+	}
+	res := r.db.WithContext(ctx).Where("id = ?", id).Delete(&creativeWorldRuleModel{})
+	if res.Error != nil {
+		return fmt.Errorf("删除二创规则失败: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return domain.ErrCreativeWorldRuleNotFound
+	}
+	return nil
+}
+
+// UpsertDivergence 创建/更新分叉点。
+func (r *CreativeRepo) UpsertDivergence(ctx context.Context, d *domain.DivergencePoint) error {
+	if _, err := uuid.Parse(d.CreativeWorkID); err != nil {
+		return domain.ErrCreativeNotFound
+	}
+	var existing divergenceModel
+	err := r.db.WithContext(ctx).First(&existing, "creative_work_id = ?", d.CreativeWorkID).Error
+	now := time.Now().UTC()
+
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		id, genErr := uuid.NewV7()
+		if genErr != nil {
+			return fmt.Errorf("生成分叉点 ID 失败: %w", genErr)
+		}
+		d.ID = id.String()
+		d.CreatedAt, d.UpdatedAt = now, now
+		m := divergenceModel{
+			ID: d.ID, CreativeWorkID: d.CreativeWorkID,
+			OriginalChapterID: d.OriginalChapterID, OriginalEventID: d.OriginalEventID,
+			TimeLabel: d.TimeLabel, Description: d.Description,
+			CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
+		}
+		if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
+			if isForeignKeyViolation(err) {
+				return domain.ErrDivergenceSourceInvalid
+			}
+			return fmt.Errorf("创建分叉点失败: %w", err)
+		}
+		return nil
+	case err != nil:
+		return fmt.Errorf("查询分叉点失败: %w", err)
+	}
+
+	if err := r.db.WithContext(ctx).Model(&divergenceModel{}).Where("id = ?", existing.ID).Updates(map[string]any{
+		"original_chapter_id": d.OriginalChapterID, "original_event_id": d.OriginalEventID,
+		"time_label": d.TimeLabel, "description": d.Description, "updated_at": now,
+	}).Error; err != nil {
+		return fmt.Errorf("更新分叉点失败: %w", err)
+	}
+	d.ID = existing.ID
+	d.CreatedAt = existing.CreatedAt
+	d.UpdatedAt = now
+	return nil
+}
+
+// GetDivergence 取分叉点。
+func (r *CreativeRepo) GetDivergence(ctx context.Context, creativeWorkID string) (*domain.DivergencePoint, error) {
+	if _, err := uuid.Parse(creativeWorkID); err != nil {
+		return nil, domain.ErrDivergenceNotFound
+	}
+	var m divergenceModel
+	if err := r.db.WithContext(ctx).First(&m, "creative_work_id = ?", creativeWorkID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrDivergenceNotFound
+		}
+		return nil, fmt.Errorf("查询分叉点失败: %w", err)
+	}
+	d := domain.DivergencePoint{
+		ID: m.ID, CreativeWorkID: m.CreativeWorkID,
+		OriginalChapterID: m.OriginalChapterID, OriginalEventID: m.OriginalEventID,
+		TimeLabel: m.TimeLabel, Description: m.Description,
+		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+	}
+	return &d, nil
+}
+
+// ReplaceTimeline 用给定顺序整体替换二创时间线（单事务，幂等）。
+func (r *CreativeRepo) ReplaceTimeline(ctx context.Context, creativeWorkID string, events []domain.CreativeTimelineEvent) error {
+	if _, err := uuid.Parse(creativeWorkID); err != nil {
+		return domain.ErrCreativeNotFound
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("creative_work_id = ?", creativeWorkID).Delete(&creativeTimelineModel{}).Error; err != nil {
+			return fmt.Errorf("清理旧二创时间线失败: %w", err)
+		}
+		now := time.Now().UTC()
+		models := make([]creativeTimelineModel, 0, len(events))
+		for i, e := range events {
+			id, err := uuid.NewV7()
+			if err != nil {
+				return fmt.Errorf("生成二创时间线 ID 失败: %w", err)
+			}
+			models = append(models, creativeTimelineModel{
+				ID: id.String(), CreativeWorkID: creativeWorkID, SourceOriginalEventID: e.SourceOriginalEventID,
+				Status: string(e.Status), Sequence: i + 1, TimeLabel: e.TimeLabel,
+				Title: e.Title, Description: e.Description, CreatedAt: now, UpdatedAt: now,
+			})
+		}
+		if len(models) > 0 {
+			if err := tx.CreateInBatches(&models, 200).Error; err != nil {
+				if isUniqueViolation(err) {
+					return fmt.Errorf("%w：同一条原著事件被重复继承", domain.ErrCreativeTimelineBad)
+				}
+				return fmt.Errorf("写入二创时间线失败: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// ListTimeline 列出二创时间线。
+func (r *CreativeRepo) ListTimeline(ctx context.Context, creativeWorkID string) ([]domain.CreativeTimelineEvent, error) {
+	if _, err := uuid.Parse(creativeWorkID); err != nil {
+		return nil, domain.ErrCreativeNotFound
+	}
+	var models []creativeTimelineModel
+	if err := r.db.WithContext(ctx).Where("creative_work_id = ?", creativeWorkID).
+		Order("sequence ASC").Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("查询二创时间线失败: %w", err)
+	}
+	out := make([]domain.CreativeTimelineEvent, 0, len(models))
+	for _, m := range models {
+		out = append(out, toDomainCreativeTimeline(m))
+	}
+	return out, nil
+}
+
+func toDomainCreativeWorldRule(m creativeWorldRuleModel) domain.CreativeWorldRule {
+	return domain.CreativeWorldRule{
+		ID: m.ID, CreativeWorldID: m.CreativeWorldID, SourceRuleID: m.SourceRuleID,
+		Status: domain.CreativeWorldRuleStatus(m.Status), Category: m.Category,
+		Name: m.Name, Description: m.Description, Importance: m.Importance,
+		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+	}
+}
+
+func toDomainCreativeTimeline(m creativeTimelineModel) domain.CreativeTimelineEvent {
+	return domain.CreativeTimelineEvent{
+		ID: m.ID, CreativeWorkID: m.CreativeWorkID, SourceOriginalEventID: m.SourceOriginalEventID,
+		Status: domain.CreativeTimelineEventStatus(m.Status), Sequence: m.Sequence,
+		TimeLabel: m.TimeLabel, Title: m.Title, Description: m.Description,
+		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+	}
+}
+
 func toDomainCreativeWork(m creativeWorkModel) domain.CreativeWork {
 	w := domain.CreativeWork{
 		ID: m.ID, ProjectID: m.ProjectID, OriginalWorkID: m.OriginalWorkID,

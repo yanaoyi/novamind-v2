@@ -2062,6 +2062,292 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /creative/{id}/world:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [creative]
+      summary: 二创世界详情
+      description: 未建世界时返回空壳（id 为 null），便于前端渲染"去继承"入口。
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeWorld" }
+    put:
+      tags: [creative]
+      summary: 更新二创世界
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                inheritance_mode: { type: string, enum: [FULL, PARTIAL, MODIFIED, NEW] }
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeWorld" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative/{id}/world/inherit:
+    post:
+      tags: [creative]
+      summary: 继承原著世界
+      description: FULL/PARTIAL 会把原著规则整套带过来（INHERITED），作者再逐条改；MODIFIED/NEW 先建空世界。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { type: string, enum: [FULL, PARTIAL, MODIFIED, NEW], example: PARTIAL }
+      responses:
+        "200":
+          description: 继承成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeWorld" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /creative/{id}/world/rules:
+    post:
+      tags: [creative]
+      summary: 新增二创世界规则
+      description: 不带 source_rule_id 视为 NEW；带上则视为从该原著规则改出来的 MODIFIED。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreativeWorldRuleRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeWorldRule" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /creative-world-rules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [creative]
+      summary: 更新二创世界规则
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreativeWorldRuleRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeWorldRule" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [creative]
+      summary: 在二创里删掉一条规则
+      description: 继承来的规则标记为 REMOVED 并写映射；纯新增的直接删除。
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative/{id}/divergence:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [creative]
+      summary: 分叉点详情
+      responses:
+        "200":
+          description: 查询成功（未设置时 data 为 null）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/DivergencePoint" }
+    put:
+      tags: [creative]
+      summary: 设置分叉点
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                original_event_id: { type: string, format: uuid }
+                original_chapter_id: { type: string, format: uuid }
+                time_label: { type: string, example: 三年前·梅雨季 }
+                description: { type: string }
+      responses:
+        "200":
+          description: 设置成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/DivergencePoint" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /creative/{id}/timeline:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [creative]
+      summary: 二创时间线
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: "#/components/schemas/CreativeTimelineEvent" } }
+                          total: { type: integer }
+    put:
+      tags: [creative]
+      summary: 保存二创时间线
+      description: 整体替换（幂等）：传入顺序即最终顺序。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "#/components/schemas/CreativeTimelineItem" }
+      responses:
+        "200":
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: "#/components/schemas/CreativeTimelineEvent" } }
+                          total: { type: integer }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /creative/{id}/timeline/build:
+    post:
+      tags: [creative]
+      summary: 自动构建二创时间线
+      description: 把分叉点（含）之前的原著事件按序继承过来，并保留作者已有的二创新事件。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 构建完成
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: "#/components/schemas/CreativeTimelineEvent" } }
+                          total: { type: integer }
+
 components:
   responses:
     BadRequest:
@@ -2790,3 +3076,68 @@ components:
           enum: [INHERITED, MODIFIED, REPLACED, FUSED, REMOVED, NEW]
         description: { type: string }
         created_at: { type: string, format: date-time }
+    CreativeWorldRuleRequest:
+      type: object
+      required: [name]
+      properties:
+        category: { type: string, example: 社会规则 }
+        name: { type: string, example: 老城区的人情规则 }
+        description: { type: string }
+        importance: { type: integer, minimum: 1, maximum: 5, default: 3 }
+        status: { type: string, enum: [INHERITED, MODIFIED, REMOVED, NEW] }
+        source_rule_id: { type: string, format: uuid, nullable: true }
+    CreativeWorldRule:
+      allOf:
+        - $ref: "#/components/schemas/CreativeWorldRuleRequest"
+        - type: object
+          required: [id, status]
+          properties:
+            id: { type: string, format: uuid }
+    CreativeWorld:
+      type: object
+      required: [creative_work_id, inheritance_mode, rules]
+      properties:
+        id: { type: string, format: uuid, nullable: true, description: 未建世界时为 null }
+        creative_work_id: { type: string, format: uuid }
+        source_world_id: { type: string, format: uuid, nullable: true }
+        inheritance_mode: { type: string, enum: [FULL, PARTIAL, MODIFIED, NEW] }
+        name: { type: string }
+        description: { type: string }
+        inherited_count: { type: integer }
+        modified_count: { type: integer }
+        removed_count: { type: integer }
+        new_count: { type: integer }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/CreativeWorldRule" }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+    DivergencePoint:
+      type: object
+      required: [id, creative_work_id]
+      properties:
+        id: { type: string, format: uuid }
+        creative_work_id: { type: string, format: uuid }
+        original_chapter_id: { type: string, format: uuid, nullable: true }
+        original_event_id: { type: string, format: uuid, nullable: true }
+        time_label: { type: string, example: 三年前·梅雨季 }
+        description: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreativeTimelineItem:
+      type: object
+      required: [title]
+      properties:
+        source_original_event_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [INHERITED, MODIFIED, NEW, REMOVED] }
+        time_label: { type: string }
+        title: { type: string }
+        description: { type: string }
+    CreativeTimelineEvent:
+      allOf:
+        - $ref: "#/components/schemas/CreativeTimelineItem"
+        - type: object
+          required: [id, sequence]
+          properties:
+            id: { type: string, format: uuid }
+            sequence: { type: integer, minimum: 1 }

@@ -311,9 +311,14 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrSourceCharacterNotFound),
 		errors.Is(err, domain.ErrMappingNotFound):
 		return http.StatusNotFound, "CREATIVE_NOT_FOUND", true
+	case errors.Is(err, domain.ErrCreativeWorldNotFound),
+		errors.Is(err, domain.ErrCreativeWorldRuleNotFound),
+		errors.Is(err, domain.ErrDivergenceNotFound):
+		return http.StatusNotFound, "CREATIVE_WORLD_NOT_FOUND", true
 	case errors.Is(err, domain.ErrCreativeAlreadyExists),
 		errors.Is(err, domain.ErrCreativeCharacterDup),
-		errors.Is(err, domain.ErrCreativeCharacterLocked):
+		errors.Is(err, domain.ErrCreativeCharacterLocked),
+		errors.Is(err, domain.ErrCreativeWorldRuleDup):
 		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrOriginalAlreadyExists),
 		errors.Is(err, domain.ErrCharacterDuplicate),
@@ -373,6 +378,11 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrInheritanceWeightInvalid),
 		errors.Is(err, domain.ErrInheritanceNoDimension),
 		errors.Is(err, domain.ErrFusionNeedsTwoSources),
+		errors.Is(err, domain.ErrCreativeWorldModeBad),
+		errors.Is(err, domain.ErrCreativeWorldRuleName),
+		errors.Is(err, domain.ErrCreativeWorldRuleStatus),
+		errors.Is(err, domain.ErrDivergenceSourceInvalid),
+		errors.Is(err, domain.ErrCreativeTimelineBad),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

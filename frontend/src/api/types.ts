@@ -111,3 +111,231 @@ export interface OriginalImportResult {
   chapter_count: number
   chapters: OriginalChapterBrief[]
 }
+
+// ---------- 人物 / 人物 DNA / 人物关系（对应后端 /characters 与 /relationships） ----------
+
+export interface DNADimension {
+  text: string
+  /** 继承权重 0-100 */
+  weight: number
+}
+
+/** DNA 的 11 个维度（与后端 domain.CharacterDNA 一致） */
+export const DNA_KEYS = [
+  'personality',
+  'values',
+  'motivation',
+  'behavior',
+  'speech_style',
+  'background',
+  'ability',
+  'decision_style',
+  'conflict_response',
+  'emotional_response',
+  'relationship_pattern',
+] as const
+
+export type DNAKey = (typeof DNA_KEYS)[number]
+
+export const DNA_LABELS: Record<DNAKey, string> = {
+  personality: '人格',
+  values: '价值观',
+  motivation: '动机',
+  behavior: '行为',
+  speech_style: '语言风格',
+  background: '背景',
+  ability: '能力',
+  decision_style: '决策方式',
+  conflict_response: '冲突反应',
+  emotional_response: '情绪反应',
+  relationship_pattern: '关系模式',
+}
+
+export type CharacterDNA = Record<DNAKey, DNADimension>
+
+export function emptyDNA(): CharacterDNA {
+  return DNA_KEYS.reduce((acc, key) => {
+    acc[key] = { text: '', weight: 0 }
+    return acc
+  }, {} as CharacterDNA)
+}
+
+export type CharacterSource = 'MANUAL' | 'AI'
+
+export interface Character {
+  id: string
+  original_work_id: string
+  name: string
+  aliases: string[]
+  role: string
+  gender: string
+  age: string
+  appearance: string
+  personality: string
+  motivation: string
+  values: string
+  fears: string
+  desires: string
+  behavior_patterns: string
+  speech_style: string
+  abilities: string
+  first_appearance: string
+  last_appearance: string
+  dna: CharacterDNA
+  importance: number
+  source: CharacterSource
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CharacterInput {
+  name: string
+  aliases?: string[]
+  role?: string
+  gender?: string
+  age?: string
+  appearance?: string
+  personality?: string
+  motivation?: string
+  values?: string
+  fears?: string
+  desires?: string
+  behavior_patterns?: string
+  speech_style?: string
+  abilities?: string
+  first_appearance?: string
+  last_appearance?: string
+  dna?: CharacterDNA
+  importance?: number
+  notes?: string
+}
+
+export interface CharacterList {
+  items: Character[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export type RelationType =
+  | 'family'
+  | 'friend'
+  | 'lover'
+  | 'enemy'
+  | 'mentor'
+  | 'student'
+  | 'colleague'
+  | 'rival'
+  | 'organization'
+  | 'other'
+
+export const RELATION_LABELS: Record<RelationType, string> = {
+  family: '亲属',
+  friend: '朋友',
+  lover: '恋人',
+  enemy: '敌对',
+  mentor: '师长',
+  student: '学生',
+  colleague: '同僚',
+  rival: '竞争',
+  organization: '组织',
+  other: '其他',
+}
+
+export interface Relationship {
+  id: string
+  original_work_id: string
+  source_character_id: string
+  target_character_id: string
+  relation_type: RelationType
+  strength: number
+  description: string
+  source: CharacterSource
+  created_at: string
+  updated_at: string
+}
+
+export interface RelationshipInput {
+  source_character_id: string
+  target_character_id: string
+  relation_type: RelationType
+  strength?: number
+  description?: string
+}
+
+// ---------- 世界观（对应后端 /world、/rules、/locations、/factions） ----------
+
+export interface World {
+  id: string
+  original_work_id: string
+  name: string
+  description: string
+  rule_count: number
+  location_count: number
+  faction_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface WorldRule {
+  id: string
+  world_id: string
+  category: string
+  name: string
+  description: string
+  importance: number
+  created_at: string
+  updated_at: string
+}
+
+export interface WorldRuleInput {
+  category?: string
+  name: string
+  description?: string
+  importance?: number
+}
+
+export interface WorldLocation {
+  id: string
+  world_id: string
+  name: string
+  type: string
+  description: string
+  parent_location_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WorldLocationInput {
+  name: string
+  type?: string
+  description?: string
+  parent_location_id?: string | null
+}
+
+export interface Faction {
+  id: string
+  world_id: string
+  name: string
+  type: string
+  description: string
+  goals: string
+  relationships: string
+  created_at: string
+  updated_at: string
+}
+
+export interface FactionInput {
+  name: string
+  type?: string
+  description?: string
+  goals?: string
+  relationships?: string
+}
+
+/** 后端列表接口的统一形状（世界观下的规则/地点/势力用它） */
+export interface ListOf<T> {
+  items: T[]
+  total: number
+}

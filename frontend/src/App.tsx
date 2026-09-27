@@ -5,8 +5,10 @@ import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import ProjectsPage from './pages/ProjectsPage'
 import ChapterReaderPage from './pages/original/ChapterReaderPage'
+import OriginalCharactersPage from './pages/original/OriginalCharactersPage'
 import OriginalChaptersPage from './pages/original/OriginalChaptersPage'
 import OriginalOverviewPage from './pages/original/OriginalOverviewPage'
+import OriginalWorldPage from './pages/original/OriginalWorldPage'
 
 const { Header, Sider, Content } = Layout
 
@@ -108,8 +110,16 @@ export default function App() {
             <Route path="/original/overview" element={<OriginalOverviewPage />} />
             <Route path="/original/chapters" element={<OriginalChaptersPage />} />
             <Route path="/original/chapters/:no" element={<ChapterReaderPage />} />
+            <Route path="/original/characters" element={<OriginalCharactersPage />} />
+            {/* 三个入口复用同一个世界观页，用 key 强制重挂载以切到对应标签页 */}
+            <Route path="/original/world" element={<OriginalWorldPage key="world" defaultTab="rules" />} />
+            <Route path="/original/locations" element={<OriginalWorldPage key="locations" defaultTab="locations" />} />
+            <Route path="/original/factions" element={<OriginalWorldPage key="factions" defaultTab="factions" />} />
 
-            {ORIGINAL_PAGES.filter((p) => p.path !== 'overview' && p.path !== 'chapters').map((p) => (
+            {ORIGINAL_PAGES.filter(
+              (p) =>
+                !['overview', 'chapters', 'characters', 'world', 'locations', 'factions'].includes(p.path),
+            ).map((p) => (
               <Route
                 key={p.path}
                 path={`/original/${p.path}`}

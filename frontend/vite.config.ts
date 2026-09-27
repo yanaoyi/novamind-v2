@@ -22,7 +22,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
-    // antd 组件在 jsdom 下的首次渲染偏慢，放宽超时避免误报
-    testTimeout: 20000,
+    // antd 组件在 jsdom 下偏慢：人物页那张 11 维度 DNA 表单实测单例要 19-20 秒，
+    // 与其它测试文件并行跑时会超过 20 秒。放宽到 45 秒避免误报超时。
+    testTimeout: 45000,
   },
 })

@@ -23,6 +23,9 @@ type Config struct {
 	LogLevel      string
 	StorageDir    string
 	UploadMaxMB   int
+	// SecretKey 用于加密模型 API Key（环境变量 NOVAMIND_SECRET）。
+	// 丢失它意味着已保存的模型密钥都解不开，只能重新填写。
+	SecretKey string
 }
 
 // Load 读取 .env（若存在）并组装配置。
@@ -51,6 +54,7 @@ func Load(envFiles ...string) (*Config, error) {
 		RedisDB:       redisDB,
 		LogLevel:      getEnv("LOG_LEVEL", "info"),
 		StorageDir:    getEnv("STORAGE_DIR", "./data/uploads"),
+		SecretKey:     getEnv("NOVAMIND_SECRET", ""),
 	}
 	uploadMaxMB, err := strconv.Atoi(getEnv("UPLOAD_MAX_MB", "50"))
 	if err != nil || uploadMaxMB <= 0 {

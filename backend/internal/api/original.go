@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/yanaoyi/novamindv2/backend/internal/ai"
 	"github.com/yanaoyi/novamindv2/backend/internal/domain"
 	"github.com/yanaoyi/novamindv2/backend/internal/service"
 )
@@ -293,6 +294,10 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "EVENT_NOT_FOUND", true
 	case errors.Is(err, domain.ErrPlotArcNotFound):
 		return http.StatusNotFound, "PLOT_ARC_NOT_FOUND", true
+	case errors.Is(err, domain.ErrProviderNotFound):
+		return http.StatusNotFound, "MODEL_PROVIDER_NOT_FOUND", true
+	case errors.Is(err, domain.ErrProviderDuplicate):
+		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrOriginalAlreadyExists),
 		errors.Is(err, domain.ErrCharacterDuplicate),
 		errors.Is(err, domain.ErrRelationDuplicate),
@@ -328,6 +333,14 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrTimelineOrderBad),
 		errors.Is(err, domain.ErrPlotArcTitleEmpty),
 		errors.Is(err, domain.ErrPlotArcTypeInvalid),
+		errors.Is(err, domain.ErrProviderNameEmpty),
+		errors.Is(err, domain.ErrProviderTypeInvalid),
+		errors.Is(err, domain.ErrProviderBaseEmpty),
+		errors.Is(err, domain.ErrProviderModelEmpty),
+		errors.Is(err, domain.ErrProviderTempRange),
+		errors.Is(err, domain.ErrProviderPurposeBad),
+		errors.Is(err, domain.ErrNoProviderAvailable),
+		errors.Is(err, ai.ErrMissingSecret),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

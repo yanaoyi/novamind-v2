@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/yanaoyi/novamindv2/backend/internal/ai"
 	"github.com/yanaoyi/novamindv2/backend/internal/config"
 	"github.com/yanaoyi/novamindv2/backend/internal/service"
 )
@@ -21,6 +22,8 @@ type Server struct {
 	characters *service.OriginalCharacterService
 	worlds     *service.OriginalWorldService
 	events     *service.OriginalEventService
+	providers  *service.ModelProviderService
+	prompts    *ai.Engine
 }
 
 // NewServer 构建 HTTP 服务。
@@ -33,10 +36,13 @@ func NewServer(
 	characters *service.OriginalCharacterService,
 	worlds *service.OriginalWorldService,
 	events *service.OriginalEventService,
+	providers *service.ModelProviderService,
+	promptEngine *ai.Engine,
 ) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, deps: deps,
-		projects: projects, originals: originals, characters: characters, worlds: worlds, events: events,
+		projects: projects, originals: originals, characters: characters, worlds: worlds,
+		events: events, providers: providers, prompts: promptEngine,
 	}
 }
 
@@ -108,6 +114,19 @@ func (s *Server) Router() *gin.Engine {
 			plotArcs.DELETE("/:id", s.deletePlotArc)
 		}
 
+		// AI 接入配置（规格书 §36 Model Gateway）与 Prompt 清单（§37）
+		modelProviders := v1.Group("/model-providers")
+		{
+			modelProviders.GET("", s.listModelProviders)
+			modelProviders.POST("", s.createModelProvider)
+			modelProviders.GET("/:id", s.getModelProvider)
+			modelProviders.PUT("/:id", s.updateModelProvider)
+			modelProviders.DELETE("/:id", s.deleteModelProvider)
+			modelProviders.POST("/:id/default", s.setDefaultModelProvider)
+			modelProviders.POST("/:id/test", s.testModelProvider)
+		}
+		v1.GET("/prompts", s.listPrompts)
+
 		// 人物与关系（规格书 §10-§12）
 		characters := v1.Group("/characters")
 		{
@@ -150,7 +169,8 @@ func (s *Server) Router() *gin.Engine {
 // requireServices 确认业务服务已就绪（数据库已连接）。
 // 未就绪时返回 503，而不是让请求打到 nil 上 panic 或静默 404。
 func (s *Server) requireServices(c *gin.Context) bool {
-	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil || s.events == nil {
+	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
+		s.events == nil || s.providers == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

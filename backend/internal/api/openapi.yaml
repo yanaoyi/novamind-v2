@@ -1170,6 +1170,182 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /model-providers:
+    get:
+      tags: [ai]
+      summary: 模型配置列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ModelProviderList"
+    post:
+      tags: [ai]
+      summary: 新增模型配置
+      description: api_key 会用 NOVAMIND_SECRET 加密入库；接口永不返回密钥，只返回 has_api_key。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelProviderRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ModelProvider"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /model-providers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [ai]
+      summary: 模型配置详情
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ModelProvider"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [ai]
+      summary: 更新模型配置
+      description: api_key 留空表示保持原密钥不变。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelProviderRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ModelProvider"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [ai]
+      summary: 删除模型配置
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /model-providers/{id}/default:
+    post:
+      tags: [ai]
+      summary: 设为默认模型
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 设置成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ModelProvider"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /model-providers/{id}/test:
+    post:
+      tags: [ai]
+      summary: 测试模型配置
+      description: 用一条最小请求真实调用上游（会消耗极少量 token）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 测试结果（ok=false 表示调用失败，error_message 给出原因）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ModelProviderTest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /prompts:
+    get:
+      tags: [ai]
+      summary: Prompt 模板清单
+      description: 列出编译进二进制的版本化模板（文件名约定 <name>.<version>.md）。
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/PromptMeta"
+                          total: { type: integer }
+
 components:
   responses:
     BadRequest:
@@ -1657,3 +1833,56 @@ components:
           items:
             $ref: "#/components/schemas/PlotArc"
         total: { type: integer }
+    ModelProviderRequest:
+      type: object
+      required: [name, provider, api_base, model_name]
+      properties:
+        name: { type: string, maxLength: 120, example: DeepSeek }
+        provider: { type: string, enum: [OPENAI_COMPATIBLE, ANTHROPIC] }
+        api_base: { type: string, example: https://api.deepseek.com/v1 }
+        api_key: { type: string, description: 明文只在请求里出现，服务端加密存储 }
+        model_name: { type: string, example: deepseek-chat }
+        purpose: { type: string, enum: [chat, embedding, both], default: chat }
+        temperature: { type: number, minimum: 0, maximum: 2, default: 0.7 }
+        max_tokens: { type: integer, default: 4096 }
+        timeout_sec: { type: integer, default: 120 }
+        enabled: { type: boolean, default: true }
+        is_default: { type: boolean, default: false }
+        notes: { type: string }
+    ModelProvider:
+      allOf:
+        - $ref: "#/components/schemas/ModelProviderRequest"
+        - type: object
+          required: [id, has_api_key, created_at, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            api_key: { type: string, readOnly: true, description: 永远不返回 }
+            has_api_key: { type: boolean, description: 是否已保存密钥（不暴露任何密钥片段） }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    ModelProviderList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelProvider"
+        total: { type: integer }
+    ModelProviderTest:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        model: { type: string }
+        reply: { type: string }
+        latency_ms: { type: integer, format: int64 }
+        total_tokens: { type: integer }
+        error_message: { type: string }
+    PromptMeta:
+      type: object
+      required: [name, version, path]
+      properties:
+        name: { type: string, example: character_extract }
+        version: { type: string, example: v1 }
+        path: { type: string, example: character/character_extract.v1.md }

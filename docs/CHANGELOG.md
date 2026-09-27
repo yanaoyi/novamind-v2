@@ -270,3 +270,42 @@ PUT|DELETE     /plot-arcs/{id}
 ### 待办（Phase 2 剩余）
 
 - **PDF 解析**（唯一剩余项）
+
+### 2026-09-27 · Phase 3 开工：P3-1 Model Gateway + Prompt Engine
+
+> BOSS 决定：先进 Phase 3，PDF 解析暂时搁置。
+
+**模型接入配置**（迁移 `0006_create_model_providers`）
+
+- `model_providers`：名称、提供商类型、接口地址、**加密后的密钥**、模型名、用途（chat/embedding/both）、温度、最大 token、超时、启用、是否默认
+- 密钥用 **AES-256-GCM** 加密存储，主密钥由环境变量 `NOVAMIND_SECRET` 经 SHA-256 派生；**接口永不返回密钥**（连尾 4 位都不给），只返回 `has_api_key`
+- 同一用途只能有一个默认配置（部分唯一索引保证）
+- 忘记 `NOVAMIND_SECRET` 的后果已在 `.env.example` 里写清：已保存的 Key 只能重填
+
+**Model Gateway**（`internal/ai`）
+
+- 统一入口 `Gateway.Chat()`，按提供商类型分发，业务层**不认识任何厂商 SDK**
+- 支持两类协议：**OPENAI_COMPATIBLE**（覆盖 OpenAI / DeepSeek / 智谱 / Kimi / one-api / vLLM 等所有兼容 `/chat/completions` 的服务）与 **ANTHROPIC**（Messages API，system 消息自动抽到独立字段、自动补 `max_tokens`）
+- 重试策略：限流（429）与 5xx 退避重试最多 3 次；**鉴权错误不重试**（重试没意义还会浪费额度）
+- 错误语义：`APIError{Provider, StatusCode, Body}` 带 `IsAuthError/IsRateLimited/IsRetryable` 判定
+- JSON 模式：OpenAI 兼容协议自动带 `response_format=json_object`（Phase 3 结构化输出要用）
+
+**Prompt Engine**（`internal/ai/prompt.go` + `backend/prompts/`）
+
+- 模板文件名即版本：`<name>.<version>.md`，`Get(name, "")` 自动取最新版本
+- 模板用 `text/template` 且开启 `missingkey=error`：**变量缺失直接报错**，不会静默渲染空值
+- 7 个 v1 模板已就位：`chapter_summary` / `character_extract` / `world_extract` / `plot_extract` / `outline_generate` / `chapter_generate` / `consistency_check`（Phase 3/5 直接复用）
+- 目录调整：模板从仓库根 `prompts/` 移到 **`backend/prompts/`** —— `go:embed` 只能嵌入模块内文件，放外面就没法随二进制分发
+
+**API**（8 个）：`/model-providers` CRUD + `/{id}/default` + `/{id}/test`（真实调用一次上游）+ `/prompts` 模板清单
+
+**验证**
+
+- 单元测试 17 例：加密往返/换密钥失败/篡改检测、模板加载与最新版本选择、渲染缺变量报错；网关用 `httptest` 假上游验证了 **OpenAI 协议拼装（含 response_format 与鉴权头）**、**5xx 重试恰好 2 次**、**401 不重试**、响应非 JSON 时的报错提示、**Anthropic 的 system 拆分与多段文本拼接**、上下文超时
+- 端到端冒烟 `scripts/smoke-phase3.sh`：**25 项全过**。它会在本机起一个假的 OpenAI 兼容上游，让网关**真的发一次 HTTP**——验证上游收到 `Authorization: Bearer sk-...`、`model` 正确、回复被解析；同时验证**库里存的是密文**、响应不含密钥字段/明文、更新时密钥留空仍保留、重复名 409、类型/温度校验 400、删除后列表干净
+
+### 待办（Phase 3 剩余）
+
+- P3-2 任务系统（异步任务 + 进度 + 重试）
+- P3-3 分阶段原著分析流水线 + **AI 提案与作者审核**（AI 不得直接改原著模型，规格书 §52）
+- P3-4 前端：模型配置页 / 任务中心 / 分析提案审核页

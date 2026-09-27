@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yanaoyi/novamindv2/backend/internal/ai"
 	"github.com/yanaoyi/novamindv2/backend/internal/api"
 	"github.com/yanaoyi/novamindv2/backend/internal/config"
 	"github.com/yanaoyi/novamindv2/backend/internal/infra"
@@ -97,6 +98,22 @@ func run() error {
 		worldRepo,
 	)
 
+	// AI 接入（规格书 §36 Model Gateway / §37 Prompt Engine）
+	gateway := ai.NewGateway()
+	providers := service.NewModelProviderService(
+		repository.NewModelProviderRepo(pg.DB),
+		gateway,
+		cfg.SecretKey,
+	)
+	if cfg.SecretKey == "" {
+		logger.Warn("NOVAMIND_SECRET 未配置：暂时无法保存模型 API Key（见 .env.example）")
+	}
+	promptEngine, err := ai.NewEngine()
+	if err != nil {
+		return err
+	}
+	logger.Info("Prompt 模板已加载", slog.Int("count", len(promptEngine.List())))
+
 	// Redis
 	if cfg.RedisAddr == "" {
 		logger.Warn("REDIS_ADDR 未配置，跳过 Redis 连接")
@@ -110,7 +127,11 @@ func run() error {
 		logger.Info("Redis 已连接")
 	}
 
-	srv := api.NewServer(cfg, logger, deps, projects, originals, characters, worlds, events)
+	srv := api.NewServer(
+		cfg, logger, deps,
+		projects, originals, characters, worlds, events,
+		providers, promptEngine,
+	)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

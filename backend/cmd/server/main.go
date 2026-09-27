@@ -126,6 +126,16 @@ func run() error {
 	worker := task.NewWorker(taskRepo, registry, logger,
 		task.WithConcurrency(2), task.WithPollInterval(2*time.Second))
 
+	// AI 分析：模型调用器 + 提案服务（AI 只产提案，作者通过后才写原著模型）
+	invoker := service.NewModelInvoker(providers, promptEngine, gateway)
+	analysis := service.NewAnalysisService(
+		repository.NewAnalysisProposalRepo(pg.DB),
+		originalRepo,
+		repository.NewOriginalRepo(pg.DB),
+		tasks,
+	)
+	task.RegisterAnalysisHandlers(registry, analysis, invoker)
+
 	// Redis
 	if cfg.RedisAddr == "" {
 		logger.Warn("REDIS_ADDR 未配置，跳过 Redis 连接")
@@ -144,6 +154,7 @@ func run() error {
 		projects, originals, characters, worlds, events,
 		providers, promptEngine,
 		tasks, registry.Types,
+		analysis,
 	)
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())

@@ -310,6 +310,33 @@ PUT|DELETE     /plot-arcs/{id}
 - P3-3 分阶段原著分析流水线 + **AI 提案与作者审核**（AI 不得直接改原著模型，规格书 §52）
 - P3-4 前端：模型配置页 / 任务中心 / 分析提案审核页
 
+### 2026-09-27 · P3-3 分析流水线 + AI 提案与作者审核（Phase 3 核心）
+
+**把规格书 §52 那条红线做成了数据库事实**：AI 产出**只写入 `analysis_proposals` 提案表**，作者审核通过后才写进原著正式表；两者在同一事务内完成，不存在"审核过了但没写进去"或反之的中间态。
+
+**数据模型**（迁移 `0008_create_analysis_proposals`）：`work_id`、`task_id`、阶段、实体类型、标题、`payload`（JSONB）、原文依据 `evidence`、置信度、状态（PENDING/APPROVED/REJECTED）、审核备注与时间、`applied_id`（通过后写入正式表的记录 ID）；同一任务内同实体只留一条（部分唯一索引）。
+
+**四个分析阶段**（规格书 §54 的分阶段任务，各自是一个任务类型）
+
+| 阶段 | 任务类型 | 产出提案 |
+|---|---|---|
+| `chapter_summary` | `analysis_chapter_summary` | 章节摘要（逐章调用，可回写到章节） |
+| `character_extract` | `analysis_character_extract` | 人物（含 11 维 DNA 权重与原文依据） |
+| `world_extract` | `analysis_world_extract` | 世界设定、规则、地点（含层级 parent）、势力 |
+| `plot_extract` | `analysis_plot_extract` | 事件（含参与者/地点/后果）、剧情弧 |
+
+**模型输出容错**（`service/analysis_json.go`）：模型即使被要求"只输出 JSON"，也常包 ```json 代码块或带解释文字 —— 这里做容错提取（去代码块 → 取首个 `{` 到末个 `}`），单章解析失败只跳过该条而不拖垮整批。结构化校验按实体类型要求最小字段（人物必须有名字、事件必须有标题…），不合法直接跳过。
+
+**审核通过即写入**：`ApproveProposal` 支持**作者修改后再通过**（payload override，规格书 §40），写入时按实体类型分派：人物→人物表（DNA 一起落）、规则/地点/势力→世界观、事件→**参与者按姓名解析成人物 ID、地点按名称关联**、剧情弧→**起止事件按标题匹配**、章节摘要→回写章节。所有写入都在 `Approve` 的事务里，`apply` 闭包接收 `tx` 复用同一事务。
+
+**API**（6 个）：`POST /original/{id}/analysis`（入队）、`GET /original/{id}/proposals`、`GET /original/{id}/analysis/summary`、`GET /proposals/{id}`、`POST /proposals/{id}/approve`、`POST /proposals/{id}/reject`。
+
+**验证**
+
+- 单元测试：JSON 容错提取（纯 JSON / 代码块 / 夹带解释文字 / 各种非法输入）、DNA 解析与工具函数、提案校验（14 个用例覆盖各实体类型的必填字段与剧情弧类型）
+- 端到端冒烟 `scripts/smoke-phase3-analysis.sh`：**24 项全过** —— 起假模型上游 → 触发人物提取 → **AI 产出 2 条提案但原著人物数仍为 0**（红线验证）→ 作者改名后通过 → 原著出现「林默（已校对）」且 `source=AI`、DNA 权重 95 保留、`applied_id` 非空 → 另一条驳回后**没有写进原著** → 统计 pending0/approved1/rejected1 → 重复审核 409 → 无章节时触发分析 400
+- **冒烟抓到两个真 bug 并修复**：① 提案统计恒为 0 —— gorm 链式调用复用同一个 statement 导致 Where 条件叠加，改为三次独立查询；② 无章节时触发分析返回 500 —— 缺哨兵错误，补 `ErrNoChapters` 并映射 400
+
 ### 2026-09-27 · P3-2 任务系统（异步 + 进度 + 重试 + 取消）
 
 **数据模型**（迁移 `0007_create_tasks`）：`tasks` 表 —— 类型、状态（PENDING/RUNNING/PAUSED/COMPLETED/FAILED/CANCELLED）、进度 0-100、进度文案、input/output（JSONB）、错误、`attempts`/`max_attempts`、开始与结束时间；`(status, created_at)` 部分索引供 worker 领取。

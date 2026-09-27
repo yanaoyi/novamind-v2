@@ -1526,6 +1526,208 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /original/{id}/analysis:
+    post:
+      tags: [analysis]
+      summary: 触发原著分析（异步）
+      description: |
+        按阶段分析原著。**AI 产出只进入待审核提案，不会直接改写原著数据**（规格书 §52）。
+        阶段：chapter_summary / character_extract / world_extract / plot_extract。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 原著 ID
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage]
+              properties:
+                stage:
+                  type: string
+                  enum: [chapter_summary, character_extract, world_extract, plot_extract]
+      responses:
+        "202":
+          description: 已入队
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/proposals:
+    get:
+      tags: [analysis]
+      summary: 分析提案列表
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        - name: stage
+          in: query
+          schema: { type: string, enum: [chapter_summary, character_extract, world_extract, plot_extract] }
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+            enum: [chapter_summary, character, world, world_rule, location, faction, event, plot_arc]
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ProposalList"
+
+  /original/{id}/analysis/summary:
+    get:
+      tags: [analysis]
+      summary: 提案统计
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          pending: { type: integer, format: int64 }
+                          approved: { type: integer, format: int64 }
+                          rejected: { type: integer, format: int64 }
+
+  /proposals/{id}:
+    get:
+      tags: [analysis]
+      summary: 提案详情
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Proposal"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /proposals/{id}/approve:
+    post:
+      tags: [analysis]
+      summary: 通过提案
+      description: 作者确认后写入原著正式表；payload 可传修改后的内容（AI 结果允许作者修改）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload: { type: object, additionalProperties: true, description: 作者修改后的内容 }
+                note: { type: string }
+      responses:
+        "200":
+          description: 已通过并写入
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Proposal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /proposals/{id}/reject:
+    post:
+      tags: [analysis]
+      summary: 驳回提案
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, example: 原文没有依据 }
+      responses:
+        "200":
+          description: 已驳回
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Proposal"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
 components:
   responses:
     BadRequest:
@@ -2100,6 +2302,38 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Task"
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        page_size: { type: integer }
+    Proposal:
+      type: object
+      required: [id, work_id, stage, entity_type, status, payload]
+      properties:
+        id: { type: string, format: uuid }
+        work_id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid, nullable: true }
+        stage: { type: string, enum: [chapter_summary, character_extract, world_extract, plot_extract] }
+        entity_type:
+          type: string
+          enum: [chapter_summary, character, world, world_rule, location, faction, event, plot_arc]
+        title: { type: string, example: 林默 }
+        payload: { type: object, additionalProperties: true, description: 模型产出的结构化内容 }
+        evidence: { type: string, description: 模型给出的原文依据 }
+        confidence: { type: integer, minimum: 0, maximum: 100 }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        review_note: { type: string }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        applied_id: { type: string, format: uuid, nullable: true, description: 通过后写入正式表的记录 ID }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProposalList:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Proposal"
         total: { type: integer, format: int64 }
         page: { type: integer }
         page_size: { type: integer }

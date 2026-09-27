@@ -316,6 +316,45 @@ func (r *OriginalRepo) ListChapters(ctx context.Context, workID string, page, pa
 	return out, total, nil
 }
 
+// UpdateChapterSummary 回写章节摘要（AI 提案审核通过时使用）。
+func (r *OriginalRepo) UpdateChapterSummary(ctx context.Context, workID string, chapterNo int, summary string) error {
+	if _, err := uuid.Parse(workID); err != nil {
+		return domain.ErrOriginalNotFound
+	}
+	res := r.db.WithContext(ctx).Model(&originalChapterModel{}).
+		Where("original_work_id = ? AND chapter_no = ?", workID, chapterNo).
+		Updates(map[string]any{"summary": summary, "updated_at": time.Now().UTC()})
+	if res.Error != nil {
+		return fmt.Errorf("更新章节摘要失败: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return domain.ErrChapterNotFound
+	}
+	return nil
+}
+
+// ListChapterContents 取章节（含正文），按章节号升序，最多 limit 章。
+// 供 AI 分析阶段组装上下文；limit 用于控制单次送入模型的篇幅。
+func (r *OriginalRepo) ListChapterContents(ctx context.Context, workID string, limit int) ([]domain.OriginalChapter, error) {
+	if _, err := uuid.Parse(workID); err != nil {
+		return nil, domain.ErrOriginalNotFound
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	var models []originalChapterModel
+	if err := r.db.WithContext(ctx).
+		Where("original_work_id = ?", workID).
+		Order("chapter_no ASC").Limit(limit).Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("查询章节正文失败: %w", err)
+	}
+	out := make([]domain.OriginalChapter, 0, len(models))
+	for _, m := range models {
+		out = append(out, toDomainChapter(m))
+	}
+	return out, nil
+}
+
 // GetChapter 按章节号取单章（含正文）。
 func (r *OriginalRepo) GetChapter(ctx context.Context, workID string, chapterNo int) (*domain.OriginalChapter, error) {
 	if _, err := uuid.Parse(workID); err != nil {

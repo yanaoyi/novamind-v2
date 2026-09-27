@@ -302,6 +302,10 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "TASK_NOT_FOUND", true
 	case errors.Is(err, domain.ErrTaskNotCancellable), errors.Is(err, domain.ErrTaskNotRetryable):
 		return http.StatusConflict, CodeConflict, true
+	case errors.Is(err, domain.ErrProposalNotFound):
+		return http.StatusNotFound, "PROPOSAL_NOT_FOUND", true
+	case errors.Is(err, domain.ErrProposalAlreadyDecided):
+		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrOriginalAlreadyExists),
 		errors.Is(err, domain.ErrCharacterDuplicate),
 		errors.Is(err, domain.ErrRelationDuplicate),
@@ -348,6 +352,11 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrTaskTypeEmpty),
 		errors.Is(err, domain.ErrTaskStatusInvalid),
 		errors.Is(err, service.ErrTaskTypeUnknown),
+		errors.Is(err, domain.ErrProposalStageInvalid),
+		errors.Is(err, domain.ErrProposalEntityInvalid),
+		errors.Is(err, domain.ErrProposalPayloadInvalid),
+		errors.Is(err, service.ErrModelJSONInvalid),
+		errors.Is(err, service.ErrNoChapters),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

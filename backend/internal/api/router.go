@@ -26,6 +26,7 @@ type Server struct {
 	prompts    *ai.Engine
 	tasks      *service.TaskService
 	taskTypes  func() []string
+	analysis   *service.AnalysisService
 }
 
 // NewServer 构建 HTTP 服务。
@@ -42,12 +43,13 @@ func NewServer(
 	promptEngine *ai.Engine,
 	tasks *service.TaskService,
 	taskTypes func() []string,
+	analysis *service.AnalysisService,
 ) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, deps: deps,
 		projects: projects, originals: originals, characters: characters, worlds: worlds,
 		events: events, providers: providers, prompts: promptEngine,
-		tasks: tasks, taskTypes: taskTypes,
+		tasks: tasks, taskTypes: taskTypes, analysis: analysis,
 	}
 }
 
@@ -105,6 +107,17 @@ func (s *Server) Router() *gin.Engine {
 			original.GET("/:id/plot-arcs", s.listPlotArcs)
 			original.POST("/:id/plot-arcs", s.createPlotArc)
 			original.POST("/:id/reparse", s.reparseOriginal)
+			original.POST("/:id/analysis", s.enqueueAnalysis)
+			original.GET("/:id/proposals", s.listProposals)
+			original.GET("/:id/analysis/summary", s.analysisSummary)
+		}
+
+		// AI 提案审核（规格书 §52：AI 结果必须经作者确认）
+		proposals := v1.Group("/proposals")
+		{
+			proposals.GET("/:id", s.getProposal)
+			proposals.POST("/:id/approve", s.approveProposal)
+			proposals.POST("/:id/reject", s.rejectProposal)
 		}
 
 		// 事件 / 剧情弧（规格书 §14、§16）
@@ -187,7 +200,7 @@ func (s *Server) Router() *gin.Engine {
 // 未就绪时返回 503，而不是让请求打到 nil 上 panic 或静默 404。
 func (s *Server) requireServices(c *gin.Context) bool {
 	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
-		s.events == nil || s.providers == nil || s.tasks == nil {
+		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

@@ -6,6 +6,7 @@ import Placeholder from './pages/Placeholder'
 import ProjectsPage from './pages/ProjectsPage'
 import SettingsPage from './pages/SettingsPage'
 import TasksPage from './pages/TasksPage'
+import CreativePage from './pages/CreativePage'
 import ChapterReaderPage from './pages/original/ChapterReaderPage'
 import OriginalAnalysisPage from './pages/original/OriginalAnalysisPage'
 import OriginalCharactersPage from './pages/original/OriginalCharactersPage'
@@ -47,6 +48,7 @@ const CREATIVE_PAGES: Array<{ path: string; label: string; phase: string }> = [
 ]
 
 const SIMPLE_PAGES: Array<{ path: string; label: string; phase?: string }> = [
+  { path: '/creative-workspace', label: '二创工作区' },
   { path: '/editor', label: '编辑器', phase: 'Phase 5' },
   { path: '/ai', label: 'AI 助手', phase: 'Phase 3' },
   { path: '/consistency', label: '一致性检查', phase: 'Phase 6' },
@@ -150,10 +152,20 @@ export default function App() {
               <Route
                 key={p.path}
                 path={`/creative/${p.path}`}
-                element={<Placeholder title={`二创 · ${p.label}`} phase={p.phase} />}
+                element={
+                  ['characters', 'world', 'timeline', 'mappings'].includes(p.path) ? (
+                    <CreativePage
+                      key={`creative-${p.path}`}
+                      defaultTab={p.path as 'characters' | 'world' | 'timeline' | 'mappings'}
+                    />
+                  ) : (
+                    <Placeholder title={`二创 · ${p.label}`} phase={p.phase} />
+                  )
+                }
               />
             ))}
             <Route path="/creative" element={<Navigate to="/creative/overview" replace />} />
+            <Route path="/creative-workspace" element={<CreativePage key="creative-workspace" />} />
 
             {SIMPLE_PAGES.map((p) => (
               <Route key={p.path} path={p.path} element={<Placeholder title={p.label} phase={p.phase} />} />

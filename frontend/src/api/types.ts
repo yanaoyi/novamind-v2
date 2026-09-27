@@ -606,3 +606,139 @@ export interface ProposalSummary {
   approved: number
   rejected: number
 }
+
+// ---------- 二创（对应后端 /creative） ----------
+
+export type CreativeWorkStatus = 'DRAFT' | 'WRITING' | 'FINISHED'
+export type CreativeSourceType = 'ORIGINAL_INHERITED' | 'MODIFIED' | 'FUSED' | 'NEW'
+export type MappingType = 'INHERITED' | 'MODIFIED' | 'REPLACED' | 'FUSED' | 'REMOVED' | 'NEW'
+export type WorldInheritanceMode = 'FULL' | 'PARTIAL' | 'MODIFIED' | 'NEW'
+export type CreativeRuleStatus = 'INHERITED' | 'MODIFIED' | 'REMOVED' | 'NEW'
+export type CreativeTimelineStatus = 'INHERITED' | 'MODIFIED' | 'NEW' | 'REMOVED'
+
+export const CREATIVE_SOURCE_LABEL: Record<CreativeSourceType, string> = {
+  ORIGINAL_INHERITED: '继承原著',
+  MODIFIED: '继承后修改',
+  FUSED: '多人融合',
+  NEW: '原创',
+}
+
+export const MAPPING_LABEL: Record<MappingType, string> = {
+  INHERITED: '继承',
+  MODIFIED: '修改',
+  REPLACED: '替换',
+  FUSED: '融合',
+  REMOVED: '删除',
+  NEW: '新增',
+}
+
+export const WORLD_MODE_LABEL: Record<WorldInheritanceMode, string> = {
+  FULL: '整套继承',
+  PARTIAL: '部分继承（可逐条改）',
+  MODIFIED: '继承基准上大改',
+  NEW: '全新世界',
+}
+
+export const CREATIVE_RULE_STATUS_LABEL: Record<CreativeRuleStatus, string> = {
+  INHERITED: '继承',
+  MODIFIED: '已修改',
+  REMOVED: '已删除',
+  NEW: '新增',
+}
+
+export interface CreativeWork {
+  id: string
+  project_id: string
+  original_work_id: string
+  title: string
+  description: string
+  status: CreativeWorkStatus
+  divergence_point_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreativeWorldRule {
+  id: string
+  source_rule_id: string | null
+  status: CreativeRuleStatus
+  category: string
+  name: string
+  description: string
+  importance: number
+}
+
+export interface CreativeWorld {
+  id: string | null
+  creative_work_id: string
+  source_world_id: string | null
+  inheritance_mode: WorldInheritanceMode
+  name: string
+  description: string
+  inherited_count: number
+  modified_count: number
+  removed_count: number
+  new_count: number
+  rules: CreativeWorldRule[]
+}
+
+export interface DivergencePoint {
+  id: string
+  creative_work_id: string
+  original_chapter_id: string | null
+  original_event_id: string | null
+  time_label: string
+  description: string
+}
+
+export interface CreativeTimelineEvent {
+  id: string
+  source_original_event_id: string | null
+  status: CreativeTimelineStatus
+  sequence: number
+  time_label: string
+  title: string
+  description: string
+}
+
+export interface InheritanceRule {
+  id: string
+  source_character_id: string
+  personality: number
+  values: number
+  motivation: number
+  behavior: number
+  speech_style: number
+  background: number
+  ability: number
+  relationship_pattern: number
+}
+
+export interface CreativeCharacter {
+  id: string
+  creative_work_id: string
+  name: string
+  description: string
+  source_type: CreativeSourceType
+  source_character_id: string | null
+  dna: CharacterDNA
+  fusion_sources: Array<{ character_id: string; name: string; weight: number }>
+  fusion_detail: Array<{ dimension: string; from_name: string; from_id: string; weight: number }>
+  importance: number
+  is_locked: boolean
+  rules?: InheritanceRule[]
+  created_at: string
+  updated_at: string
+}
+
+export interface CreativeMapping {
+  id: string
+  creative_work_id: string
+  original_type: string
+  original_id: string
+  creative_type: string
+  creative_id: string
+  mapping_type: MappingType
+  description: string
+  created_at: string
+}

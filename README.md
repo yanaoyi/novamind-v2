@@ -31,18 +31,36 @@ docker/     Docker 相关（本地无 Docker，仅作部署产物）
 source scripts/dev-env.sh     # 把 ~/.local/go/bin 放到 PATH 最前
 ```
 
-## 启动（Phase 1 目标形态）
+## 启动
+
+两条命令（各自一个终端）：
 
 ```bash
-# 后端
-cd backend && go run ./cmd/server        # 默认 :8080
-curl -s localhost:8080/api/v1/health
-
-# 前端（Phase 1 后期）
-cd frontend && npm install && npm run dev
+bash scripts/dev-backend.sh     # 后端 → http://127.0.0.1:8080
+bash scripts/dev-frontend.sh    # 前端 → http://127.0.0.1:5173
 ```
 
-配置：复制 `backend/.env.example` 为 `backend/.env` 并填写。**`.env` 不提交 Git。**
+打开 **http://127.0.0.1:5173** 即可使用；前端开发服务器把 `/api` 代理到后端 8080，无需处理跨域。
+
+常用地址：
+
+| 地址 | 用途 |
+|---|---|
+| http://127.0.0.1:5173 | 前端界面 |
+| http://127.0.0.1:8080/api/v1/health | 健康检查（含 PG / Redis 真实状态） |
+| http://127.0.0.1:8080/api/v1/openapi.yaml | OpenAPI 规范 |
+| http://127.0.0.1:8080/swagger/index.html | Swagger UI |
+
+首次准备数据库：
+
+```bash
+sudo bash scripts/setup-local-db.sh     # 幂等创建 novamind 账号与库
+cd backend && go run ./cmd/migrate up   # 建表
+```
+
+**注意**：后端必须在 `backend/` 目录下启动——配置按当前工作目录查找 `.env`；
+缺 `DATABASE_URL` 会直接拒绝启动（不让服务静默退化成"没有工程接口"的残废状态）。
+`scripts/dev-backend.sh` 已经处理了这一点。
 
 ## 开发纪律
 

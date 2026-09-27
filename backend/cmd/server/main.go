@@ -48,20 +48,21 @@ func run() error {
 		Started: time.Now(),
 	}
 
-	var projects *service.ProjectService
-	// PostgreSQL：连接失败即启动失败（配置了就必须可用，避免"假装健康"）
+	// PostgreSQL：配置了就必须可用，没配置直接拒绝启动。
+	// 说明：早期版本在缺 DATABASE_URL 时"降级启动"，结果工程路由不会注册、
+	// 接口静默返回 404 —— 这种"残废服务"比启动失败更难排查，故改为 fail fast。
 	if cfg.DatabaseURL == "" {
-		logger.Warn("DATABASE_URL 未配置，跳过 PostgreSQL 连接")
-	} else {
-		pg, err := infra.NewPostgres(context.Background(), cfg.DatabaseURL, cfg.LogLevel == "debug")
-		if err != nil {
-			return err
-		}
-		defer func() { _ = pg.Close() }()
-		deps.Postgres = pg.Health
-		projects = service.NewProjectService(repository.NewProjectRepo(pg.DB))
-		logger.Info("PostgreSQL 已连接")
+		return errors.New("DATABASE_URL 未配置：请在 backend/.env 中配置，" +
+			"或在 backend 目录下启动（.env 按当前工作目录查找）")
 	}
+	pg, err := infra.NewPostgres(context.Background(), cfg.DatabaseURL, cfg.LogLevel == "debug")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = pg.Close() }()
+	deps.Postgres = pg.Health
+	projects := service.NewProjectService(repository.NewProjectRepo(pg.DB))
+	logger.Info("PostgreSQL 已连接")
 
 	// Redis
 	if cfg.RedisAddr == "" {

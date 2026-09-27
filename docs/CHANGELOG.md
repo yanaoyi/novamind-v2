@@ -55,7 +55,26 @@
 - 端到端冒烟 10 项全过：创建 201 / 列表分页 / 详情 / 更新（改名+归档、type 不变）/ 删除 / 删除后 404 / 非法 UUID 404 / 空名称 400 / 非法 type 400 / 类型过滤
 - 测试：service 4 例（假仓储纯逻辑）+ api 2 例
 
-### 待办（下一步）
+### 2026-09-27 · P1-6 前端骨架完成
 
-- P1-6 前端骨架：Vite + React + TS + Ant Design + Zustand；按 PRODUCT_SPEC §8 建路由；项目管理页可增删改查
-- P1-7 收尾：前端组件测试、刷新状态文档
+- 工程：Vite 7 + React 18 + TypeScript + Ant Design 5 + Zustand 5 + react-router-dom 6
+  - **React 用 18 而非 19**：antd v5 配 React 19 需要额外补丁包，Phase 1 优先稳定
+- 路由按 PRODUCT_SPEC §8 建全（dashboard / projects / original×10 / creative×10 / editor / ai / consistency / tasks / settings），未实现模块用统一占位页并标注计划 Phase
+- `src/api/`：统一请求层（解析 `{data,error,trace_id}`、抛带后端错误码的 `ApiError`）+ 工程接口封装 + 与 OpenAPI 对齐的类型
+- `src/stores/projectStore.ts`：Zustand 状态与动作（load / create / update / remove）
+- `src/pages/ProjectsPage.tsx`：列表分页、关键字搜索、类型过滤、新建 / 编辑（类型不可改）/ 删除（二次确认）
+- `src/pages/Dashboard.tsx`：工作台展示后端真实健康状态
+- 开发脚本：`scripts/dev-backend.sh`（自动 cd 到 backend，缺 .env 直接报错）、`scripts/dev-frontend.sh`
+- 网络：`frontend/.npmrc` 指向 npmmirror（官方源实测 13 分钟未完成依赖解析，镜像 18 秒装完 252 个包）
+- 测试：`ProjectsPage.test.tsx` 5 例（列表渲染 / 新建 POST / 编辑 PUT 且不提交 type / 删除二次确认 / 后端 500 不白屏），用内存假后端校验前后端契约
+- **前后端联调冒烟**：vite 代理链路（5173 → 8080）POST 201、列表、PUT 改状态、DELETE 全通
+- 修掉两个真实缺陷：① 缺 `DATABASE_URL` 时"降级启动"导致工程路由不注册、接口静默 404 → 改为 **fail fast**；② jsdom 下 antd 两字中文按钮插入空格导致测试按名字找不到按钮
+
+### 2026-09-27 · P1-7 收尾（Phase 1 完成）
+
+- 测试全景：后端 15 例 + 前端 5 例，全绿；测试不污染开发库（事务回滚）
+- 文档刷新：本文件、`CODEX_STATE.md`、`README.md`、`ARCHITECTURE.md`
+
+### 待办（下一步：Phase 2）
+
+- Phase 2 原著系统：文件上传、文本解析、章节识别，以及 OriginalWork / OriginalChapter / OriginalCharacter / World / Timeline / Plot

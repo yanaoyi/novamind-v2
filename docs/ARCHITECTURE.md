@@ -12,7 +12,7 @@
 | Backend | **Go + Gin + GORM** | 规格书 §6 |
 | 数据库 | **PostgreSQL 16**（+ pgvector） | JSONB 存 AI 半结构化结果 |
 | 缓存/队列 | **Redis + Asynq** | 异步任务 |
-| Frontend | **React + TypeScript + Vite** | SPA |
+| Frontend | **React 18 + TypeScript + Vite** | SPA；React 18 为与 antd v5 完全兼容（React 19 需额外补丁包），后续可评估升级 |
 | UI | **Ant Design** | 先求稳，不追求视觉定制 |
 | 状态 | **Zustand** | 轻量，够 V1 |
 | 编辑器 | **Tiptap** | 规格书 §48 |
@@ -53,7 +53,7 @@ novamindv2/
 │       ├── components/
 │       ├── features/          # 按业务域组织
 │       ├── stores/            # Zustand
-│       ├── api/               # API 客户端（由 OpenAPI 生成类型）
+│       ├── api/               # 请求层与类型（与 backend/internal/api/openapi.yaml 对齐）
 │       └── editor/            # Tiptap
 ├── prompts/
 │   ├── original/ character/ world/ plot/ outline/ writing/ review/
@@ -234,14 +234,14 @@ AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试
 
 | 项 | 实测结果 | 决策 |
 |---|---|---|
-| Go | 系统 `go1.19.8`（`/usr/lib/go-1.19`），无 root 升级 | **另装 go1.24.x 到 `~/.local/go`**，只给本项目用；不依赖系统 Go |
+| Go | 系统 `go1.19.8`（`/usr/lib/go-1.19`），无 root 升级 | ✅ 已另装 **go1.26.8** 到 `~/.local/go`，项目专用；不依赖系统 Go |
 | Node/npm | v22.18.0 / 10.9.3 | 直接可用 |
-| PostgreSQL | **未安装** | 见下方"待确认决策 P1" |
-| Redis | **未安装** | 同上 |
+| PostgreSQL | 原为未安装 | ✅ 已装 **15.19**，集群 `15 main` 在线；账号/库用 `scripts/setup-local-db.sh` 创建 |
+| Redis | 原为未安装 | ✅ 已装 **7.0.15**，监听 127.0.0.1:6379 |
 | Docker / Podman | **未安装，也没有 docker.sock** | `docker-compose.yml` 只作为部署/CI 产物；**本地开发流程不得依赖 Docker** |
 | sudo | 需要密码（当前用户属 sudo 组） | 不擅自使用 sudo；需要系统级安装时请 BOSS 执行 |
 | Python | 3.11.2（scripts 用） | 可用 |
-| 网络 | proxy.golang.org / registry.npmjs.org 均 200 | 依赖可拉 |
+| 网络 | Go 源可用；**npm 官方源极慢**（实测 13 分钟未完成依赖解析） | Go 用 `GOPROXY=https://goproxy.cn,direct`；npm 用 `frontend/.npmrc` 指向 `registry.npmmirror.com`（18 秒装完 252 包） |
 | 磁盘 | 剩余 1.1T | 充足 |
 
 ### 已定决策（2026-09-27 BOSS 拍板）

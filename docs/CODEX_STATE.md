@@ -1,14 +1,14 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-27（Phase 1 · P1-1 ~ P1-5 已完成并验收；下一步 P1-6 前端）
+> 最后更新：2026-09-27（**Phase 1 完成**：P1-1 ~ P1-7 全部交付并验收）
 > **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
 
 ## 1. 一句话状态
 
-**P1-1 ~ P1-5 全部完成并验收：骨架、Go 工具链、PG/Redis 连接、数据层（迁移+仓储）、项目管理 API（含 OpenAPI + Swagger UI）。**
-后端现在可以真实读写 PostgreSQL 里的工程数据；下一步 P1-6 做前端骨架与项目管理页。
+**Phase 1 完成。** 前后端已打通：浏览器里可以真实地对 PostgreSQL 里的工程做增删改查。
+下一步进入 **Phase 2（原著系统）**。
 
 ---
 
@@ -29,7 +29,7 @@
 
 ## 3. 正在进行
 
-**P1-1 ~ P1-5 全部完成。** 当前卡口只剩前端（P1-6）。
+**Phase 1 全部完成（P1-1 ~ P1-7）。** 无阻塞项。
 
 运行现状：PostgreSQL 15.19（集群 `15 main 5432 online`）与 Redis 7.0.15 均 active；
 业务账号 `novamind` 可登录；迁移版本 = 1（dirty=false）；`projects` 表 0 行（测试不残留）。
@@ -48,8 +48,8 @@
 | ~~P1-3~~ ✅ | 配置与基础设施层 | `internal/infra`（Postgres 连接池 + Redis 客户端 + 健康检查）+ 接入 main | 实测 health：`postgres=ok`、`redis=ok` |
 | ~~P1-4~~ ✅ | 数据层 | `projects` 迁移 + `cmd/migrate`(up/down/down-all/version/force) + `repository.ProjectRepo` | up 幂等、down 可回滚、可重建；13 个测试全绿；测试不污染库 |
 | ~~P1-5~~ ✅ | 项目管理 API | 5 端点 + 统一响应/错误码 + 分页 + OpenAPI + Swagger UI | 10 项端到端冒烟全过；防漂移测试守住文档与代码一致 |
-| P1-6 | 前端骨架 | Vite+React+TS+AntD+Zustand 工程 + 按 PRODUCT_SPEC §8 的空白路由 + `src/api` 客户端 + **项目管理页可增删改查** | 浏览器里能建项目→列表→改→删 |
-| P1-7 | 测试与收尾 | 后端 unit/service/API 测试、前端组件测试、`docs/CHANGELOG.md`、更新本文件 | 全部测试通过；三份文档状态刷新 |
+| ~~P1-6~~ ✅ | 前端骨架 | Vite+React18+TS+AntD5+Zustand + §8 全量路由（占位页标注计划 Phase）+ `src/api` + 工程管理页 | 组件测试 5 例全绿；vite 代理联调 POST/GET/PUT/DELETE 全通 |
+| ~~P1-7~~ ✅ | 测试与收尾 | 后端 15 例 + 前端 5 例测试；刷新 `CHANGELOG.md` 与三份文档 | 全绿；文档已刷新 |
 
 **Phase 1 完成判据**：浏览器可完整操作 `Project` 的增删改查；后端三态健康检查真实；迁移可重建；OpenAPI 可访问；测试全绿。
 **Phase 1 不做**：原著导入、AI 调用、二创、编辑器——那是 Phase 2 以后。
@@ -79,7 +79,8 @@
 | 后端 | **P1-5 完成**：config / infra / domain / repository / service / api 六层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4 |
 | 数据库 | **P1-4 完成**：`projects` 表 + `schema_migrations`（版本 1）；迁移可 up/down/重建 |
 | API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
-| 前端 | 未开始（0 行） |
+| 前端 | **P1-6 完成**：Vite 7 + React 18 + antd 5 + Zustand 5；工程管理页可增删改查；5 个组件测试 |
+| 工程化 | `scripts/dev-backend.sh` / `dev-frontend.sh` / `setup-local-db.sh`；`frontend/.npmrc` 走 npmmirror |
 | AI 模型 | 未接入；Phase 1 只做 Model Gateway 骨架与配置表，不接真实 Key（真实接入在 Phase 3） |
 | Prompt 库 | 目录规划完成，模板未写 |
 | 任务系统 | 未开始（Phase 1 只留结构，Phase 3 实装） |
@@ -112,3 +113,5 @@
 | 2026-09-27 | P1-3 实测通过：health 返回 `postgres=ok` / `redis=ok`（BOSS 启动服务 + 执行 `scripts/setup-local-db.sh`） |
 | 2026-09-27 | P1-4 完成：迁移执行器 `cmd/migrate`、`repository.ProjectRepo`；验证 up 幂等 / down 回滚 / 重建；domain+repository 测试全绿且不污染库 |
 | 2026-09-27 | P1-5 完成：servcie+api 层、5 个端点、错误码翻译、DTO；OpenAPI 3.0.3 规范 + 内嵌 Swagger UI + 防漂移测试（含反向用例）；10 项端到端冒烟全过 |
+| 2026-09-27 | P1-6 完成：前端骨架（Vite+React18+antd5+Zustand）、§8 全量路由、工程管理页、5 个组件测试；vite 代理联调全链路通过 |
+| 2026-09-27 | P1-7 完成：测试与文档收尾。**Phase 1 交付完毕**；顺手修掉两个真实缺陷（缺 DATABASE_URL 静默降级 → fail fast；jsdom+antd 按钮名空格问题） |

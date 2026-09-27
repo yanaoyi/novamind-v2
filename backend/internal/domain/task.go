@@ -47,6 +47,7 @@ type Task struct {
 	ID              string
 	ProjectID       *string
 	WorkID          *string
+	CreativeWorkID  *string
 	Type            string
 	Status          TaskStatus
 	Progress        int

@@ -126,6 +126,8 @@ Agent → Tool → Service → Repository → DB
 * 所有请求带 `X-Request-Id`（无则生成），贯穿日志。
 * **OpenAPI 文档随代码自动生成**（swaggo 注解或 huma），CI/本地可访问 `/swagger`。
 * 长任务不阻塞 HTTP：创建任务返回 `202 + task_id`，进度走 `GET /api/v1/tasks/:id`。
+* **接口禁止直接返回领域结构体**：handler 一律转成 `xxxResponse` DTO 再返回。领域结构体没有 json tag，直接返回会把 `VersionNo` / `EmotionalGoal` 这类 Go 字段名漏给前端（2026-09-27 实测踩过一次，见 CHANGELOG）。
+* 二进制响应（导出）不走统一响应包：直接 `Content-Type` + `Content-Disposition` 返回流。
 
 ---
 
@@ -197,6 +199,17 @@ AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试
 ```json
 { "severity": "high", "type": "timeline", "description": "...", "evidence": "...", "suggestion": "..." }
 ```
+
+落地实现（Phase 6）：`consistency_check` 异步任务 → `service.WritingService.CheckConsistency` 逐章送审 `prompts/review/consistency_check.v1.md` → 模型输出容错提取（复用 P3-3 的解析思路）→ 校验 severity/type/description 后写 `consistency_issues` 表 → 作者在 `/consistency` 页逐条「已解决 / 忽略 / 重新打开」。**AI 只报告问题，不自动改文**（产品原则 1）。
+
+---
+
+## 9.1 写作与版本（Phase 5 / 7）
+
+* 层级：`creative_works → creative_volumes → creative_chapters → creative_scenes / chapter_versions`。
+* **正文变化才留版本**：标题、大纲、状态、归属卷的修改不产生版本噪声；只有 `content` 真正变了才 `snapshot`。
+* **恢复版本前先自动备份当前正文**：`RestoreVersion` 的顺序固定为「读旧版 → 备份当前 → 写入旧版内容 → 再留一版」，任何一次恢复都不会让内容凭空消失。
+* **列表默认不带正文**：`GET /creative/{id}/chapters` 默认剔掉 `content`（长篇正文一起返回会拖垮列表），需要正文时用 `?full=true` 或逐个取详情。导出走 `GET /creative/{id}/export?format=`，按「卷 → 章」排版。
 
 ---
 

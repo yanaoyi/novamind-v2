@@ -28,6 +28,8 @@ type Server struct {
 	taskTypes  func() []string
 	analysis   *service.AnalysisService
 	creative   *service.CreativeService
+	writing    *service.WritingService
+	invoker    *service.ModelInvoker
 }
 
 // NewServer 构建 HTTP 服务。
@@ -46,12 +48,15 @@ func NewServer(
 	taskTypes func() []string,
 	analysis *service.AnalysisService,
 	creative *service.CreativeService,
+	writing *service.WritingService,
+	invoker *service.ModelInvoker,
 ) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, deps: deps,
 		projects: projects, originals: originals, characters: characters, worlds: worlds,
 		events: events, providers: providers, prompts: promptEngine,
 		tasks: tasks, taskTypes: taskTypes, analysis: analysis, creative: creative,
+		writing: writing, invoker: invoker,
 	}
 }
 
@@ -136,6 +141,31 @@ func (s *Server) Router() *gin.Engine {
 			creative.GET("/:id/timeline", s.getCreativeTimeline)
 			creative.PUT("/:id/timeline", s.setCreativeTimeline)
 			creative.POST("/:id/timeline/build", s.buildCreativeTimeline)
+			// 写作系统（规格书 §27-§29、§38、§39、§61）
+			creative.POST("/:id/volumes", s.createVolume)
+			creative.GET("/:id/volumes", s.listVolumes)
+			creative.POST("/:id/chapters", s.createChapter)
+			creative.GET("/:id/chapters", s.listCreativeChapters)
+			creative.POST("/:id/consistency/check", s.checkConsistency)
+			creative.GET("/:id/consistency/issues", s.listConsistencyIssues)
+			creative.GET("/:id/export", s.exportCreative)
+		}
+		chapters := v1.Group("/chapters")
+		{
+			chapters.GET("/:id", s.getCreativeChapter)
+			chapters.PUT("/:id", s.updateCreativeChapter)
+			chapters.DELETE("/:id", s.deleteCreativeChapter)
+			chapters.POST("/:id/generate", s.generateChapter)
+			chapters.GET("/:id/versions", s.listChapterVersions)
+			chapters.GET("/:id/versions/:no", s.getChapterVersion)
+			chapters.POST("/:id/versions/:no/restore", s.restoreChapterVersion)
+			chapters.POST("/:id/scenes", s.createChapterScene)
+			chapters.GET("/:id/scenes", s.listChapterScenes)
+		}
+		v1.POST("/ai/rewrite", s.rewriteText)
+		consistencyIssues := v1.Group("/consistency-issues")
+		{
+			consistencyIssues.PUT("/:id", s.updateConsistencyIssue)
 		}
 		creativeWorldRules := v1.Group("/creative-world-rules")
 		{
@@ -241,7 +271,8 @@ func (s *Server) Router() *gin.Engine {
 // 未就绪时返回 503，而不是让请求打到 nil 上 panic 或静默 404。
 func (s *Server) requireServices(c *gin.Context) bool {
 	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
-		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil || s.creative == nil {
+		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil ||
+		s.creative == nil || s.writing == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

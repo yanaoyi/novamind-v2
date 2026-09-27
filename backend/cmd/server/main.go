@@ -145,6 +145,13 @@ func run() error {
 		repository.NewOriginalWorldRepo(pg.DB),
 		repository.NewOriginalEventRepo(pg.DB),
 	)
+	// 写作服务：仓储 + 二创作品查询（repo 直接提供 GetWorkByID）+ 上下文读取（CreativeService 提供人物/世界）
+	writing := service.NewWritingService(
+		repository.NewWritingRepo(pg.DB),
+		repository.NewCreativeRepo(pg.DB),
+		creative,
+	)
+	task.RegisterWritingHandlers(registry, writing, invoker)
 
 	// Redis
 	if cfg.RedisAddr == "" {
@@ -166,6 +173,8 @@ func run() error {
 		tasks, registry.Types,
 		analysis,
 		creative,
+		writing,
+		invoker,
 	)
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())

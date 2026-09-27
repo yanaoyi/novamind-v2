@@ -2,6 +2,8 @@
 
 面向"基于原著进行二次创作"的专业 AI 写作系统。按 `docs/PRODUCT_SPEC.md` / `docs/ARCHITECTURE.md` 分阶段实现，规格书见 `../novamind-pro/NovaMind_V1_开发规格说明书.md`。
 
+**当前状态（2026-09-27）**：规格书 §63 的 Phase 1–7 全部完成 —— 工程管理、原著导入与结构化、AI 分析（提案→作者审核）、二创（继承/融合/分叉点/时间线）、写作（卷·章节·场景·版本·AI 写作）、一致性检查、导出（txt/md/docx）。唯一未做的是 **PDF 解析**（BOSS 决定暂缓）。详见 `docs/CODEX_STATE.md`。
+
 ## 技术栈
 
 Go + Gin + GORM + PostgreSQL(+pgvector) + Redis(Asynq) ｜ React + TypeScript + Vite + Ant Design + Zustand + Tiptap

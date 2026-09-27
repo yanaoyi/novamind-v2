@@ -7,6 +7,8 @@ import ProjectsPage from './pages/ProjectsPage'
 import SettingsPage from './pages/SettingsPage'
 import TasksPage from './pages/TasksPage'
 import CreativePage from './pages/CreativePage'
+import ConsistencyPage from './pages/creative/ConsistencyPage'
+import WritingWorkspacePage from './pages/creative/WritingWorkspacePage'
 import ChapterReaderPage from './pages/original/ChapterReaderPage'
 import OriginalAnalysisPage from './pages/original/OriginalAnalysisPage'
 import OriginalCharactersPage from './pages/original/OriginalCharactersPage'
@@ -153,7 +155,11 @@ export default function App() {
                 key={p.path}
                 path={`/creative/${p.path}`}
                 element={
-                  ['characters', 'world', 'timeline', 'mappings'].includes(p.path) ? (
+                  p.path === 'outline' ? (
+                    <WritingWorkspacePage key="creative-outline" defaultTab="outline" />
+                  ) : p.path === 'chapters' ? (
+                    <WritingWorkspacePage key="creative-chapters" defaultTab="chapters" />
+                  ) : ['characters', 'world', 'timeline', 'mappings'].includes(p.path) ? (
                     <CreativePage
                       key={`creative-${p.path}`}
                       defaultTab={p.path as 'characters' | 'world' | 'timeline' | 'mappings'}
@@ -166,9 +172,13 @@ export default function App() {
             ))}
             <Route path="/creative" element={<Navigate to="/creative/overview" replace />} />
             <Route path="/creative-workspace" element={<CreativePage key="creative-workspace" />} />
+            <Route path="/editor" element={<WritingWorkspacePage key="editor" />} />
+            <Route path="/consistency" element={<ConsistencyPage />} />
 
             {SIMPLE_PAGES.map((p) => (
-              <Route key={p.path} path={p.path} element={<Placeholder title={p.label} phase={p.phase} />} />
+              ['/editor', '/consistency'].includes(p.path) ? null : (
+                <Route key={p.path} path={p.path} element={<Placeholder title={p.label} phase={p.phase} />} />
+              )
             ))}
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/settings" element={<SettingsPage />} />

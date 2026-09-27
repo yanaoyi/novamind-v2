@@ -514,6 +514,7 @@ export interface Task {
   id: string
   project_id: string | null
   work_id: string | null
+  creative_work_id: string | null
   type: string
   status: TaskStatus
   progress: number
@@ -742,3 +743,118 @@ export interface CreativeMapping {
   description: string
   created_at: string
 }
+
+// ---------- 写作系统（Phase 5/6/7，规格书 §27-§29、§39、§59） ----------
+
+export type ChapterStatus = 'DRAFT' | 'REVIEW' | 'FINAL'
+
+export const CHAPTER_STATUS_LABEL: Record<ChapterStatus, string> = {
+  DRAFT: '草稿',
+  REVIEW: '待审',
+  FINAL: '定稿',
+}
+
+export const CHAPTER_STATUS_COLOR: Record<ChapterStatus, string> = {
+  DRAFT: 'default',
+  REVIEW: 'orange',
+  FINAL: 'green',
+}
+
+export interface CreativeVolume {
+  id: string
+  title: string
+  summary: string
+  sequence: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreativeChapter {
+  id: string
+  volume_id: string | null
+  chapter_no: number
+  title: string
+  summary: string
+  content: string
+  status: ChapterStatus
+  word_count: number
+  purpose: string
+  conflict: string
+  outcome: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChapterVersion {
+  id: string
+  chapter_id: string
+  version_no: number
+  content?: string
+  word_count: number
+  note: string
+  created_at: string
+}
+
+export interface CreativeScene {
+  id: string
+  chapter_id: string
+  sequence: number
+  title: string
+  location: string
+  characters: string[]
+  purpose: string
+  conflict: string
+  emotional_goal: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export type IssueSeverity = 'high' | 'medium' | 'low'
+export type IssueType = 'character' | 'world' | 'timeline' | 'plot' | 'language'
+export type IssueStatus = 'OPEN' | 'RESOLVED' | 'IGNORED'
+
+export const ISSUE_SEVERITY_LABEL: Record<IssueSeverity, string> = {
+  high: '严重',
+  medium: '中等',
+  low: '轻微',
+}
+
+export const ISSUE_SEVERITY_COLOR: Record<IssueSeverity, string> = {
+  high: 'red',
+  medium: 'orange',
+  low: 'blue',
+}
+
+export const ISSUE_TYPE_LABEL: Record<IssueType, string> = {
+  character: '人物',
+  world: '世界观',
+  timeline: '时间线',
+  plot: '剧情',
+  language: '语言',
+}
+
+export const ISSUE_STATUS_LABEL: Record<IssueStatus, string> = {
+  OPEN: '待处理',
+  RESOLVED: '已解决',
+  IGNORED: '已忽略',
+}
+
+export interface ConsistencyIssue {
+  id: string
+  creative_work_id: string
+  chapter_id: string | null
+  severity: IssueSeverity
+  type: IssueType
+  description: string
+  evidence: string
+  suggestion: string
+  status: IssueStatus
+  created_at: string
+  updated_at: string
+}
+
+/** 编辑器内的 AI 操作（规格书 §38） */
+export type RewriteAction = '改写' | '扩写' | '缩写' | '润色' | '增强冲突' | '增强情绪'
+
+export const REWRITE_ACTIONS: RewriteAction[] = ['改写', '扩写', '缩写', '润色', '增强冲突', '增强情绪']

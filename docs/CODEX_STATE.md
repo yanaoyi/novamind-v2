@@ -1,14 +1,14 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-27（**Phase 1 / 2 / 3 / 4 完成；下一步 Phase 5 写作系统**）
+> 最后更新：2026-09-27（**Phase 1 ~ Phase 7 全部完成**，唯一缺口是 PDF 解析）
 > **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
 
 ## 1. 一句话状态
 
-**Phase 4（二创系统）完成**：二创作品、人物继承（DNA 权重派生）、人物融合（逐维度来源）、映射、二创世界（继承/修改/删除/新增规则）、分叉点、二创时间线（按分叉点自动切分），并配了完整的前端二创工作区。
-下一步进入 **Phase 5（写作系统：大纲 / 章节 / 场景 / 编辑器 / AI 写作）**，其后 Phase 6 一致性、Phase 7 版本与导出。
+**Phase 5 / 6 / 7 全部完成**：写作系统（卷 / 章节 / 场景 / 自动保存编辑器 / AI 写本章 / 编辑器内 AI 操作）、一致性检查（逐章送审 → 问题清单 → 逐条处理）、版本与导出（正文变更自动留版、恢复前自动备份、txt/md/docx 导出）。
+至此规格书 §63 的七个 Phase 全部落地，**唯一未做的是 PDF 解析（BOSS 决定暂缓）**。
 
 ---
 
@@ -21,6 +21,7 @@
 | 环境勘查 | Go 1.19.8（系统）/ Node v22.18.0 / npm 10.9.3 / Python 3.11.2；**无 PostgreSQL、无 Redis、无 Docker**；sudo 需密码；网络可达 Go/npm 源；磁盘剩 1.1T |
 | 目录建立 | 最终位置 `codex/novamindv2/`（与 v1 平级），`docs/` 已建 |
 | 治理文档 | `PRODUCT_SPEC.md`、`ARCHITECTURE.md`、本文件 已落盘 |
+| Phase 5 / 6 / 7 | 写作系统 + 一致性检查 + 版本与导出：后端 4 个模块（domain/repository/service/task+api）、迁移 `0011`/`0012`、端到端冒烟 30 项全过；前端写作工作台 + 编辑器 + 一致性问题页，测试 19 例全绿 |
 | 仓库骨架（P1-1） | 目录结构对齐规格书 §50；`.gitignore` / `README.md` / `scripts/dev-env.sh` 就位；Git 仓库已初始化，首提交 `0bc38a7` |
 | Go 工具链（P1-2） | Go **1.26.8** 装在 `~/.local/go`（系统 1.19.8 不动） |
 | 后端骨架（P1-2） | `config` / `domain.Project` / `api`（统一响应+中间件+健康检查）/ `cmd/server`；`go build`+`go vet`+`gofmt` 全通过；服务实测 200 与统一 404 正常 |
@@ -29,9 +30,19 @@
 
 ## 3. 正在进行
 
-**Phase 4 完成**：后端 4 片（人物继承/融合/映射、二创世界、分叉点、二创时间线）+ 前端二创工作区。
-冒烟：`scripts/smoke-phase4.sh` 33 项、`scripts/smoke-phase4b.sh` 32 项全过；前端 14 例全绿。
-下一步 Phase 5。
+**无进行中的开发项**。Phase 5/6/7 已收官：`scripts/smoke-phase5.sh` 30 项全过；后端 8 个包测试全绿；前端 6 个文件 19 例全绿；迁移版本 12。
+
+### Phase 5/6/7 任务拆分（写作 / 一致性 / 版本与导出）
+
+| # | 任务 | 状态 |
+|---|---|---|
+| P5-1 | 数据模型：卷 / 章节 / 场景 / 版本 / 一致性问题（迁移 0011） | ✅ |
+| P5-2 | 写作服务：章节 CRUD + 正文变更留版 + 恢复前备份 + 上下文组装 | ✅ |
+| P5-3 | AI 写作：`writing_chapter` 任务（写本章）+ 编辑器内同步 AI 操作 | ✅ |
+| P5-4 | 前端写作工作台：大纲/卷、章节编辑器（1.5s 自动保存）、版本抽屉、场景登记 | ✅ |
+| P6 | 一致性检查：`consistency_check` 任务 → 问题清单 → 逐条处理（前端 `/consistency`） | ✅ |
+| P7 | 导出 txt / md / docx（自建最小 OOXML）+ 版本历史 | ✅ |
+| — | PDF 解析 | 仍待做（已知缺口，BOSS 决定暂缓） |
 
 ### Phase 4 任务拆分（二创系统）
 
@@ -64,11 +75,15 @@
 | — | PDF 解析 | 待做（已知缺口） |
 
 运行现状：PostgreSQL 15.19（集群 `15 main 5432 online`）与 Redis 7.0.15 均 active；
-业务账号 `novamind` 可登录；迁移版本 = 1（dirty=false）；`projects` 表 0 行（测试不残留）。
+业务账号 `novamind` 可登录；**迁移版本 = 12**（dirty=false）；各冒烟脚本用 `trap` 自清理，测试不在库里留数据。
 
 ---
 
-## 4. 未完成 / 下一步（Phase 1：基础框架）
+## 4. Phase 1 任务拆分（历史归档）
+
+> Phase 1 早已收官，此表保留作为最初的拆分依据，便于回溯。
+
+**剩余工作（全项目）**：只有 **PDF 解析** 一项（规格书 §15 支持 PDF，当前只支持 TXT/DOCX；BOSS 2026-09-27 决定暂缓）。其余 §63 的 Phase 1–7 全部完成。
 
 规格书 §63 定义 Phase 1 = Go Backend + React Frontend + PostgreSQL + Redis + Docker + 基础 API + 项目管理。
 本文把它拆成 7 个可验收的任务：
@@ -95,6 +110,8 @@
 | P1 | 本地无 PostgreSQL / Redis，怎么装？ | **方案 A**：BOSS 已装 PostgreSQL 15.19 + Redis 7.0.15，并用 `scripts/setup-local-db.sh` 建好账号与库 | ✅ 已完成 |
 | P2 | 项目目录位置 | **`/lzcapp/document/codex/novamindv2/`**（与 v1 平级），已迁移完成 | 已定 |
 | P3 | v1（`novamind-pro`）是否复用 | **不复用，全部重新做**；v1 只作为产品交互参考，一行不动 | 已定 |
+| P4 | PDF 解析 | BOSS 2026-09-27 决定**暂缓**，不做 | 待做 |
+| P5 | 「调试服务器」指哪台 | `47.237.18.94`（阿里云轻量，root 免密）；旧 `8.145.62.78` 已废弃 | 已定 |
 
 其他已知限制：
 
@@ -108,15 +125,18 @@
 
 | 子系统 | 状态 |
 |---|---|
-| 后端 | **P1-5 完成**：config / infra / domain / repository / service / api 六层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4 |
-| 数据库 | **P1-4 完成**：`projects` 表 + `schema_migrations`（版本 1）；迁移可 up/down/重建 |
+| 后端 | **全 Phase 完成**：config / infra / domain / repository / service / api / ai / task 各层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4；`go test ./...` 8 个包全绿 |
+| 数据库 | **迁移版本 12**：projects → originals/characters/world/events → model_providers → tasks（+creative_work_id）→ analysis_proposals → creative core/world/timeline → writing（卷/章节/场景/版本/一致性问题）；全部可 up/down/重建 |
 | API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
 | 原著系统 | **P2-1 ~ P2-6 基本完成**：导入与章节（5 API）、人物/DNA/关系（9 API）、世界观（14 API）、事件/时间线/剧情弧（11 API）；前端全链路可用；**仅剩 PDF 解析（BOSS 决定暂缓）** |
 | AI 层 | **Phase 3 P3-1 完成**：Model Gateway（OpenAI 兼容 + Anthropic，含重试与错误语义）、Prompt Engine（7 个版本化模板，编译进二进制）、模型配置 CRUD + 连通性测试；密钥 AES-256-GCM 加密，接口不返回密钥 |
 | 任务系统 | **P3-2 完成**：PostgreSQL 队列（`FOR UPDATE SKIP LOCKED` 原子领取）+ worker 池 + 进度节流上报 + panic 兜底 + 自动重试/取消；首个任务 `original_reparse`；任务 API 6 个 |
 | 分析流水线 | **P3-3 完成**：4 个分析阶段（章节摘要/人物/世界观/剧情）→ 提案表 → 作者审核（可修改后通过）→ 写入原著；模型输出容错提取；6 个 API |
+| 写作系统 | **P5 完成**：卷 / 章节（含大纲三要素）/ 场景 / 版本；`writing_chapter` 任务（带人物 DNA + 世界规则 + 前几章摘要的上下文组装）；编辑器内同步 AI 操作 6 种 |
+| 一致性引擎 | **P6 完成**：`consistency_check` 任务逐章送审 → `consistency_issues`（severity/type/evidence/suggestion）→ 逐条「已解决/忽略/重新打开」 |
+| 导出 | **P7 完成**：txt / md / docx（自建最小 OOXML，无第三方依赖），按「卷 → 章」输出；非法格式 400 |
 | 解析与存储 | `internal/parser`（编码/切章/DOCX）、`internal/storage`（本地文件系统 + SHA256 + 路径安全） |
-| 前端 | Vite 7 + React 18 + antd 5 + Zustand 5；已实现：工程管理、原著总览/上传、章节目录/阅读、**人物（含 DNA 编辑器）与关系**、**世界观（世界/规则/地点/势力）**；8 个测试 |
+| 前端 | Vite 7 + React 18 + antd 5 + Zustand 5；已实现：工程管理、原著总览/上传、章节目录/阅读、人物（含 DNA 编辑器）与关系、世界观（世界/规则/地点/势力）、事件/时间线/剧情、模型设置、任务中心、AI 分析审核、二创工作区、**写作工作台与章节编辑器（自动保存 / 版本 / AI / 导出）**、**一致性问题页**；6 个测试文件 19 例全绿 |
 | 工程化 | `scripts/dev-backend.sh` / `dev-frontend.sh` / `setup-local-db.sh`；`frontend/.npmrc` 走 npmmirror |
 | AI 模型 | 未接入；Phase 1 只做 Model Gateway 骨架与配置表，不接真实 Key（真实接入在 Phase 3） |
 | Prompt 库 | 目录规划完成，模板未写 |
@@ -164,3 +184,5 @@
 | 2026-09-27 | P3-4 完成：前端模型设置（真实连通测试）、任务中心（自动刷新/取消/重试）、AI 分析审核页（可改 JSON 后通过）；前端测试 14 例全绿。**Phase 3 收官，下一步 Phase 4 二创系统** |
 | 2026-09-27 | P4-2/P4-3 完成：二创世界继承（FULL/PARTIAL/MODIFIED/NEW + 规则 INHERITED/MODIFIED/REMOVED/NEW）+ 分叉点 + 二创时间线（按分叉点自动切分、不覆盖二创新内容）；冒烟 32 项全过；修复空指针与空 ID 两个真 bug |
 | 2026-09-27 | P4-4 完成：前端二创工作区（人物继承滑杆含实时派生预览、融合、世界规则状态、分叉点与时间线、映射）；**Phase 4 收官**，下一步 Phase 5 写作系统 |
+| 2026-09-27 | P5-1~P5-4 / P6 / P7 完成：写作系统（卷·章节·场景·版本·AI 写本章·编辑器 AI 操作）、一致性检查、txt/md/docx 导出；冒烟 30 项、后端 8 包、前端 19 例全绿；**Phase 5/6/7 收官，全项目仅剩 PDF 解析** |
+| 2026-09-27 | 修掉两个真 bug：① 写作任务入队 500（`tasks.work_id` 外键指向原著，改用新增的 `tasks.creative_work_id`，迁移 `0012`）；② 版本/场景/问题接口直接返回领域结构体导致 JSON 键名是 Go 字段名（补 4 个响应 DTO + 1 个请求 DTO） |

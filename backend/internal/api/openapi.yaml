@@ -1357,6 +1357,9 @@ paths:
         - name: work_id
           in: query
           schema: { type: string, format: uuid }
+        - name: creative_work_id
+          in: query
+          schema: { type: string, format: uuid }
         - name: status
           in: query
           schema: { type: string, enum: [PENDING, RUNNING, PAUSED, COMPLETED, FAILED, CANCELLED] }
@@ -2348,6 +2351,401 @@ paths:
                           items: { type: array, items: { $ref: "#/components/schemas/CreativeTimelineEvent" } }
                           total: { type: integer }
 
+  /creative/{id}/volumes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [writing]
+      summary: 卷列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    post:
+      tags: [writing]
+      summary: 新增卷
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                summary: { type: string }
+                sequence: { type: integer }
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /creative/{id}/chapters:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [writing]
+      summary: 章节列表
+      parameters:
+        - name: full
+          in: query
+          schema: { type: boolean, default: false, description: 是否包含正文 }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    post:
+      tags: [writing]
+      summary: 新增章节
+      description: content 非空时自动生成 v1 版本。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChapterRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /chapters/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [writing]
+      summary: 章节详情
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [writing]
+      summary: 更新章节
+      description: 正文有变化时自动存一个新版本（章节版本管理）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                summary: { type: string }
+                content: { type: string }
+                status: { type: string, enum: [DRAFT, REVIEW, FINAL] }
+                volume_id: { type: string, format: uuid, nullable: true }
+                purpose: { type: string }
+                conflict: { type: string }
+                outcome: { type: string }
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [writing]
+      summary: 删除章节
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /chapters/{id}/generate:
+    post:
+      tags: [writing]
+      summary: 让 AI 写本章（异步）
+      description: 按人物 DNA、世界规则与最近章节摘要组装上下文生成正文，完成后自动存版本。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_words: { type: integer, default: 2000 }
+                instruction: { type: string }
+      responses:
+        "202":
+          description: 已入队
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Task" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /chapters/{id}/versions:
+    get:
+      tags: [writing]
+      summary: 章节版本列表
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /chapters/{id}/versions/{no}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [writing]
+      summary: 版本详情（含正文）
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /chapters/{id}/versions/{no}/restore:
+    post:
+      tags: [writing]
+      summary: 恢复章节版本
+      description: 恢复前会先把当前正文自动存一版，避免误操作丢内容。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: no
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: 恢复成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /chapters/{id}/scenes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [writing]
+      summary: 场景列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    post:
+      tags: [writing]
+      summary: 新增场景
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreativeScene"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /ai/rewrite:
+    post:
+      tags: [writing]
+      summary: 编辑器 AI 操作（同步）
+      description: 改写 / 扩写 / 缩写 / 润色 / 增强冲突 / 增强情绪。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chapter_id, text, action]
+              properties:
+                chapter_id: { type: string, format: uuid }
+                text: { type: string }
+                action: { type: string, enum: [改写, 扩写, 缩写, 润色, 增强冲突, 增强情绪] }
+                instruction: { type: string }
+      responses:
+        "200":
+          description: 返回处理后的文本
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          text: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /creative/{id}/consistency/check:
+    post:
+      tags: [consistency]
+      summary: 一致性检查（异步）
+      description: 不传 chapter_ids 时检查全部有正文的章节；结果进问题列表。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chapter_ids: { type: array, items: { type: string, format: uuid } }
+      responses:
+        "202":
+          description: 已入队
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Task" }
+
+  /creative/{id}/consistency/issues:
+    get:
+      tags: [consistency]
+      summary: 一致性问题列表
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [OPEN, RESOLVED, IGNORED] }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /consistency-issues/{id}:
+    put:
+      tags: [consistency]
+      summary: 更新一致性问题状态
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [OPEN, RESOLVED, IGNORED] }
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /creative/{id}/export:
+    get:
+      tags: [writing]
+      summary: 导出作品
+      description: 支持 txt / md / docx，按「卷 → 章」结构输出。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: format
+          in: query
+          schema: { type: string, enum: [txt, md, docx], default: txt }
+      responses:
+        "200":
+          description: 文件内容
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+
 components:
   responses:
     BadRequest:
@@ -2895,6 +3293,7 @@ components:
         type: { type: string, example: original_reparse }
         project_id: { type: string, format: uuid, nullable: true }
         work_id: { type: string, format: uuid, nullable: true }
+        creative_work_id: { type: string, format: uuid, nullable: true }
         input: { type: object, additionalProperties: true, example: { work_id: "uuid" } }
         max_attempts: { type: integer, default: 3 }
     Task:
@@ -3141,3 +3540,26 @@ components:
           properties:
             id: { type: string, format: uuid }
             sequence: { type: integer, minimum: 1 }
+    CreateChapterRequest:
+      type: object
+      required: [chapter_no, title]
+      properties:
+        volume_id: { type: string, format: uuid, nullable: true }
+        chapter_no: { type: integer, minimum: 1 }
+        title: { type: string, example: 旧信 }
+        summary: { type: string }
+        purpose: { type: string, description: 本章叙事目的 }
+        conflict: { type: string }
+        outcome: { type: string }
+        content: { type: string }
+    CreativeScene:
+      type: object
+      properties:
+        sequence: { type: integer, default: 1 }
+        title: { type: string }
+        location: { type: string }
+        characters: { type: array, items: { type: string } }
+        purpose: { type: string }
+        conflict: { type: string }
+        emotional_goal: { type: string }
+        content: { type: string }

@@ -458,3 +458,33 @@ PUT|DELETE     /plot-arcs/{id}
 - `internal/task` 单元测试 9 例（内存假仓储，确定性）：成功完成并写 output、空队列返回 (false,nil)、**失败→回队列→重试成功**、**超过上限才 FAILED**、**panic 被兜住并记为失败**、未知类型失败、**已取消任务不被改写**、注册表排序与查找、入参取值
 - `internal/repository` 集成测试 6 例（真实 PG，事务回滚）：领取后 RUNNING 且 attempts=1、队列空返回 nil、**失败回到 PENDING→达上限 FAILED→重试清零**、**终态不可取消/不可重试**、不存在报 404、列表过滤与倒序
 - 端到端冒烟 `scripts/smoke-phase3-tasks.sh`：**19 项全过** —— 真实走了一遍「建工程→建原著→导入 3 章→入队 reparse→worker 领取执行→轮询到 COMPLETED」，校验进度 100、attempts=1、output 里章节数与编码正确、章节数未变；再验证完成任务的取消/重试都返回 409、非法原著的任务会 FAILED 且带 error、**失败任务可重试并重新排队**、未知类型 400、按 work_id 过滤生效
+
+### 2026-09-27 · P5-1 ~ P5-4 写作系统 + P6 一致性 + P7 版本与导出（Phase 5/6/7 完成）
+
+**数据模型**（迁移 `0011_create_writing`）：`creative_volumes`（卷）、`creative_chapters`（章节，含大纲三要素 purpose/conflict/outcome 与 word_count）、`chapter_versions`（版本快照）、`creative_scenes`（场景，人物数组）、`consistency_issues`（一致性问题，severity/type/status + 依据 + 建议）。所有表带软删除与部分索引，约束（标题非空、状态枚举、章号为正）落在数据库层。
+
+**章节与版本**（`service/writing_service.go`）：章节 CRUD、按卷/章号排序的列表（默认不带正文，`?full=true` 才带，避免列表把几十万字正文一起吐出来）、**正文变化才留版本**（标题/大纲改动不产生噪声版本）、`NextVersionNo` 取号、**恢复版本前先把当前正文自动备份一版**（规格书 §59 的"误操作可回退"）。字数统计按去空白字符计，中文按字。
+
+**写作上下文组装**（`BuildContext`，规格书 §31 的裁剪版）：本章大纲（目的/冲突/结果）+ 已登记场景 + 前 3 章摘要 + 相关二创人物 DNA（按重要度取前若干位）+ 二创世界规则。三块拼进 `writing/chapter_generate.v1.md`，让"AI 写本章"有据可依而不是自由发挥。
+
+**任务化**：`writing_chapter`（写本章，进度分 3 段上报：组装上下文 → 调用模型 → 写入版本）与 `consistency_check`（一致性检查）。异步、可取消、失败可重试，都复用 P3-2 的 PG 队列。
+
+**一致性引擎**（`CheckConsistency` + `prompts/review/consistency_check.v1.md`）：对指定章节（不传则全部有正文的章节）逐章送审，要求模型返回 `{issues:[{severity,type,description,evidence,suggestion}]}`；输出做容错提取（复用 P3-3 的 `analysis_json.go` 思路），按严重度与类型校验后落库；作者可逐条「已解决 / 忽略 / 重新打开」。
+
+**导出**（P7）：`GET /creative/{id}/export?format=txt|md|docx`，按「卷 → 章」输出，含章标题与正文；DOCX 用自建最小 OOXML 写出（`service/docx.go`，不引第三方库，`zip` + `word/document.xml` + 正确的 `[Content_Types].xml`），实测是合法 zip 且 Word 可打开；不支持的格式返回 400。
+
+**前端**（`pages/creative/WritingWorkspacePage.tsx` + `ChapterEditor.tsx` + `ConsistencyPage.tsx`）：左侧章节列表 + 右侧编辑器；**停止输入 1.5 秒自动保存**（可关）；本章大纲折叠区（目的/冲突/结果/摘要）；`让 AI 写本章`（目标字数 + 补充要求，带进度条）；编辑器内 AI 操作（改写/扩写/缩写/润色/增强冲突/增强情绪）；版本抽屉（预览 + 恢复）；场景抽屉（登记场景：地点/情绪目标/目的/冲突）；导出下拉（txt/md/docx 触发浏览器下载）；`/consistency` 页按状态筛选并逐条处理。
+
+**修掉的两个真 bug**
+
+1. **写作任务入队 500**：`tasks.work_id` 外键指向 `original_works`，而写作/一致性任务传的是二创作品 ID，直接触发外键冲突。新增迁移 `0012_tasks_creative_work` 加 `tasks.creative_work_id`，任务模型/仓储/服务/API 全链路带上该列，两类作品互不干扰。
+2. **接口返回 Go 字段名而非 JSON 字段名**：`getChapterVersion` / `createChapterScene` / `listChapterScenes` / `listConsistencyIssues` 直接返回领域结构体（无 json tag），前端拿到的是 `VersionNo`、`EmotionalGoal` 这种键名。补了 `ChapterVersionResponse` / `VolumeResponse` / `SceneResponse` / `ConsistencyIssueResponse` 四个 DTO 与转换函数，请求侧也补了 `createSceneRequest`。
+
+**验证**
+
+- 后端：`gofmt -l` 无输出、`go build ./...`、`go vet ./...` 通过；`go test ./... -count=1` **8 个包全绿**（含防漂移测试：新增路由全部已在 openapi.yaml 里）
+- 迁移：`up` 到版本 **12**（dirty=false）
+- 端到端冒烟 `scripts/smoke-phase5.sh`：**30 项全过** —— 原著+二创+继承 → 建卷建章 → 改正文生成 v2 → **v1 正文确实是旧内容** → 恢复 v1 得到 4 个版本（创建/编辑/恢复前备份/恢复结果）→ 编辑器 AI 改写返回处理结果、空文本 400、非法操作 400 → AI 写本章任务 COMPLETED 且正文写入并新增版本 → 一致性检查任务产出 2 条问题（high + character 类型）→ 标记解决后待处理剩 1 → 导出 TXT 含作品名与章标题、MD 含 `#` 层级、DOCX 是合法 zip 且 >1KB、`format=pdf` 返回 400
+- 前端：`tsc -b` + `vite build` 通过；`npx vitest run` **6 个文件 19 例全绿**（新增 `src/pages/writing.test.tsx` 5 例：章节列表与正文加载、大纲视图三要素、版本抽屉、导出走二进制接口、一致性问题按状态筛选并标记解决）
+
+**Phase 5/6/7 完成判据**：作者可以在界面上「建卷 → 建章 → 写正文（自动保存）→ 让 AI 起草 → 用 AI 改写 → 回到任意历史版本 → 跑一致性检查并逐条处理 → 导出 txt/md/docx」走完整条链路。

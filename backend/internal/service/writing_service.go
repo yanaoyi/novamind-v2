@@ -1,0 +1,656 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/yanaoyi/novamindv2/backend/internal/domain"
+)
+
+// WritingRepository 是写作系统需要的仓储能力。
+type WritingRepository interface {
+	CreateVolume(ctx context.Context, v *domain.CreativeVolume) error
+	ListVolumes(ctx context.Context, workID string) ([]domain.CreativeVolume, error)
+
+	CreateChapter(ctx context.Context, c *domain.CreativeChapter) error
+	GetChapter(ctx context.Context, id string) (*domain.CreativeChapter, error)
+	ListChapters(ctx context.Context, workID string, withContent bool) ([]domain.CreativeChapter, error)
+	UpdateChapter(ctx context.Context, c *domain.CreativeChapter) error
+	DeleteChapter(ctx context.Context, id string) error
+
+	NextVersionNo(ctx context.Context, chapterID string) (int, error)
+	CreateVersion(ctx context.Context, v *domain.ChapterVersion) error
+	ListVersions(ctx context.Context, chapterID string) ([]domain.ChapterVersion, error)
+	GetVersion(ctx context.Context, chapterID string, versionNo int) (*domain.ChapterVersion, error)
+
+	CreateScene(ctx context.Context, s *domain.CreativeScene) error
+	ListScenes(ctx context.Context, chapterID string) ([]domain.CreativeScene, error)
+
+	CreateIssues(ctx context.Context, issues []domain.ConsistencyIssue) (int, error)
+	ListIssues(ctx context.Context, workID, status string) ([]domain.ConsistencyIssue, error)
+	UpdateIssueStatus(ctx context.Context, id, status string) error
+}
+
+// ChapterWriter 让 AI 写作任务能拿到"写成什么样"的上下文（二创人物/世界规则/前情）。
+type ChapterContextReader interface {
+	ListCharacters(ctx context.Context, workID string) ([]domain.CreativeCharacter, error)
+	GetWorldDetail(ctx context.Context, workID string) (*WorldDetail, error)
+}
+
+// WritingService 是写作系统服务。
+type WritingService struct {
+	repo      WritingRepository
+	creative  CreativeWorkReader
+	ctxReader ChapterContextReader
+}
+
+// CreativeWorkReader 只需要"确认二创作品存在并拿到它"。
+type CreativeWorkReader interface {
+	GetWorkByID(ctx context.Context, id string) (*domain.CreativeWork, error)
+}
+
+// NewWritingService 构建服务。
+func NewWritingService(repo WritingRepository, creative CreativeWorkReader, ctxReader ChapterContextReader) *WritingService {
+	return &WritingService{repo: repo, creative: creative, ctxReader: ctxReader}
+}
+
+// CreateVolumeInput 是卷入参。
+type CreateVolumeInput struct {
+	Title    string
+	Summary  string
+	Sequence int
+}
+
+// CreateVolume 新增卷。
+func (s *WritingService) CreateVolume(ctx context.Context, workID string, in CreateVolumeInput) (*domain.CreativeVolume, error) {
+	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+		return nil, err
+	}
+	v := &domain.CreativeVolume{CreativeWorkID: workID, Title: in.Title, Summary: in.Summary, Sequence: in.Sequence}
+	v.Normalize()
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateVolume(ctx, v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// ListVolumes 列出卷。
+func (s *WritingService) ListVolumes(ctx context.Context, workID string) ([]domain.CreativeVolume, error) {
+	items, err := s.repo.ListVolumes(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []domain.CreativeVolume{}
+	}
+	return items, nil
+}
+
+// CreateChapterInput 是章节入参（含大纲信息）。
+type CreateChapterInput struct {
+	VolumeID  *string
+	ChapterNo int
+	Title     string
+	Summary   string
+	Purpose   string
+	Conflict  string
+	Outcome   string
+	Content   string
+}
+
+// CreateChapter 新增章节；正文非空时会同时生成 v1 版本。
+func (s *WritingService) CreateChapter(ctx context.Context, workID string, in CreateChapterInput) (*domain.CreativeChapter, error) {
+	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+		return nil, err
+	}
+	c := &domain.CreativeChapter{
+		CreativeWorkID: workID, VolumeID: in.VolumeID, ChapterNo: in.ChapterNo, Title: in.Title,
+		Summary: in.Summary, Purpose: in.Purpose, Conflict: in.Conflict, Outcome: in.Outcome,
+		Content: in.Content, Status: domain.ChapterDraft,
+	}
+	c.Normalize()
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateChapter(ctx, c); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(c.Content) != "" {
+		if err := s.snapshot(ctx, c, "创建章节"); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
+// UpdateChapterInput 是章节更新入参。
+type UpdateChapterInput struct {
+	Title    *string
+	Summary  *string
+	Content  *string
+	Status   *domain.ChapterStatus
+	VolumeID *string
+	Purpose  *string
+	Conflict *string
+	Outcome  *string
+}
+
+// UpdateChapter 更新章节；正文变化时会新建一个版本（规格书 §59）。
+func (s *WritingService) UpdateChapter(ctx context.Context, id string, in UpdateChapterInput) (*domain.CreativeChapter, bool, error) {
+	c, err := s.repo.GetChapter(ctx, id)
+	if err != nil {
+		return nil, false, err
+	}
+	contentChanged := false
+	if in.Title != nil {
+		c.Title = *in.Title
+	}
+	if in.Summary != nil {
+		c.Summary = *in.Summary
+	}
+	if in.Status != nil {
+		c.Status = *in.Status
+	}
+	if in.VolumeID != nil {
+		c.VolumeID = in.VolumeID
+	}
+	if in.Purpose != nil {
+		c.Purpose = *in.Purpose
+	}
+	if in.Conflict != nil {
+		c.Conflict = *in.Conflict
+	}
+	if in.Outcome != nil {
+		c.Outcome = *in.Outcome
+	}
+	if in.Content != nil && *in.Content != c.Content {
+		c.Content = *in.Content
+		contentChanged = true
+	}
+	c.Normalize()
+	if err := c.Validate(); err != nil {
+		return nil, false, err
+	}
+	if err := s.repo.UpdateChapter(ctx, c); err != nil {
+		return nil, false, err
+	}
+	if contentChanged {
+		if err := s.snapshot(ctx, c, "编辑正文"); err != nil {
+			return nil, false, err
+		}
+	}
+	return c, contentChanged, nil
+}
+
+func (s *WritingService) snapshot(ctx context.Context, c *domain.CreativeChapter, note string) error {
+	no, err := s.repo.NextVersionNo(ctx, c.ID)
+	if err != nil {
+		return err
+	}
+	return s.repo.CreateVersion(ctx, &domain.ChapterVersion{
+		ChapterID: c.ID, VersionNo: no, Content: c.Content, WordCount: c.WordCount, Note: note,
+	})
+}
+
+// GetChapter 取章节。
+func (s *WritingService) GetChapter(ctx context.Context, id string) (*domain.CreativeChapter, error) {
+	return s.repo.GetChapter(ctx, id)
+}
+
+// ListChapters 列出章节。
+func (s *WritingService) ListChapters(ctx context.Context, workID string, withContent bool) ([]domain.CreativeChapter, error) {
+	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListChapters(ctx, workID, withContent)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []domain.CreativeChapter{}
+	}
+	return items, nil
+}
+
+// DeleteChapter 删除章节。
+func (s *WritingService) DeleteChapter(ctx context.Context, id string) error {
+	return s.repo.DeleteChapter(ctx, id)
+}
+
+// ListVersions 列出章节版本。
+func (s *WritingService) ListVersions(ctx context.Context, chapterID string) ([]domain.ChapterVersion, error) {
+	if _, err := s.repo.GetChapter(ctx, chapterID); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListVersions(ctx, chapterID)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []domain.ChapterVersion{}
+	}
+	return items, nil
+}
+
+// GetVersion 取某版本（含正文）。
+func (s *WritingService) GetVersion(ctx context.Context, chapterID string, versionNo int) (*domain.ChapterVersion, error) {
+	return s.repo.GetVersion(ctx, chapterID, versionNo)
+}
+
+// RestoreVersion 恢复到某个版本（当前正文会先存成新版本，避免丢内容）。
+func (s *WritingService) RestoreVersion(ctx context.Context, chapterID string, versionNo int) (*domain.CreativeChapter, error) {
+	version, err := s.repo.GetVersion(ctx, chapterID, versionNo)
+	if err != nil {
+		return nil, err
+	}
+	c, err := s.repo.GetChapter(ctx, chapterID)
+	if err != nil {
+		return nil, err
+	}
+	if c.Content != version.Content {
+		// 先给"当前内容"留一版
+		if err := s.snapshot(ctx, c, fmt.Sprintf("恢复 v%d 前的自动备份", versionNo)); err != nil {
+			return nil, err
+		}
+	}
+	c.Content = version.Content
+	c.Normalize()
+	if err := s.repo.UpdateChapter(ctx, c); err != nil {
+		return nil, err
+	}
+	if err := s.snapshot(ctx, c, fmt.Sprintf("恢复自 v%d", versionNo)); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// CreateScene 新增场景。
+func (s *WritingService) CreateScene(ctx context.Context, chapterID string, in domain.CreativeScene) (*domain.CreativeScene, error) {
+	if _, err := s.repo.GetChapter(ctx, chapterID); err != nil {
+		return nil, err
+	}
+	in.ChapterID = chapterID
+	in.Normalize()
+	if err := s.repo.CreateScene(ctx, &in); err != nil {
+		return nil, err
+	}
+	return &in, nil
+}
+
+// ListScenes 列出场景。
+func (s *WritingService) ListScenes(ctx context.Context, chapterID string) ([]domain.CreativeScene, error) {
+	items, err := s.repo.ListScenes(ctx, chapterID)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []domain.CreativeScene{}
+	}
+	return items, nil
+}
+
+// ChapterContext 是喂给写作 Agent 的上下文（规格书 §31 的裁剪版）。
+type ChapterContext struct {
+	WorkTitle        string
+	ChapterGoal      string
+	Scene            string
+	PreviousContext  string
+	CharacterContext string
+	WorldContext     string
+}
+
+// BuildContext 组装写作上下文：人物 DNA + 世界规则 + 前几章摘要。
+func (s *WritingService) BuildContext(ctx context.Context, chapterID string) (*ChapterContext, error) {
+	chapter, err := s.repo.GetChapter(ctx, chapterID)
+	if err != nil {
+		return nil, err
+	}
+	work, err := s.creative.GetWorkByID(ctx, chapter.CreativeWorkID)
+	if err != nil {
+		return nil, err
+	}
+	out := &ChapterContext{
+		WorkTitle:   work.Title,
+		ChapterGoal: strings.TrimSpace(chapter.Purpose + " " + chapter.Summary),
+		Scene:       chapter.Title,
+	}
+
+	if s.ctxReader != nil {
+		if characters, err := s.ctxReader.ListCharacters(ctx, chapter.CreativeWorkID); err == nil {
+			var sb strings.Builder
+			for _, c := range characters {
+				dims := []string{}
+				for name, dim := range c.DNA.Dimensions() {
+					if dim.Weight > 0 && dim.Text != "" {
+						dims = append(dims, fmt.Sprintf("%s(%d%%)", name, dim.Weight))
+					}
+				}
+				fmt.Fprintf(&sb, "- %s（%s）：%s %s\n", c.Name, c.SourceType, c.Description, strings.Join(dims, " "))
+			}
+			out.CharacterContext = sb.String()
+		}
+		if detail, err := s.ctxReader.GetWorldDetail(ctx, chapter.CreativeWorkID); err == nil && detail.World != nil {
+			var sb strings.Builder
+			fmt.Fprintf(&sb, "世界：%s %s\n", detail.World.Name, detail.World.Description)
+			for _, r := range detail.Rules {
+				if r.Status == domain.RuleRemoved {
+					continue
+				}
+				fmt.Fprintf(&sb, "- [%s][%s] %s：%s\n", r.Status, r.Category, r.Name, r.Description)
+			}
+			out.WorldContext = sb.String()
+		}
+	}
+
+	// 前情：本章之前最近 3 章的摘要
+	if chapters, err := s.repo.ListChapters(ctx, chapter.CreativeWorkID, false); err == nil {
+		previous := []string{}
+		for _, c := range chapters {
+			if c.ChapterNo >= chapter.ChapterNo {
+				break
+			}
+			if c.Summary != "" {
+				previous = append(previous, fmt.Sprintf("第%d章 %s：%s", c.ChapterNo, c.Title, c.Summary))
+			}
+		}
+		if len(previous) > 3 {
+			previous = previous[len(previous)-3:]
+		}
+		out.PreviousContext = strings.Join(previous, "\n")
+	}
+	return out, nil
+}
+
+// GenerateChapterDraft 用 AI 生成本章正文草稿（供写作任务调用）。
+func (s *WritingService) GenerateChapterDraft(
+	ctx context.Context,
+	chapterID string,
+	runner PromptRunner,
+	targetWords int,
+	instruction string,
+	report func(stage string, percent int),
+) (string, error) {
+	chapterCtx, err := s.BuildContext(ctx, chapterID)
+	if err != nil {
+		return "", err
+	}
+	if targetWords <= 0 {
+		targetWords = 2000
+	}
+	if report != nil {
+		report("组装上下文", 20)
+	}
+	reply, err := runner.RunPrompt(ctx, "chapter_generate", map[string]any{
+		"TargetWords":      targetWords,
+		"ChapterGoal":      chapterCtx.ChapterGoal,
+		"Scene":            chapterCtx.Scene,
+		"CharacterContext": chapterCtx.CharacterContext,
+		"WorldContext":     chapterCtx.WorldContext,
+		"PreviousContext":  chapterCtx.PreviousContext,
+		"Instruction":      instruction,
+	})
+	if err != nil {
+		return "", err
+	}
+	if report != nil {
+		report("写入草稿", 80)
+	}
+	return strings.TrimSpace(reply), nil
+}
+
+// RewriteAction 是编辑器内 AI 操作的类型。
+type RewriteAction string
+
+const (
+	RewriteActionRewrite  RewriteAction = "改写"
+	RewriteActionExpand   RewriteAction = "扩写"
+	RewriteActionShorten  RewriteAction = "缩写"
+	RewriteActionPolish   RewriteAction = "润色"
+	RewriteActionConflict RewriteAction = "增强冲突"
+	RewriteActionEmotion  RewriteAction = "增强情绪"
+)
+
+// Valid 判断操作类型是否合法。
+func (a RewriteAction) Valid() bool {
+	switch a {
+	case RewriteActionRewrite, RewriteActionExpand, RewriteActionShorten,
+		RewriteActionPolish, RewriteActionConflict, RewriteActionEmotion:
+		return true
+	default:
+		return false
+	}
+}
+
+// RewriteInput 是编辑器 AI 操作入参。
+type RewriteInput struct {
+	ChapterID   string
+	Text        string
+	Action      RewriteAction
+	Instruction string
+}
+
+// RewriteText 对选中文本做 AI 处理（同步返回，规格书 §38）。
+func (s *WritingService) RewriteText(ctx context.Context, runner PromptRunner, in RewriteInput) (string, error) {
+	if !in.Action.Valid() {
+		return "", fmt.Errorf("不支持的 AI 操作：%s", in.Action)
+	}
+	if strings.TrimSpace(in.Text) == "" {
+		return "", errors.New("请先选中要处理的文本")
+	}
+	chapterCtx, err := s.BuildContext(ctx, in.ChapterID)
+	if err != nil {
+		return "", err
+	}
+	return runner.RunPrompt(ctx, "rewrite", map[string]any{
+		"Action":           string(in.Action),
+		"Text":             in.Text,
+		"Instruction":      in.Instruction,
+		"CharacterContext": chapterCtx.CharacterContext,
+		"WorldContext":     chapterCtx.WorldContext,
+	})
+}
+
+// CheckConsistency 对指定章节做一致性检查，结果写入问题列表（规格书 §39）。
+func (s *WritingService) CheckConsistency(
+	ctx context.Context,
+	workID string,
+	chapterIDs []string,
+	runner PromptRunner,
+	report func(stage string, percent int),
+) (int, error) {
+	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+		return 0, err
+	}
+	chapters := make([]domain.CreativeChapter, 0)
+	if len(chapterIDs) > 0 {
+		for _, id := range chapterIDs {
+			c, err := s.repo.GetChapter(ctx, id)
+			if err != nil {
+				return 0, err
+			}
+			if c.CreativeWorkID != workID {
+				return 0, errors.New("章节不属于该二创作品")
+			}
+			chapters = append(chapters, *c)
+		}
+	} else {
+		all, err := s.repo.ListChapters(ctx, workID, true)
+		if err != nil {
+			return 0, err
+		}
+		for _, c := range all {
+			if strings.TrimSpace(c.Content) != "" {
+				chapters = append(chapters, c)
+			}
+		}
+	}
+	if len(chapters) == 0 {
+		return 0, errors.New("没有可检查的正文（章节还是空的）")
+	}
+
+	charactersContext := ""
+	worldContext := ""
+	if s.ctxReader != nil {
+		if characters, err := s.ctxReader.ListCharacters(ctx, workID); err == nil {
+			var sb strings.Builder
+			for _, c := range characters {
+				fmt.Fprintf(&sb, "- %s（%s）：%s\n", c.Name, c.SourceType, c.Description)
+			}
+			charactersContext = sb.String()
+		}
+		if detail, err := s.ctxReader.GetWorldDetail(ctx, workID); err == nil && detail.World != nil {
+			var sb strings.Builder
+			for _, rule := range detail.Rules {
+				if rule.Status == domain.RuleRemoved {
+					continue
+				}
+				fmt.Fprintf(&sb, "- [%s] %s：%s\n", rule.Category, rule.Name, rule.Description)
+			}
+			worldContext = sb.String()
+		}
+	}
+
+	total := 0
+	for i, chapter := range chapters {
+		if report != nil {
+			report(fmt.Sprintf("检查第 %d/%d 章", i+1, len(chapters)), 10+int(float64(i)/float64(len(chapters))*80))
+		}
+		reply, err := runner.RunPrompt(ctx, "consistency_check", map[string]any{
+			"CharacterContext": charactersContext,
+			"WorldContext":     worldContext,
+			"TimelineContext":  "（时间线检查在 Phase 4 的二创时间线里维护）",
+			"ChapterText":      trimChars(chapter.Content, maxAnalysisChars),
+		})
+		if err != nil {
+			return total, err
+		}
+		obj, err := ExtractJSONObject(reply)
+		if err != nil {
+			continue // 单章解析失败不拖垮整批
+		}
+		chapterID := chapter.ID
+		issues := make([]domain.ConsistencyIssue, 0)
+		for _, raw := range asSlice(obj["issues"]) {
+			item, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			issues = append(issues, domain.ConsistencyIssue{
+				CreativeWorkID: workID, ChapterID: &chapterID,
+				Severity: strVal(item, "severity"), Type: strVal(item, "type"),
+				Description: strVal(item, "description"), Evidence: strVal(item, "evidence"),
+				Suggestion: strVal(item, "suggestion"),
+			})
+		}
+		created, err := s.repo.CreateIssues(ctx, issues)
+		if err != nil {
+			return total, err
+		}
+		total += created
+	}
+	if report != nil {
+		report("完成", 100)
+	}
+	return total, nil
+}
+
+// ListIssues 列出一致性问题。
+func (s *WritingService) ListIssues(ctx context.Context, workID, status string) ([]domain.ConsistencyIssue, error) {
+	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListIssues(ctx, workID, status)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []domain.ConsistencyIssue{}
+	}
+	return items, nil
+}
+
+// UpdateIssueStatus 更新问题状态（RESOLVED / IGNORED）。
+func (s *WritingService) UpdateIssueStatus(ctx context.Context, id, status string) error {
+	if status != "OPEN" && status != "RESOLVED" && status != "IGNORED" {
+		return domain.ErrIssueStatusInvalid
+	}
+	return s.repo.UpdateIssueStatus(ctx, id, status)
+}
+
+// Export 导出作品（TXT / Markdown / DOCX，规格书 §61）。
+func (s *WritingService) Export(ctx context.Context, workID, format string) ([]byte, string, string, error) {
+	work, err := s.creative.GetWorkByID(ctx, workID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	volumes, err := s.repo.ListVolumes(ctx, workID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	chapters, err := s.repo.ListChapters(ctx, workID, true)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if len(chapters) == 0 {
+		return nil, "", "", errors.New("还没有章节正文可导出")
+	}
+
+	volumeTitle := map[string]string{}
+	for _, v := range volumes {
+		volumeTitle[v.ID] = v.Title
+	}
+
+	switch strings.ToLower(format) {
+	case "", "txt":
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "%s\n\n", work.Title)
+		if work.Description != "" {
+			fmt.Fprintf(&buf, "（%s）\n\n", work.Description)
+		}
+		currentVolume := ""
+		for _, c := range chapters {
+			if c.VolumeID != nil {
+				if title := volumeTitle[*c.VolumeID]; title != "" && title != currentVolume {
+					currentVolume = title
+					fmt.Fprintf(&buf, "【%s】\n\n", title)
+				}
+			}
+			fmt.Fprintf(&buf, "第 %d 章 %s\n\n%s\n\n", c.ChapterNo, c.Title, c.Content)
+		}
+		return buf.Bytes(), work.Title + ".txt", "text/plain; charset=utf-8", nil
+
+	case "md", "markdown":
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "# %s\n\n", work.Title)
+		if work.Description != "" {
+			fmt.Fprintf(&buf, "> %s\n\n", work.Description)
+		}
+		currentVolume := ""
+		for _, c := range chapters {
+			if c.VolumeID != nil {
+				if title := volumeTitle[*c.VolumeID]; title != "" && title != currentVolume {
+					currentVolume = title
+					fmt.Fprintf(&buf, "## %s\n\n", title)
+				}
+			}
+			fmt.Fprintf(&buf, "### 第 %d 章 %s\n\n%s\n\n", c.ChapterNo, c.Title, c.Content)
+		}
+		return buf.Bytes(), work.Title + ".md", "text/markdown; charset=utf-8", nil
+
+	case "docx":
+		data, err := buildDocx(work.Title, chapters)
+		if err != nil {
+			return nil, "", "", err
+		}
+		return data, work.Title + ".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", nil
+
+	default:
+		return nil, "", "", domain.ErrExportFormatInvalid
+	}
+}

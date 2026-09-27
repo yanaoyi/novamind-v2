@@ -39,11 +39,12 @@ var ErrTaskTypeUnknown = errors.New("任务类型未注册")
 
 // EnqueueInput 是入队参数。
 type EnqueueInput struct {
-	Type        string
-	ProjectID   *string
-	WorkID      *string
-	Input       map[string]any
-	MaxAttempts int
+	Type           string
+	ProjectID      *string
+	WorkID         *string
+	CreativeWorkID *string
+	Input          map[string]any
+	MaxAttempts    int
 }
 
 // Enqueue 把任务放入队列（异步执行，调用方拿 task_id 轮询）。
@@ -52,7 +53,7 @@ func (s *TaskService) Enqueue(ctx context.Context, in EnqueueInput) (*domain.Tas
 		return nil, fmt.Errorf("%w: %s", ErrTaskTypeUnknown, in.Type)
 	}
 	t := &domain.Task{
-		Type: in.Type, ProjectID: in.ProjectID, WorkID: in.WorkID,
+		Type: in.Type, ProjectID: in.ProjectID, WorkID: in.WorkID, CreativeWorkID: in.CreativeWorkID,
 		Input: in.Input, MaxAttempts: in.MaxAttempts,
 	}
 	t.Normalize()

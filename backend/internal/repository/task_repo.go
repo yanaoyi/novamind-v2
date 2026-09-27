@@ -17,6 +17,7 @@ type taskModel struct {
 	ID              string         `gorm:"column:id;type:uuid;primaryKey"`
 	ProjectID       *string        `gorm:"column:project_id;type:uuid"`
 	WorkID          *string        `gorm:"column:work_id;type:uuid"`
+	CreativeWorkID  *string        `gorm:"column:creative_work_id;type:uuid"`
 	Type            string         `gorm:"column:type;size:60;not null"`
 	Status          string         `gorm:"column:status;size:20;not null;default:PENDING"`
 	Progress        int            `gorm:"column:progress;not null;default:0"`
@@ -37,12 +38,13 @@ func (taskModel) TableName() string { return "tasks" }
 
 // TaskFilter 是任务列表查询条件。
 type TaskFilter struct {
-	ProjectID string
-	WorkID    string
-	Status    string
-	Type      string
-	Page      int
-	PageSize  int
+	ProjectID      string
+	WorkID         string
+	CreativeWorkID string
+	Status         string
+	Type           string
+	Page           int
+	PageSize       int
 }
 
 // TaskRepo 是任务仓储。
@@ -103,6 +105,9 @@ func (r *TaskRepo) List(ctx context.Context, f TaskFilter) ([]domain.Task, int64
 	}
 	if f.WorkID != "" {
 		query = query.Where("work_id = ?", f.WorkID)
+	}
+	if f.CreativeWorkID != "" {
+		query = query.Where("creative_work_id = ?", f.CreativeWorkID)
 	}
 	if f.Status != "" {
 		query = query.Where("status = ?", f.Status)
@@ -319,7 +324,7 @@ func toTaskModel(t *domain.Task) (taskModel, error) {
 		return taskModel{}, fmt.Errorf("序列化任务结果失败: %w", err)
 	}
 	return taskModel{
-		ID: t.ID, ProjectID: t.ProjectID, WorkID: t.WorkID, Type: t.Type,
+		ID: t.ID, ProjectID: t.ProjectID, WorkID: t.WorkID, CreativeWorkID: t.CreativeWorkID, Type: t.Type,
 		Status: string(t.Status), Progress: t.Progress, ProgressMessage: t.ProgressMessage,
 		Input: string(input), Output: string(output), Error: t.Error,
 		Attempts: t.Attempts, MaxAttempts: t.MaxAttempts,
@@ -329,7 +334,7 @@ func toTaskModel(t *domain.Task) (taskModel, error) {
 
 func toDomainTask(m taskModel) (domain.Task, error) {
 	t := domain.Task{
-		ID: m.ID, ProjectID: m.ProjectID, WorkID: m.WorkID, Type: m.Type,
+		ID: m.ID, ProjectID: m.ProjectID, WorkID: m.WorkID, CreativeWorkID: m.CreativeWorkID, Type: m.Type,
 		Status: domain.TaskStatus(m.Status), Progress: m.Progress, ProgressMessage: m.ProgressMessage,
 		Error: m.Error, Attempts: m.Attempts, MaxAttempts: m.MaxAttempts,
 		CreatedAt: m.CreatedAt, StartedAt: m.StartedAt, FinishedAt: m.FinishedAt, UpdatedAt: m.UpdatedAt,

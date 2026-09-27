@@ -1,7 +1,7 @@
 import type { Envelope } from './types'
 
 /** 开发环境走 vite 代理（/api → 后端:8080），生产可用 VITE_API_BASE 覆盖 */
-const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api/v1'
+export const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api/v1'
 
 /** 后端统一错误体对应的前端异常 */
 export class ApiError extends Error {

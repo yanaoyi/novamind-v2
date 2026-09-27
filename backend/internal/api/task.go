@@ -16,11 +16,12 @@ type domainTask = domain.Task
 
 // 任务类型请求（手工入队，供调试与将来扩展）。
 type createTaskRequest struct {
-	Type        string         `json:"type" binding:"required" example:"original_reparse"`
-	ProjectID   *string        `json:"project_id"`
-	WorkID      *string        `json:"work_id"`
-	Input       map[string]any `json:"input"`
-	MaxAttempts int            `json:"max_attempts" example:"3"`
+	Type           string         `json:"type" binding:"required" example:"original_reparse"`
+	ProjectID      *string        `json:"project_id"`
+	WorkID         *string        `json:"work_id"`
+	CreativeWorkID *string        `json:"creative_work_id"`
+	Input          map[string]any `json:"input"`
+	MaxAttempts    int            `json:"max_attempts" example:"3"`
 }
 
 // TaskResponse 是任务对外表示。
@@ -28,6 +29,7 @@ type TaskResponse struct {
 	ID              string         `json:"id"`
 	ProjectID       *string        `json:"project_id"`
 	WorkID          *string        `json:"work_id"`
+	CreativeWorkID  *string        `json:"creative_work_id"`
 	Type            string         `json:"type"`
 	Status          string         `json:"status"`
 	Progress        int            `json:"progress"`
@@ -53,7 +55,7 @@ type TaskListResponse struct {
 
 func toTaskResponse(t domainTask) TaskResponse {
 	return TaskResponse{
-		ID: t.ID, ProjectID: t.ProjectID, WorkID: t.WorkID, Type: t.Type,
+		ID: t.ID, ProjectID: t.ProjectID, WorkID: t.WorkID, CreativeWorkID: t.CreativeWorkID, Type: t.Type,
 		Status: string(t.Status), Progress: t.Progress, ProgressMessage: t.ProgressMessage,
 		Input: t.Input, Output: t.Output, Error: t.Error,
 		Attempts: t.Attempts, MaxAttempts: t.MaxAttempts,
@@ -68,6 +70,7 @@ func toTaskResponse(t domainTask) TaskResponse {
 //	@Produce	json
 //	@Param		project_id	query		string	false	"按工程过滤"
 //	@Param		work_id		query		string	false	"按原著过滤"
+//	@Param		creative_work_id	query		string	false	"按二创作品过滤"
 //	@Param		status		query		string	false	"按状态过滤"	Enums(PENDING, RUNNING, PAUSED, COMPLETED, FAILED, CANCELLED)
 //	@Param		type		query		string	false	"按类型过滤"
 //	@Param		page		query		int		false	"页码"
@@ -81,12 +84,13 @@ func (s *Server) listTasks(c *gin.Context) {
 	page := parseInt(c.Query("page"), 1)
 	pageSize := parseInt(c.Query("page_size"), 20)
 	items, total, err := s.tasks.List(c.Request.Context(), repository.TaskFilter{
-		ProjectID: c.Query("project_id"),
-		WorkID:    c.Query("work_id"),
-		Status:    c.Query("status"),
-		Type:      c.Query("type"),
-		Page:      page,
-		PageSize:  pageSize,
+		ProjectID:      c.Query("project_id"),
+		WorkID:         c.Query("work_id"),
+		CreativeWorkID: c.Query("creative_work_id"),
+		Status:         c.Query("status"),
+		Type:           c.Query("type"),
+		Page:           page,
+		PageSize:       pageSize,
 	})
 	if err != nil {
 		s.failFromError(c, err)
@@ -140,7 +144,7 @@ func (s *Server) createTask(c *gin.Context) {
 		return
 	}
 	t, err := s.tasks.Enqueue(c.Request.Context(), service.EnqueueInput{
-		Type: req.Type, ProjectID: req.ProjectID, WorkID: req.WorkID,
+		Type: req.Type, ProjectID: req.ProjectID, WorkID: req.WorkID, CreativeWorkID: req.CreativeWorkID,
 		Input: req.Input, MaxAttempts: req.MaxAttempts,
 	})
 	if err != nil {

@@ -15,9 +15,11 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import type { Project, ProjectStatus, ProjectType } from '../api/types'
 import { useProjectStore } from '../stores/projectStore'
+import { useOriginalStore } from '../stores/originalStore'
 
 const TYPE_LABEL: Record<ProjectType, string> = {
   ORIGINAL: '原著',
@@ -44,6 +46,7 @@ interface FormValues {
 }
 
 export default function ProjectsPage() {
+  const navigate = useNavigate()
   const {
     items,
     total,
@@ -57,6 +60,7 @@ export default function ProjectsPage() {
   } = useProjectStore()
 
   const [form] = Form.useForm<FormValues>()
+  const setWorkId = useOriginalStore((s) => s.setWorkId)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Project | null>(null)
   const [keyword, setKeyword] = useState('')
@@ -118,6 +122,12 @@ export default function ProjectsPage() {
     }
   }
 
+  /** 进入某工程的原著工作区（总览页会按需引导创建原著） */
+  const enterOriginal = (record: Project) => {
+    setWorkId(null) // 清掉上一部原著，交给总览页按目标工程重新定位
+    navigate('/original/overview', { state: { projectId: record.id } })
+  }
+
   const columns: ColumnsType<Project> = [
     { title: '名称', dataIndex: 'name', key: 'name', width: 220 },
     {
@@ -156,6 +166,11 @@ export default function ProjectsPage() {
       width: 150,
       render: (_, record) => (
         <Space>
+          {record.type === 'ORIGINAL' && (
+            <Button type="link" size="small" onClick={() => enterOriginal(record)}>
+              原著
+            </Button>
+          )}
           <Button type="link" size="small" onClick={() => openEdit(record)}>
             编辑
           </Button>

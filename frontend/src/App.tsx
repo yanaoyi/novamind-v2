@@ -4,6 +4,9 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import ProjectsPage from './pages/ProjectsPage'
+import ChapterReaderPage from './pages/original/ChapterReaderPage'
+import OriginalChaptersPage from './pages/original/OriginalChaptersPage'
+import OriginalOverviewPage from './pages/original/OriginalOverviewPage'
 
 const { Header, Sider, Content } = Layout
 
@@ -101,14 +104,18 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/projects" element={<ProjectsPage />} />
 
-            {ORIGINAL_PAGES.map((p) => (
+            <Route path="/original" element={<Navigate to="/original/overview" replace />} />
+            <Route path="/original/overview" element={<OriginalOverviewPage />} />
+            <Route path="/original/chapters" element={<OriginalChaptersPage />} />
+            <Route path="/original/chapters/:no" element={<ChapterReaderPage />} />
+
+            {ORIGINAL_PAGES.filter((p) => p.path !== 'overview' && p.path !== 'chapters').map((p) => (
               <Route
                 key={p.path}
                 path={`/original/${p.path}`}
                 element={<Placeholder title={`原著 · ${p.label}`} phase={p.phase} />}
               />
             ))}
-            <Route path="/original" element={<Navigate to="/original/overview" replace />} />
 
             {CREATIVE_PAGES.map((p) => (
               <Route

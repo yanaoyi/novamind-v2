@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ProjectType } from '../api/types'
@@ -86,7 +87,12 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit) {
 }
 
 function renderPage() {
-  return render(<ProjectsPage />)
+  // ProjectsPage 里有 useNavigate（「原著」入口），必须在 Router 上下文里渲染
+  return render(
+    <MemoryRouter>
+      <ProjectsPage />
+    </MemoryRouter>,
+  )
 }
 
 beforeEach(() => {

@@ -20,10 +20,14 @@ export class ApiError extends Error {
  * 出错时抛出 ApiError（带后端错误码），调用方按 code 处理。
  */
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // FormData 必须由浏览器自己设置 Content-Type（含 multipart boundary），
+  // 手动写死 application/json 会让后端解析不出文件。
+  const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
+
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(init?.headers ?? {}),
     },
   })

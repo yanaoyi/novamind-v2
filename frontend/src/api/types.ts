@@ -56,3 +56,58 @@ export interface UpdateProjectInput {
   description?: string
   status?: ProjectStatus
 }
+
+// ---------- 原著（对应后端 /api/v1/original） ----------
+
+export type SourceType = 'MANUAL' | 'TXT' | 'DOCX' | 'PDF'
+export type OriginalStatus = 'DRAFT' | 'PARSED' | 'ANALYZED'
+
+export interface Original {
+  id: string
+  project_id: string
+  title: string
+  author: string
+  description: string
+  source_type: SourceType
+  status: OriginalStatus
+  char_count: number
+  chapter_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateOriginalInput {
+  title: string
+  author?: string
+  description?: string
+}
+
+export interface OriginalChapterBrief {
+  chapter_no: number
+  title: string
+  char_count: number
+  summary: string
+}
+
+export interface OriginalChapterDetail extends OriginalChapterBrief {
+  content: string
+  start_position: number
+  end_position: number
+}
+
+export interface OriginalChapterList {
+  items: OriginalChapterBrief[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface OriginalImportResult {
+  file_id: string
+  file_name: string
+  size_bytes: number
+  encoding: string
+  char_count: number
+  chapter_count: number
+  chapters: OriginalChapterBrief[]
+}

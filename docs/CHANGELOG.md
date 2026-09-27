@@ -111,6 +111,22 @@
 - P2-6 原著其余模型与接口：OriginalCharacter、CharacterRelationship、World/WorldRule/Location/Faction、OriginalEvent、Timeline、PlotArc（AI 提取在 Phase 3）
 - PDF 解析支持
 
+### 2026-09-27 · P2-5 前端原著页面完成
+
+- `src/api/original.ts`：原著接口封装（按工程取原著时把 404 转成 `null`，便于"还没有原著"分支）
+- `src/api/client.ts`：**FormData 不再强行写 `Content-Type: application/json`**（否则 multipart 边界丢失，后端解析不出文件）
+- `src/stores/originalStore.ts`：当前原著、章节目录、当前章节；只持久化 `workId`（刷新后仍停在同一部原著），不持久化数据本身
+- 页面：
+  - **原著总览** `OriginalOverviewPage`：未选原著时列出 ORIGINAL 工程供选择 → 该工程没有原著则引导创建 → 有原著则显示详情 + **拖拽上传**（.txt/.docx，导入后提示识别到的编码与切分章数）
+  - **章节目录** `OriginalChaptersPage`：分页表格，点击进入阅读
+  - **章节阅读** `ChapterReaderPage`：正文按原文换行展示、显示字数与原文位置、上一章/下一章
+- 工程列表新增「原著」入口（ORIGINAL 类型工程可见），带目标工程跳转，总览页自动定位
+- 路由：`/original/overview`、`/original/chapters`、`/original/chapters/:no` 接上真实页面，其余原著菜单项仍为占位
+
+**测试**：新增 `originalFlow.test.tsx` —— 在内存假后端上跑完整链路（自动定位工程 → 创建原著 → 选文件 → **断言上传确实是 multipart/FormData** → 详情刷新为已导入 → 目录 4 章 → 阅读正文）；前端用例 6 个全绿，`npm run build` 通过。
+
+顺手修：`ProjectsPage` 引入 `useNavigate` 后，旧测试因缺少 Router 上下文失败 → 测试改为在 `MemoryRouter` 中渲染。
+
 ### 2026-09-27 · 运行方式修正（懒猫服务发布）
 
 - 问题：用一次性命令 `npm run dev &` 启的服务，工具会话一结束就被回收，懒猫微服报

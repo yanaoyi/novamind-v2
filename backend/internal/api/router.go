@@ -24,6 +24,8 @@ type Server struct {
 	events     *service.OriginalEventService
 	providers  *service.ModelProviderService
 	prompts    *ai.Engine
+	tasks      *service.TaskService
+	taskTypes  func() []string
 }
 
 // NewServer 构建 HTTP 服务。
@@ -38,11 +40,14 @@ func NewServer(
 	events *service.OriginalEventService,
 	providers *service.ModelProviderService,
 	promptEngine *ai.Engine,
+	tasks *service.TaskService,
+	taskTypes func() []string,
 ) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, deps: deps,
 		projects: projects, originals: originals, characters: characters, worlds: worlds,
 		events: events, providers: providers, prompts: promptEngine,
+		tasks: tasks, taskTypes: taskTypes,
 	}
 }
 
@@ -99,6 +104,7 @@ func (s *Server) Router() *gin.Engine {
 			original.PUT("/:id/timeline", s.setTimelineOrder)
 			original.GET("/:id/plot-arcs", s.listPlotArcs)
 			original.POST("/:id/plot-arcs", s.createPlotArc)
+			original.POST("/:id/reparse", s.reparseOriginal)
 		}
 
 		// 事件 / 剧情弧（规格书 §14、§16）
@@ -126,6 +132,17 @@ func (s *Server) Router() *gin.Engine {
 			modelProviders.POST("/:id/test", s.testModelProvider)
 		}
 		v1.GET("/prompts", s.listPrompts)
+
+		// 异步任务（规格书 §53）
+		tasks := v1.Group("/tasks")
+		{
+			tasks.GET("", s.listTasks)
+			tasks.POST("", s.createTask)
+			tasks.GET("/:id", s.getTask)
+			tasks.POST("/:id/cancel", s.cancelTask)
+			tasks.POST("/:id/retry", s.retryTask)
+		}
+		v1.GET("/task-types", s.listTaskTypes)
 
 		// 人物与关系（规格书 §10-§12）
 		characters := v1.Group("/characters")
@@ -170,7 +187,7 @@ func (s *Server) Router() *gin.Engine {
 // 未就绪时返回 503，而不是让请求打到 nil 上 panic 或静默 404。
 func (s *Server) requireServices(c *gin.Context) bool {
 	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
-		s.events == nil || s.providers == nil {
+		s.events == nil || s.providers == nil || s.tasks == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

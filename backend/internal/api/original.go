@@ -298,6 +298,10 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "MODEL_PROVIDER_NOT_FOUND", true
 	case errors.Is(err, domain.ErrProviderDuplicate):
 		return http.StatusConflict, CodeConflict, true
+	case errors.Is(err, domain.ErrTaskNotFound):
+		return http.StatusNotFound, "TASK_NOT_FOUND", true
+	case errors.Is(err, domain.ErrTaskNotCancellable), errors.Is(err, domain.ErrTaskNotRetryable):
+		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrOriginalAlreadyExists),
 		errors.Is(err, domain.ErrCharacterDuplicate),
 		errors.Is(err, domain.ErrRelationDuplicate),
@@ -341,6 +345,9 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrProviderPurposeBad),
 		errors.Is(err, domain.ErrNoProviderAvailable),
 		errors.Is(err, ai.ErrMissingSecret),
+		errors.Is(err, domain.ErrTaskTypeEmpty),
+		errors.Is(err, domain.ErrTaskStatusInvalid),
+		errors.Is(err, service.ErrTaskTypeUnknown),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

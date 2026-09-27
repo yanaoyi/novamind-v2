@@ -18,7 +18,7 @@ func TestOpenAPICoversAllRoutes(t *testing.T) {
 	paths := loadSpecPaths(t)
 
 	// 传 nil 服务：路由表恒定注册，本测试只校验路由与规范一致，不调用处理函数
-	srv := NewServer(&config.Config{}, slog.Default(), HealthDeps{}, nil, nil, nil, nil, nil, nil, nil)
+	srv := NewServer(&config.Config{}, slog.Default(), HealthDeps{}, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	router := srv.Router()
 
 	for _, problem := range verifyRouteCoverage(router.Routes(), paths) {

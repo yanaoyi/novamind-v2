@@ -103,6 +103,30 @@ func (r *OriginalRepo) CreateFile(ctx context.Context, f *domain.UploadedFile) e
 	return nil
 }
 
+// GetFile 按 ID 取上传文件登记。
+func (r *OriginalRepo) GetFile(ctx context.Context, id string) (*domain.UploadedFile, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, errors.New("文件不存在")
+	}
+	var m fileModel
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("文件不存在")
+		}
+		return nil, fmt.Errorf("查询文件失败: %w", err)
+	}
+	f := domain.UploadedFile{
+		ID: m.ID, ProjectID: m.ProjectID, OriginalName: m.OriginalName,
+		StoredPath: m.StoredPath, MimeType: m.MimeType, SizeBytes: m.SizeBytes, SHA256: m.SHA256,
+		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+	}
+	if m.DeletedAt.Valid {
+		t := m.DeletedAt.Time
+		f.DeletedAt = &t
+	}
+	return &f, nil
+}
+
 // CreateWork 创建原著。
 func (r *OriginalRepo) CreateWork(ctx context.Context, w *domain.OriginalWork) error {
 	if w.ID == "" {

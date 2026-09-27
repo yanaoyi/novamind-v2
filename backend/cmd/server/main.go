@@ -18,6 +18,7 @@ import (
 	"github.com/yanaoyi/novamindv2/backend/internal/repository"
 	"github.com/yanaoyi/novamindv2/backend/internal/service"
 	"github.com/yanaoyi/novamindv2/backend/internal/storage"
+	"github.com/yanaoyi/novamindv2/backend/internal/task"
 )
 
 // version 由构建时注入：go build -ldflags "-X main.version=..."
@@ -114,6 +115,17 @@ func run() error {
 	}
 	logger.Info("Prompt 模板已加载", slog.Int("count", len(promptEngine.List())))
 
+	// 异步任务：注册处理函数并启动 worker（规格书 §53）
+	taskRepo := repository.NewTaskRepo(pg.DB)
+	registry := task.NewRegistry()
+	task.RegisterOriginalHandlers(registry, originals)
+	tasks := service.NewTaskService(taskRepo, originalRepo, func(taskType string) bool {
+		_, ok := registry.Lookup(taskType)
+		return ok
+	})
+	worker := task.NewWorker(taskRepo, registry, logger,
+		task.WithConcurrency(2), task.WithPollInterval(2*time.Second))
+
 	// Redis
 	if cfg.RedisAddr == "" {
 		logger.Warn("REDIS_ADDR 未配置，跳过 Redis 连接")
@@ -131,7 +143,12 @@ func run() error {
 		cfg, logger, deps,
 		projects, originals, characters, worlds, events,
 		providers, promptEngine,
+		tasks, registry.Types,
 	)
+
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	go worker.Run(workerCtx)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

@@ -17,6 +17,7 @@ import (
 // OriginalRepository 是原著 service 需要的仓储能力。
 type OriginalRepository interface {
 	CreateFile(ctx context.Context, f *domain.UploadedFile) error
+	GetFile(ctx context.Context, id string) (*domain.UploadedFile, error)
 	CreateWork(ctx context.Context, w *domain.OriginalWork) error
 	GetWorkByID(ctx context.Context, id string) (*domain.OriginalWork, error)
 	GetWorkByProject(ctx context.Context, projectID string) (*domain.OriginalWork, error)
@@ -24,6 +25,86 @@ type OriginalRepository interface {
 	ReplaceChapters(ctx context.Context, workID string, chapters []domain.OriginalChapter, charCount int64) error
 	ListChapters(ctx context.Context, workID string, page, pageSize int) ([]domain.OriginalChapter, int64, error)
 	GetChapter(ctx context.Context, workID string, chapterNo int) (*domain.OriginalChapter, error)
+}
+
+// Reparse 用已保存的源文件重新解析章节（用于导入规则升级后重跑）。
+//
+// 典型用途：章节切分规则改进后，不需要让作者重新上传，直接重跑即可；
+// 实现上通过 report 回调把阶段与进度交给调用方（异步任务据此更新 tasks.progress）。
+func (s *OriginalService) Reparse(ctx context.Context, workID string, report func(stage string, percent int)) (*ImportResult, error) {
+	work, err := s.repo.GetWorkByID(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	if work.SourceFileID == nil || strings.TrimSpace(*work.SourceFileID) == "" {
+		return nil, errors.New("该原著没有源文件，无法重新解析（可能是手工录入的）")
+	}
+	if report != nil {
+		report("读取源文件", 10)
+	}
+	file, err := s.repo.GetFile(ctx, *work.SourceFileID)
+	if err != nil {
+		return nil, err
+	}
+	rc, err := s.files.Open(ctx, file.StoredPath)
+	if err != nil {
+		return nil, fmt.Errorf("打开源文件失败: %w", err)
+	}
+	defer rc.Close()
+
+	data, err := readLimited(rc, s.maxUpload)
+	if err != nil {
+		return nil, err
+	}
+	if report != nil {
+		report("解析文本与章节", 40)
+	}
+
+	text, encoding, err := parser.ParseByFilename(file.OriginalName, data)
+	if err != nil {
+		switch {
+		case errors.Is(err, parser.ErrEmptyText):
+			return nil, domain.ErrImportEmpty
+		case errors.Is(err, parser.ErrUnsupportedFormat), errors.Is(err, parser.ErrPDFNotImplemented):
+			return nil, fmt.Errorf("%w：%v", domain.ErrImportSourceInvalid, err)
+		default:
+			return nil, err
+		}
+	}
+	chapters := parser.SplitChapters(text)
+	if len(chapters) == 0 {
+		return nil, domain.ErrImportEmpty
+	}
+	if report != nil {
+		report("写入章节", 70)
+	}
+
+	domainChapters := make([]domain.OriginalChapter, 0, len(chapters))
+	briefs := make([]ChapterBrief, 0, len(chapters))
+	for _, c := range chapters {
+		charCount := domain.CharCountOf(c.Content)
+		domainChapters = append(domainChapters, domain.OriginalChapter{
+			ChapterNo:     c.No,
+			Title:         c.Title,
+			Content:       c.Content,
+			StartPosition: c.Start,
+			EndPosition:   c.End,
+			CharCount:     charCount,
+		})
+		briefs = append(briefs, ChapterBrief{ChapterNo: c.No, Title: c.Title, CharCount: charCount})
+	}
+
+	charCount := int64(utf8.RuneCountInString(text))
+	if err := s.repo.ReplaceChapters(ctx, workID, domainChapters, charCount); err != nil {
+		return nil, err
+	}
+	if report != nil {
+		report("完成", 100)
+	}
+	return &ImportResult{
+		FileID: file.ID, FileName: file.OriginalName, SizeBytes: file.SizeBytes,
+		Encoding: encoding, CharCount: charCount, ChapterCount: len(domainChapters), Chapters: briefs,
+	}, nil
 }
 
 // OriginalService 是原著业务服务。

@@ -37,7 +37,7 @@
 | # | 任务 | 状态 |
 |---|---|---|
 | P3-1 | Model Gateway + Prompt Engine + 模型配置 | ✅ |
-| P3-2 | 任务系统（异步任务 + 进度 + 重试） | 待做 |
+| P3-2 | 任务系统（异步任务 + 进度 + 重试） | ✅ |
 | P3-3 | 分阶段分析流水线 + AI 提案与作者审核 | 待做 |
 | P3-4 | 前端：模型配置 / 任务中心 / 提案审核 | 待做 |
 
@@ -103,6 +103,7 @@
 | API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
 | 原著系统 | **P2-1 ~ P2-6 基本完成**：导入与章节（5 API）、人物/DNA/关系（9 API）、世界观（14 API）、事件/时间线/剧情弧（11 API）；前端全链路可用；**仅剩 PDF 解析（BOSS 决定暂缓）** |
 | AI 层 | **Phase 3 P3-1 完成**：Model Gateway（OpenAI 兼容 + Anthropic，含重试与错误语义）、Prompt Engine（7 个版本化模板，编译进二进制）、模型配置 CRUD + 连通性测试；密钥 AES-256-GCM 加密，接口不返回密钥 |
+| 任务系统 | **P3-2 完成**：PostgreSQL 队列（`FOR UPDATE SKIP LOCKED` 原子领取）+ worker 池 + 进度节流上报 + panic 兜底 + 自动重试/取消；首个任务 `original_reparse`；任务 API 6 个 |
 | 解析与存储 | `internal/parser`（编码/切章/DOCX）、`internal/storage`（本地文件系统 + SHA256 + 路径安全） |
 | 前端 | Vite 7 + React 18 + antd 5 + Zustand 5；已实现：工程管理、原著总览/上传、章节目录/阅读、**人物（含 DNA 编辑器）与关系**、**世界观（世界/规则/地点/势力）**；8 个测试 |
 | 工程化 | `scripts/dev-backend.sh` / `dev-frontend.sh` / `setup-local-db.sh`；`frontend/.npmrc` 走 npmmirror |
@@ -147,3 +148,4 @@
 | 2026-09-27 | P2-6 第三片完成：前端「人物」（含 11 维度 DNA 编辑器与关系管理）与「世界观」（世界/规则/地点/势力）页面；修复表单 id 撞车导致 label 关联失效的问题 |
 | 2026-09-27 | P2-6 第四/五片完成：事件 / 时间线 / 剧情弧（11 个 API + 前端时间线页与剧情页）；冒烟 72 项、前端 11 项全过；Phase 2 仅剩 PDF |
 | 2026-09-27 | Phase 3 开工（BOSS 决定 PDF 暂缓）：P3-1 Model Gateway + Prompt Engine 完成；密钥加密存储、协议分发与重试、7 个模板；单元测试 17 例 + 冒烟 25 项全过 |
+| 2026-09-27 | P3-2 任务系统完成：PG 队列 + worker 池 + 重试/取消/进度；`original_reparse` 任务打通；单元测试 9 例 + 集成测试 6 例 + 端到端冒烟 19 项全过 |

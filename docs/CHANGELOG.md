@@ -309,3 +309,24 @@ PUT|DELETE     /plot-arcs/{id}
 - P3-2 任务系统（异步任务 + 进度 + 重试）
 - P3-3 分阶段原著分析流水线 + **AI 提案与作者审核**（AI 不得直接改原著模型，规格书 §52）
 - P3-4 前端：模型配置页 / 任务中心 / 分析提案审核页
+
+### 2026-09-27 · P3-2 任务系统（异步 + 进度 + 重试 + 取消）
+
+**数据模型**（迁移 `0007_create_tasks`）：`tasks` 表 —— 类型、状态（PENDING/RUNNING/PAUSED/COMPLETED/FAILED/CANCELLED）、进度 0-100、进度文案、input/output（JSONB）、错误、`attempts`/`max_attempts`、开始与结束时间；`(status, created_at)` 部分索引供 worker 领取。
+
+**队列实现的选择**：规格书给的是「Asynq 或等价任务队列」。我用 **PostgreSQL 自身做队列**（`UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)`），理由是：任务状态与业务数据同库同事务，**重启不丢任务**，部署不需要再依赖一个中间件；将来要换 Asynq 只需替换 worker 的取任务方式，上层接口不变。
+
+**执行框架**（`internal/task`）
+
+- `Registry`：任务类型 → 处理函数；`Worker`：可配置并发数与轮询间隔的 worker 池
+- `Reporter`：handler 用它上报进度（**800ms 节流**，避免高频写库）并检查取消
+- **panic 兜底**：handler 崩了会被记为任务失败，而不是把 worker 打死（这类故障最难查）
+- 失败自动回到队列重试，达到 `max_attempts` 才置 FAILED；**取消的任务不会被 worker 改写成"完成"**
+
+**第一个真实任务** `original_reparse`：用已保存的源文件重新解析原著章节（切章规则升级后不用让作者重传）。新增 `POST /original/{id}/reparse`（返回 202 + task_id），以及任务 API：列表/详情/取消/重试/手工入队 + `/task-types`。
+
+**验证**
+
+- `internal/task` 单元测试 9 例（内存假仓储，确定性）：成功完成并写 output、空队列返回 (false,nil)、**失败→回队列→重试成功**、**超过上限才 FAILED**、**panic 被兜住并记为失败**、未知类型失败、**已取消任务不被改写**、注册表排序与查找、入参取值
+- `internal/repository` 集成测试 6 例（真实 PG，事务回滚）：领取后 RUNNING 且 attempts=1、队列空返回 nil、**失败回到 PENDING→达上限 FAILED→重试清零**、**终态不可取消/不可重试**、不存在报 404、列表过滤与倒序
+- 端到端冒烟 `scripts/smoke-phase3-tasks.sh`：**19 项全过** —— 真实走了一遍「建工程→建原著→导入 3 章→入队 reparse→worker 领取执行→轮询到 COMPLETED」，校验进度 100、attempts=1、output 里章节数与编码正确、章节数未变；再验证完成任务的取消/重试都返回 409、非法原著的任务会 FAILED 且带 error、**失败任务可重试并重新排队**、未知类型 400、按 work_id 过滤生效

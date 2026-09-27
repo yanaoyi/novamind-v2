@@ -79,6 +79,38 @@
 
 - Phase 2 原著系统：文件上传、文本解析、章节识别，以及 OriginalWork / OriginalChapter / OriginalCharacter / World / Timeline / Plot
 
+### 2026-09-27 · Phase 2 开工：原著导入闭环（P2-1 ~ P2-4）
+
+按规格书 §63 Phase 2 拆分，先交付"上传 → 解析 → 切章 → 入库 → 查询"这条闭环。
+
+**P2-1 数据模型**（迁移 `0002_create_originals`）：`files`（上传登记）、`original_works`（原著，一工程一部，部分唯一索引）、`original_chapters`（章节，含原文字节偏移 start_position/end_position，支持回溯）；全部沿用 UUID + 时间戳 + 软删除 + CHECK 约束。
+
+**P2-2 存储与解析**
+
+- `internal/storage`：`Store` 接口 + `LocalStore`（本地文件系统，按 `<根>/<project_id>/<uuid><ext>` 落盘，写入时计算 SHA256 与 MIME；路径穿越与扩展名白名单校验）
+- `internal/parser`：编码探测（UTF-8 / UTF-8 BOM / UTF-16 LE·BE / GB18030 / Big5，按"乱码最少"打分选择）、章节识别（`第X章/回/节/卷/篇`、`Chapter N`、`序章/楔子/尾声/番外`）、无标题时的长度兜底切分；DOCX 用标准库解 zip + 扫描 `word/document.xml`（零第三方依赖）
+- **PDF 暂未支持**（`ParseByFilename` 返回明确错误），属已知缺口，见 CODEX_STATE
+
+**P2-3 仓储**：`repository.OriginalRepo` —— 创建原著/文件登记；`ReplaceChapters` 单事务"先软删后批量插入 + 回写章节数与字数"，配合"未删除行的唯一索引"保证**重复导入幂等**。
+
+**P2-4 API**（5 个端点，含 OpenAPI 与类型）：`POST /projects/{id}/original`、`GET /original/{id}`、`POST /original/{id}/import`（multipart）、`GET /original/{id}/chapters`、`GET /original/{id}/chapters/{no}`。
+
+**顺带修掉的两个基础设施缺陷**
+
+1. `scripts/dev-up.sh` 用 `$!` 记录的是 `setsid` 的 PID，派生后即失效 → `dev-down` 停不干净、新实例抢不到端口。改为"子进程自己写 `$$` 再 exec"，并给 `dev-down` 加了按端口清理本项目孤儿的兜底。
+2. 所有业务路由改为**恒定注册**，服务未就绪时返回 503 而非 404 —— 避免"数据库没连上"被误读成"接口不存在"。
+
+**验证**
+
+- 单元/集成测试 7 个测试文件：parser 11 例（含 GB18030 往返、BOM、DOCX 抽取、无标题兜底）、storage 4 例（含路径穿越拒绝）、domain/repository/service/api 既有用例全绿
+- 新增可重复执行的端到端脚本 `scripts/smoke-phase2.sh`：**15 项全过**，含 GBK 中文原文导入识别为 GB18030、5 章切分、重复导入幂等（库里仍 5 章）、PDF→400、重复建原著→409、给 CREATIVE 工程建原著→400、不存在资源→404，且用 trap 自动清理（按外键顺序）
+
+### 待办（Phase 2 剩余）
+
+- P2-5 前端：原著总览页 / 章节列表 / 章节阅读 / 上传入口
+- P2-6 原著其余模型与接口：OriginalCharacter、CharacterRelationship、World/WorldRule/Location/Faction、OriginalEvent、Timeline、PlotArc（AI 提取在 Phase 3）
+- PDF 解析支持
+
 ### 2026-09-27 · 运行方式修正（懒猫服务发布）
 
 - 问题：用一次性命令 `npm run dev &` 启的服务，工具会话一结束就被回收，懒猫微服报

@@ -9,7 +9,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/yanaoyi/novamindv2/backend/internal/config"
-	"github.com/yanaoyi/novamindv2/backend/internal/service"
 )
 
 // TestOpenAPICoversAllRoutes 是防漂移测试：
@@ -18,8 +17,8 @@ import (
 func TestOpenAPICoversAllRoutes(t *testing.T) {
 	paths := loadSpecPaths(t)
 
-	// projects 传 nil 仓储：只为拿到完整路由表，不调用处理函数
-	srv := NewServer(&config.Config{}, slog.Default(), HealthDeps{}, service.NewProjectService(nil))
+	// 传 nil 服务：路由表恒定注册，本测试只校验路由与规范一致，不调用处理函数
+	srv := NewServer(&config.Config{}, slog.Default(), HealthDeps{}, nil, nil)
 	router := srv.Router()
 
 	for _, problem := range verifyRouteCoverage(router.Routes(), paths) {

@@ -16,6 +16,7 @@ import (
 	"github.com/yanaoyi/novamindv2/backend/internal/infra"
 	"github.com/yanaoyi/novamindv2/backend/internal/repository"
 	"github.com/yanaoyi/novamindv2/backend/internal/service"
+	"github.com/yanaoyi/novamindv2/backend/internal/storage"
 )
 
 // version 由构建时注入：go build -ldflags "-X main.version=..."
@@ -61,8 +62,23 @@ func run() error {
 	}
 	defer func() { _ = pg.Close() }()
 	deps.Postgres = pg.Health
-	projects := service.NewProjectService(repository.NewProjectRepo(pg.DB))
 	logger.Info("PostgreSQL 已连接")
+
+	// 文件存储（Phase 2 用本地文件系统）
+	fileStore, err := storage.NewLocalStore(cfg.StorageDir)
+	if err != nil {
+		return err
+	}
+	logger.Info("文件存储就绪", slog.String("root", fileStore.Root()))
+
+	projectRepo := repository.NewProjectRepo(pg.DB)
+	projects := service.NewProjectService(projectRepo)
+	originals := service.NewOriginalService(
+		repository.NewOriginalRepo(pg.DB),
+		projectRepo,
+		fileStore,
+		cfg.UploadMaxBytes(),
+	)
 
 	// Redis
 	if cfg.RedisAddr == "" {
@@ -77,7 +93,7 @@ func run() error {
 		logger.Info("Redis 已连接")
 	}
 
-	srv := api.NewServer(cfg, logger, deps, projects)
+	srv := api.NewServer(cfg, logger, deps, projects, originals)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

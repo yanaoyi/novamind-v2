@@ -184,6 +184,167 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /projects/{id}/original:
+    post:
+      tags: [original]
+      summary: 创建原著
+      description: 为指定工程创建原著。工程必须是 ORIGINAL 类型，且一个工程只能有一部原著。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 工程 ID
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OriginalCreateRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Original"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /original/{id}:
+    get:
+      tags: [original]
+      summary: 原著详情
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Original"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/import:
+    post:
+      tags: [original]
+      summary: 导入原著正文
+      description: |
+        上传 txt / docx 原文：自动探测编码（UTF-8 / UTF-8 BOM / UTF-16 / GB18030 / Big5）、
+        识别章节标题并入库。**重复导入会整体替换该原著的章节**（幂等，不会重复累积）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 原著文件（.txt / .docx）
+      responses:
+        "200":
+          description: 导入成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OriginalImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/chapters:
+    get:
+      tags: [original]
+      summary: 章节目录
+      description: 返回章节目录（不含正文），按章节号升序。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OriginalChapterList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/chapters/{no}:
+    get:
+      tags: [original]
+      summary: 章节正文
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: no
+          in: path
+          required: true
+          description: 章节序号（从 1 开始）
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OriginalChapterDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   responses:
     BadRequest:
@@ -200,6 +361,12 @@ components:
             $ref: "#/components/schemas/Envelope"
     InternalError:
       description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    Conflict:
+      description: 资源冲突（例如该工程已存在原著）
       content:
         application/json:
           schema:
@@ -289,3 +456,67 @@ components:
             properties:
               status: { type: string, enum: [ok, error, not_configured] }
               detail: { type: string }
+    Original:
+      type: object
+      required: [id, project_id, title, source_type, status, char_count, chapter_count]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        title: { type: string, example: 暗涌 }
+        author: { type: string, example: 某作者 }
+        description: { type: string }
+        source_type: { type: string, enum: [MANUAL, TXT, DOCX, PDF] }
+        status: { type: string, enum: [DRAFT, PARSED, ANALYZED] }
+        char_count: { type: integer, format: int64, description: 正文字数（按字符计） }
+        chapter_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    OriginalCreateRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, maxLength: 200, example: 暗涌 }
+        author: { type: string, maxLength: 120, example: 某作者 }
+        description: { type: string, example: 导入的原著简介 }
+    OriginalImportResult:
+      type: object
+      required: [file_id, file_name, encoding, char_count, chapter_count]
+      properties:
+        file_id: { type: string, format: uuid }
+        file_name: { type: string, example: 暗涌.txt }
+        size_bytes: { type: integer, format: int64 }
+        encoding: { type: string, example: GB18030, description: 实际识别到的编码 }
+        char_count: { type: integer, format: int64 }
+        chapter_count: { type: integer }
+        chapters:
+          type: array
+          items:
+            $ref: "#/components/schemas/OriginalChapterBrief"
+    OriginalChapterBrief:
+      type: object
+      required: [chapter_no, title, char_count]
+      properties:
+        chapter_no: { type: integer, minimum: 1 }
+        title: { type: string, example: 第一章 初遇 }
+        char_count: { type: integer }
+        summary: { type: string }
+    OriginalChapterList:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OriginalChapterBrief"
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        page_size: { type: integer }
+    OriginalChapterDetail:
+      allOf:
+        - $ref: "#/components/schemas/OriginalChapterBrief"
+        - type: object
+          required: [content]
+          properties:
+            content: { type: string }
+            start_position: { type: integer, format: int64, description: 在解析后全文中的 UTF-8 字节起始偏移 }
+            end_position: { type: integer, format: int64, description: 结束偏移（不含） }

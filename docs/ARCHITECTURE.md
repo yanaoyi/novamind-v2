@@ -36,8 +36,10 @@ novamindv2/
 │   │   ├── config/            # 配置加载（env）
 │   │   ├── domain/            # 实体、枚举、领域规则（无外部依赖）
 │   │   ├── infra/             # 基础设施连接：PostgreSQL / Redis（只做连接与健康）
+│   │   ├── parser/            # 文档解析：编码探测、章节切分、DOCX 抽取
 │   │   ├── repository/        # 数据访问（GORM）
 │   │   ├── service/           # 业务编排
+│   │   ├── storage/           # 文件存储抽象（本地实现，可换 OSS/S3）
 │   │   ├── agent/             # 7 个 Agent 的实现
 │   │   ├── ai/                # Model Gateway / Prompt Engine
 │   │   ├── context/           # Context Engine / Context Snapshot
@@ -101,6 +103,9 @@ Agent → Tool → Service → Repository → DB
 
 迁移：`backend/migrations/*.up.sql|down.sql`，用 golang-migrate 执行；
 **必须能从零重建库**，且重复执行不报错；每次 schema 变更都要写迁移文件，不允许只靠 `AutoMigrate` 交付。
+
+删除顺序必须满足外键依赖（实测踩过）：`original_chapters → original_works → files → projects`。
+清理脚本/测试的 teardown 一律按这个顺序写，否则会撞 `original_works.source_file_id_fkey`。
 
 命名：表名复数蛇形（`creative_characters`），外键 `<单数表名>_id`，索引 `idx_<表>_<列>`。
 

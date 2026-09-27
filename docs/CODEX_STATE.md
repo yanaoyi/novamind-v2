@@ -1,14 +1,14 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-27（**Phase 1 完成**：P1-1 ~ P1-7 全部交付并验收）
+> 最后更新：2026-09-27（Phase 1 完成；**Phase 2 进行中：P2-1 ~ P2-4 已完成**）
 > **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
 
 ## 1. 一句话状态
 
-**Phase 1 完成。** 前后端已打通：浏览器里可以真实地对 PostgreSQL 里的工程做增删改查。
-下一步进入 **Phase 2（原著系统）**。
+**Phase 2 进行中：原著导入闭环已打通**（上传 TXT/DOCX → 编码探测 → 章节识别 → 入库 → 目录/正文查询）。
+剩余：P2-5 前端原著页面、P2-6 人物/世界观/时间线/剧情模型、PDF 支持。
 
 ---
 
@@ -29,7 +29,20 @@
 
 ## 3. 正在进行
 
-**Phase 1 全部完成（P1-1 ~ P1-7）。** 无阻塞项。
+**Phase 2 的 P2-1 ~ P2-4 完成**：数据模型（files/original_works/original_chapters）、存储抽象、编码探测与章节切分、事务化导入仓储、5 个原著 API。
+端到端脚本 `scripts/smoke-phase2.sh` 15 项全过；开发库与上传目录已清空，无残留。
+
+### Phase 2 任务拆分
+
+| # | 任务 | 状态 |
+|---|---|---|
+| P2-1 | 数据模型：files / original_works / original_chapters（迁移 0002） | ✅ |
+| P2-2 | 存储抽象 + 文本解析（编码探测 / 章节切分 / DOCX） | ✅ |
+| P2-3 | 仓储：原著 CRUD + 事务化章节替换（幂等） | ✅ |
+| P2-4 | 原著 API×5 + OpenAPI + 类型 | ✅ |
+| P2-5 | 前端：原著总览 / 章节列表 / 章节阅读 / 上传入口 | 待做 |
+| P2-6 | 原著其余模型：人物、人物关系、世界观、事件、时间线、剧情 | 待做 |
+| — | PDF 解析 | 待做（已知缺口） |
 
 运行现状：PostgreSQL 15.19（集群 `15 main 5432 online`）与 Redis 7.0.15 均 active；
 业务账号 `novamind` 可登录；迁移版本 = 1（dirty=false）；`projects` 表 0 行（测试不残留）。
@@ -79,6 +92,8 @@
 | 后端 | **P1-5 完成**：config / infra / domain / repository / service / api 六层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4 |
 | 数据库 | **P1-4 完成**：`projects` 表 + `schema_migrations`（版本 1）；迁移可 up/down/重建 |
 | API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
+| 原著系统 | **P2-1 ~ P2-4 完成**：导入 TXT/DOCX（编码探测 GB18030/Big5/UTF-16/BOM）、章节识别、事务化幂等入库；5 个 API；**PDF 未支持** |
+| 解析与存储 | `internal/parser`（编码/切章/DOCX）、`internal/storage`（本地文件系统 + SHA256 + 路径安全） |
 | 前端 | **P1-6 完成**：Vite 7 + React 18 + antd 5 + Zustand 5；工程管理页可增删改查；5 个组件测试 |
 | 工程化 | `scripts/dev-backend.sh` / `dev-frontend.sh` / `setup-local-db.sh`；`frontend/.npmrc` 走 npmmirror |
 | AI 模型 | 未接入；Phase 1 只做 Model Gateway 骨架与配置表，不接真实 Key（真实接入在 Phase 3） |

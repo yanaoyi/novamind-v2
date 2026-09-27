@@ -28,10 +28,19 @@ start_detached() {
     return 0
   fi
 
-  ( cd "${dir}" && setsid nohup "$@" >"${logfile}" 2>&1 </dev/null & echo $! >"${pidfile}" )
-  sleep 2
-  local pid
-  pid="$(cat "${pidfile}")"
+  # 让子进程自己写 PID：bash 先把 $$ 落盘，再 exec 替换成目标进程，PID 全程不变。
+  # 早前版本用 $! 记录 setsid 的 PID —— setsid 派生后这个值就失效了，
+  # 结果是 dev-down 停不掉进程、新实例又抢不到端口。这是那次"服务没反应"的真因。
+  ( cd "${dir}" && PID_FILE="${pidfile}" setsid nohup bash -c 'echo $$ > "$PID_FILE"; exec "$@"' bash "$@" >"${logfile}" 2>&1 </dev/null ) &
+
+  local waited=0
+  while [ ! -s "${pidfile}" ] && [ "${waited}" -lt 25 ]; do
+    sleep 0.2
+    waited=$((waited + 1))
+  done
+
+  local pid=""
+  [ -s "${pidfile}" ] && pid="$(cat "${pidfile}")"
   if kill -0 "${pid}" 2>/dev/null; then
     echo "[${name}] 已启动 (pid ${pid})  日志: ${logfile}"
   else

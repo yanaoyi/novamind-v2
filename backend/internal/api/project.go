@@ -76,6 +76,9 @@ func toProjectResponse(p domain.Project) ProjectResponse {
 //	@Failure		500		{object}	Envelope
 //	@Router			/projects [post]
 func (s *Server) createProject(c *gin.Context) {
+	if !s.requireServices(c) {
+		return
+	}
 	var req createProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		Fail(c, http.StatusBadRequest, CodeBadRequest, "请求参数不合法: "+err.Error(), nil)
@@ -109,6 +112,9 @@ func (s *Server) createProject(c *gin.Context) {
 //	@Failure		400			{object}	Envelope
 //	@Router			/projects [get]
 func (s *Server) listProjects(c *gin.Context) {
+	if !s.requireServices(c) {
+		return
+	}
 	filter := repository.ProjectFilter{
 		Page:     parseInt(c.Query("page"), 1),
 		PageSize: parseInt(c.Query("page_size"), 20),
@@ -158,6 +164,9 @@ func (s *Server) listProjects(c *gin.Context) {
 //	@Failure		404	{object}	Envelope
 //	@Router			/projects/{id} [get]
 func (s *Server) getProject(c *gin.Context) {
+	if !s.requireServices(c) {
+		return
+	}
 	p, err := s.projects.Get(c.Request.Context(), c.Param("id"))
 	if err != nil {
 		s.failFromError(c, err)
@@ -180,6 +189,9 @@ func (s *Server) getProject(c *gin.Context) {
 //	@Failure		404		{object}	Envelope
 //	@Router			/projects/{id} [put]
 func (s *Server) updateProject(c *gin.Context) {
+	if !s.requireServices(c) {
+		return
+	}
 	var req updateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		Fail(c, http.StatusBadRequest, CodeBadRequest, "请求参数不合法: "+err.Error(), nil)
@@ -211,6 +223,9 @@ func (s *Server) updateProject(c *gin.Context) {
 //	@Failure		404	{object}	Envelope
 //	@Router			/projects/{id} [delete]
 func (s *Server) deleteProject(c *gin.Context) {
+	if !s.requireServices(c) {
+		return
+	}
 	if err := s.projects.Delete(c.Request.Context(), c.Param("id")); err != nil {
 		s.failFromError(c, err)
 		return
@@ -222,6 +237,10 @@ func (s *Server) deleteProject(c *gin.Context) {
 
 // failFromError 把领域错误翻译成 HTTP 错误码；未知错误记日志并返回 500。
 func (s *Server) failFromError(c *gin.Context, err error) {
+	if status, code, ok := originalErrorStatus(err); ok {
+		Fail(c, status, code, err.Error(), nil)
+		return
+	}
 	switch {
 	case errors.Is(err, domain.ErrProjectNotFound):
 		Fail(c, http.StatusNotFound, "PROJECT_NOT_FOUND", err.Error(), nil)

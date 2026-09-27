@@ -22,6 +22,7 @@ type Config struct {
 	RedisDB       int
 	LogLevel      string
 	StorageDir    string
+	UploadMaxMB   int
 }
 
 // Load 读取 .env（若存在）并组装配置。
@@ -51,8 +52,16 @@ func Load(envFiles ...string) (*Config, error) {
 		LogLevel:      getEnv("LOG_LEVEL", "info"),
 		StorageDir:    getEnv("STORAGE_DIR", "./data/uploads"),
 	}
+	uploadMaxMB, err := strconv.Atoi(getEnv("UPLOAD_MAX_MB", "50"))
+	if err != nil || uploadMaxMB <= 0 {
+		return nil, fmt.Errorf("UPLOAD_MAX_MB 必须是正整数")
+	}
+	cfg.UploadMaxMB = uploadMaxMB
 	return cfg, nil
 }
+
+// UploadMaxBytes 返回上传大小上限（字节）。
+func (c *Config) UploadMaxBytes() int64 { return int64(c.UploadMaxMB) * 1024 * 1024 }
 
 // IsProduction 供日志与 Gin 模式判断使用。
 func (c *Config) IsProduction() bool { return c.AppEnv == "production" }

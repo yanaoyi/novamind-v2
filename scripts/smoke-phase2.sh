@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Phase 2 原著导入链路冒烟测试（需要后端在 127.0.0.1:8080 运行、数据库可用）。
+#
+# 用法：bash scripts/smoke-phase2.sh
+#
+# 覆盖：创建工程 → 创建原著 → 导入 GBK 中文原文 → 详情/章节目录/章节正文
+#       → 重复导入幂等 → 五类错误码 → 清理（按外键顺序）
+set -uo pipefail
+
+API="${API_BASE:-http://127.0.0.1:8080/api/v1}"
+DB="${DATABASE_URL:-postgres://novamind:novamind@127.0.0.1:5432/novamind?sslmode=disable}"
+PSQL_URL="postgresql://novamind:novamind@127.0.0.1:5432/novamind"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORK_DIR="$(mktemp -d)"
+
+PASS=0
+FAIL=0
+check() { # check <描述> <期望> <实际>
+  if [ "$2" = "$3" ]; then
+    echo "  ✓ $1 ($3)"
+    PASS=$((PASS + 1))
+  else
+    echo "  ✗ $1：期望 $2，实际 $3"
+    FAIL=$((FAIL + 1))
+  fi
+}
+getid() { python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["id"])'; }
+psqlq() { psql "$PSQL_URL" -tAc "$1"; }
+
+# ---------- 准备样本 ----------
+python3 - "$WORK_DIR" <<'PY'
+import sys
+work = sys.argv[1]
+parts = ["《暗涌》", "", "作者：测试", ""]
+for i, t in enumerate(["第一章 初遇", "第二章 裂痕", "第三章 旧信", "第四章 归途"], 1):
+    parts.append(t)
+    parts.append("")
+    parts.extend(f"这是第{i}章的正文第{j}句，林默在月台上等待。" for j in range(1, 21))
+    parts.append("")
+text = "\n".join(parts)
+open(f"{work}/gbk.txt", "w", encoding="gb18030").write(text)
+open(f"{work}/utf8.txt", "w", encoding="utf-8").write(text)
+PY
+
+echo "== 准备样本完成：$WORK_DIR"
+
+# ---------- 清理口袋（保证异常退出也能清干净） ----------
+PID=""
+CPID=""
+OID=""
+cleanup() {
+  [ -n "$OID" ] && psqlq "delete from original_chapters where original_work_id='$OID'" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from original_works where id='$OID'" >/dev/null 2>&1
+  [ -n "$PID" ] && psqlq "delete from files where project_id='$PID'" >/dev/null 2>&1
+  [ -n "$CPID" ] && psqlq "delete from files where project_id='$CPID'" >/dev/null 2>&1
+  for id in "$PID" "$CPID"; do
+    [ -n "$id" ] && psqlq "delete from projects where id='$id'" >/dev/null 2>&1
+  done
+  [ -n "$PID" ] && rm -rf "${PROJECT_ROOT}/backend/data/uploads/${PID}"
+  [ -n "$CPID" ] && rm -rf "${PROJECT_ROOT}/backend/data/uploads/${CPID}"
+  rm -rf "$WORK_DIR"
+}
+trap cleanup EXIT
+
+# ---------- 1. 建工程与原著 ----------
+echo "== 1. 创建 ORIGINAL 工程与原著"
+PID=$(curl -sf -X POST "$API/projects" -H 'Content-Type: application/json' \
+  -d '{"name":"原著导入冒烟","type":"ORIGINAL"}' | getid)
+check "创建工程" "36" "${#PID}"
+
+OID=$(curl -sf -X POST "$API/projects/$PID/original" -H 'Content-Type: application/json' \
+  -d '{"title":"暗涌","author":"测试作者","description":"GBK 编码样本"}' | getid)
+check "创建原著" "36" "${#OID}"
+
+# ---------- 2. 导入 GBK 原文 ----------
+echo "== 2. 导入 GBK 编码原文"
+IMPORT=$(curl -sf -X POST "$API/original/$OID/import" -F "file=@${WORK_DIR}/gbk.txt")
+check "识别编码" "GB18030" "$(echo "$IMPORT" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["encoding"])')"
+check "章节数" "5" "$(echo "$IMPORT" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["chapter_count"])')"
+
+echo "== 3. 原著详情"
+check "状态" "PARSED" "$(curl -sf "$API/original/$OID" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["status"])')"
+check "来源类型" "TXT" "$(curl -sf "$API/original/$OID" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["source_type"])')"
+
+echo "== 4. 章节目录与正文"
+check "目录 total" "5" "$(curl -sf "$API/original/$OID/chapters?page=1&page_size=2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+check "第 2 章标题" "第一章 初遇" "$(curl -sf "$API/original/$OID/chapters/2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["title"])')"
+
+echo "== 5. 重复导入（幂等）"
+REIMPORT=$(curl -sf -X POST "$API/original/$OID/import" -F "file=@${WORK_DIR}/utf8.txt")
+check "重导后章节数" "5" "$(echo "$REIMPORT" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["chapter_count"])')"
+check "库中未删除章节数" "5" "$(psqlq "select count(*) from original_chapters where original_work_id='$OID' and deleted_at is null")"
+
+echo "== 6. 错误场景"
+check "PDF 导入" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/import" -F "file=@/etc/hostname;filename=book.pdf")"
+check "重复创建原著" "409" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/projects/$PID/original" -H 'Content-Type: application/json' -d '{"title":"再建一个"}')"
+CPID=$(curl -sf -X POST "$API/projects" -H 'Content-Type: application/json' -d '{"name":"二创工程冒烟","type":"CREATIVE"}' | getid)
+check "给 CREATIVE 工程建原著" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/projects/$CPID/original" -H 'Content-Type: application/json' -d '{"title":"不该成功"}')"
+check "不存在的原著" "404" "$(curl -s -o /dev/null -w '%{http_code}' "$API/original/00000000-0000-7000-8000-000000000000")"
+check "不存在的章节" "404" "$(curl -s -o /dev/null -w '%{http_code}' "$API/original/$OID/chapters/99")"
+
+echo
+echo "== 结果：通过 ${PASS} 项，失败 ${FAIL} 项（清理由 trap 自动完成）"
+[ "$FAIL" -eq 0 ]

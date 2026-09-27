@@ -134,3 +134,33 @@
 - 修复：新增 `scripts/dev-up.sh`（`setsid` + PID 文件 + 就绪检查）与 `scripts/dev-down.sh`；
   前端 `vite.config.ts` 改为 `host: true`（监听 `0.0.0.0:5173`，代理能连上）+ `strictPort`
 - 验证：新会话复查，后端 PID 的 PPID = 1（已脱离会话），端口 `*:5173` / `127.0.0.1:8080` 正常，三条链路均 200
+
+### 2026-09-27 · P2-6（第一片）人物 / 人物 DNA / 人物关系
+
+**数据模型**（迁移 `0003_create_characters`）
+
+- `original_characters`：姓名、别名（JSONB）、角色/性别/年龄/外貌、性格/动机/价值观/恐惧/欲望/行为模式/语言风格/能力、首次与最后出场、**人物 DNA（JSONB）**、重要度 1-5、来源（MANUAL/AI）、备注；同原著内**姓名唯一**（大小写不敏感，软删除不占用）
+- `character_relationships`：有向边（source → target）、10 种关系类型、强度 0-100、描述、来源；**禁止自环**，同一对人物的同一关系类型唯一
+
+**人物 DNA**（规格书 §11 的核心数据结构）：11 个维度（personality / values / motivation / behavior / speech_style / background / ability / decision_style / conflict_response / emotional_response / relationship_pattern），每维一句描述 + **0-100 权重**；权重越界直接拒绝写入。这是后续二创"人物继承"（§19 InheritanceRule）的计算基础。
+
+**后端**：`repository.OriginalCharacterRepo`（PostgreSQL 唯一/外键冲突 → 领域错误翻译）、`service.OriginalCharacterService`（关系两端必须同属一部原著）、9 个 API：
+
+```
+GET|POST       /api/v1/original/{id}/characters
+GET|PUT|DELETE /api/v1/characters/{id}
+GET|POST       /api/v1/original/{id}/relationships
+PUT|DELETE     /api/v1/relationships/{id}
+```
+
+删除人物会连同其相关关系一起删除（同一事务内完成）。
+
+**验证**
+
+- 单元测试：DNA 边界值（0/100 合法，101/-1 拒绝）、维度必须为 11 个、别名去空白去重、重要度默认值、关系自环 / 非法类型 / 强度越界
+- 端到端冒烟扩展到 **33 项全过**：新增人物（DNA 权重保留）、别名去重、同名 409、DNA 权重 120 → 400、关键字搜索、DNA 更新、建关系（强度 80）、重复关系 409、自环 400、**跨原著建关系 400**、关系更新、删除人物后关系自动消失
+
+### 待办（Phase 2 剩余）
+
+- P2-6（第二片）：世界观（World / WorldRule / Location / Faction）、事件、时间线、剧情弧
+- PDF 解析支持

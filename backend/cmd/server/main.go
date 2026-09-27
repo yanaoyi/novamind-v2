@@ -79,6 +79,11 @@ func run() error {
 		fileStore,
 		cfg.UploadMaxBytes(),
 	)
+	originalRepo := repository.NewOriginalRepo(pg.DB)
+	characters := service.NewOriginalCharacterService(
+		repository.NewOriginalCharacterRepo(pg.DB),
+		originalRepo,
+	)
 
 	// Redis
 	if cfg.RedisAddr == "" {
@@ -93,7 +98,7 @@ func run() error {
 		logger.Info("Redis 已连接")
 	}
 
-	srv := api.NewServer(cfg, logger, deps, projects, originals)
+	srv := api.NewServer(cfg, logger, deps, projects, originals, characters)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

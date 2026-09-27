@@ -277,7 +277,13 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "ORIGINAL_NOT_FOUND", true
 	case errors.Is(err, domain.ErrChapterNotFound):
 		return http.StatusNotFound, "CHAPTER_NOT_FOUND", true
-	case errors.Is(err, domain.ErrOriginalAlreadyExists):
+	case errors.Is(err, domain.ErrCharacterNotFound):
+		return http.StatusNotFound, "CHARACTER_NOT_FOUND", true
+	case errors.Is(err, domain.ErrRelationNotFound):
+		return http.StatusNotFound, "RELATION_NOT_FOUND", true
+	case errors.Is(err, domain.ErrOriginalAlreadyExists),
+		errors.Is(err, domain.ErrCharacterDuplicate),
+		errors.Is(err, domain.ErrRelationDuplicate):
 		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrOriginalNotOriginalProj),
 		errors.Is(err, domain.ErrOriginalTitleRequired),
@@ -285,6 +291,14 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrOriginalStatusInvalid),
 		errors.Is(err, domain.ErrImportSourceInvalid),
 		errors.Is(err, domain.ErrImportEmpty),
+		errors.Is(err, domain.ErrCharacterNameRequired),
+		errors.Is(err, domain.ErrCharacterNameTooLong),
+		errors.Is(err, domain.ErrCharacterImportance),
+		errors.Is(err, domain.ErrDNAWeightOutOfRange),
+		errors.Is(err, domain.ErrRelationTypeInvalid),
+		errors.Is(err, domain.ErrRelationSelfReference),
+		errors.Is(err, domain.ErrRelationStrength),
+		errors.Is(err, domain.ErrRelationCrossWork),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

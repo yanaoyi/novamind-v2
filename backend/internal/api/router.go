@@ -13,11 +13,12 @@ import (
 // Server 持有 HTTP 层依赖。
 // 约束：api 层只做参数校验与响应组装，业务逻辑放在 service。
 type Server struct {
-	cfg       *config.Config
-	logger    *slog.Logger
-	deps      HealthDeps
-	projects  *service.ProjectService
-	originals *service.OriginalService
+	cfg        *config.Config
+	logger     *slog.Logger
+	deps       HealthDeps
+	projects   *service.ProjectService
+	originals  *service.OriginalService
+	characters *service.OriginalCharacterService
 }
 
 // NewServer 构建 HTTP 服务。
@@ -27,8 +28,12 @@ func NewServer(
 	deps HealthDeps,
 	projects *service.ProjectService,
 	originals *service.OriginalService,
+	characters *service.OriginalCharacterService,
 ) *Server {
-	return &Server{cfg: cfg, logger: logger, deps: deps, projects: projects, originals: originals}
+	return &Server{
+		cfg: cfg, logger: logger, deps: deps,
+		projects: projects, originals: originals, characters: characters,
+	}
 }
 
 // Router 组装路由与中间件。
@@ -66,6 +71,23 @@ func (s *Server) Router() *gin.Engine {
 			original.POST("/:id/import", s.importOriginal)
 			original.GET("/:id/chapters", s.listOriginalChapters)
 			original.GET("/:id/chapters/:no", s.getOriginalChapter)
+			original.GET("/:id/characters", s.listCharacters)
+			original.POST("/:id/characters", s.createCharacter)
+			original.GET("/:id/relationships", s.listRelationships)
+			original.POST("/:id/relationships", s.createRelationship)
+		}
+
+		// 人物与关系（规格书 §10-§12）
+		characters := v1.Group("/characters")
+		{
+			characters.GET("/:id", s.getCharacter)
+			characters.PUT("/:id", s.updateCharacter)
+			characters.DELETE("/:id", s.deleteCharacter)
+		}
+		relationships := v1.Group("/relationships")
+		{
+			relationships.PUT("/:id", s.updateRelationship)
+			relationships.DELETE("/:id", s.deleteRelationship)
 		}
 	}
 
@@ -80,7 +102,7 @@ func (s *Server) Router() *gin.Engine {
 // requireServices 确认业务服务已就绪（数据库已连接）。
 // 未就绪时返回 503，而不是让请求打到 nil 上 panic 或静默 404。
 func (s *Server) requireServices(c *gin.Context) bool {
-	if s.projects == nil || s.originals == nil {
+	if s.projects == nil || s.originals == nil || s.characters == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

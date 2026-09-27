@@ -345,6 +345,246 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /original/{id}/characters:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [characters]
+      summary: 人物列表
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+        - name: keyword
+          in: query
+          description: 按姓名/角色模糊搜索
+          schema: { type: string }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CharacterList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [characters]
+      summary: 新增人物
+      description: 同原著内姓名唯一；dna 各维度权重需在 0-100。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharacterRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Character"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /characters/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [characters]
+      summary: 人物详情
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Character"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [characters]
+      summary: 更新人物
+      description: 全量覆盖式更新：未提交的字段会被置空，客户端应回传完整对象。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharacterRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Character"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [characters]
+      summary: 删除人物
+      description: 软删除；与其相关的人物关系一并删除。
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted: { type: boolean, example: true }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/relationships:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [characters]
+      summary: 人物关系列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RelationshipList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [characters]
+      summary: 新增人物关系
+      description: 两端人物必须存在且属于同一部原著；同一对人物的同一关系类型不可重复。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationshipRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Relationship"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /relationships/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [characters]
+      summary: 更新人物关系
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationshipUpdateRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Relationship"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [characters]
+      summary: 删除人物关系
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted: { type: boolean, example: true }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   responses:
     BadRequest:
@@ -520,3 +760,113 @@ components:
             content: { type: string }
             start_position: { type: integer, format: int64, description: 在解析后全文中的 UTF-8 字节起始偏移 }
             end_position: { type: integer, format: int64, description: 结束偏移（不含） }
+    DNADimension:
+      type: object
+      required: [weight]
+      properties:
+        text: { type: string, description: 该维度的文字描述 }
+        weight: { type: integer, minimum: 0, maximum: 100, description: 继承权重（0-100） }
+    CharacterDNA:
+      type: object
+      description: 人物 DNA：每个维度一句描述 + 0-100 权重
+      properties:
+        personality: { $ref: "#/components/schemas/DNADimension" }
+        values: { $ref: "#/components/schemas/DNADimension" }
+        motivation: { $ref: "#/components/schemas/DNADimension" }
+        behavior: { $ref: "#/components/schemas/DNADimension" }
+        speech_style: { $ref: "#/components/schemas/DNADimension" }
+        background: { $ref: "#/components/schemas/DNADimension" }
+        ability: { $ref: "#/components/schemas/DNADimension" }
+        decision_style: { $ref: "#/components/schemas/DNADimension" }
+        conflict_response: { $ref: "#/components/schemas/DNADimension" }
+        emotional_response: { $ref: "#/components/schemas/DNADimension" }
+        relationship_pattern: { $ref: "#/components/schemas/DNADimension" }
+    CharacterRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 120, example: 林默 }
+        aliases: { type: array, items: { type: string }, example: [小默] }
+        role: { type: string, example: 主角 }
+        gender: { type: string, example: 女 }
+        age: { type: string, example: "24" }
+        appearance: { type: string }
+        personality: { type: string }
+        motivation: { type: string }
+        values: { type: string }
+        fears: { type: string }
+        desires: { type: string }
+        behavior_patterns: { type: string }
+        speech_style: { type: string }
+        abilities: { type: string }
+        first_appearance: { type: string }
+        last_appearance: { type: string }
+        dna: { $ref: "#/components/schemas/CharacterDNA" }
+        importance: { type: integer, minimum: 1, maximum: 5, default: 3 }
+        notes: { type: string }
+    Character:
+      allOf:
+        - $ref: "#/components/schemas/CharacterRequest"
+        - type: object
+          required: [id, original_work_id, source, created_at, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            original_work_id: { type: string, format: uuid }
+            source: { type: string, enum: [MANUAL, AI] }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    CharacterList:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Character"
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        page_size: { type: integer }
+    RelationshipRequest:
+      type: object
+      required: [source_character_id, target_character_id, relation_type]
+      properties:
+        source_character_id: { type: string, format: uuid }
+        target_character_id: { type: string, format: uuid }
+        relation_type:
+          type: string
+          enum: [family, friend, lover, enemy, mentor, student, colleague, rival, organization, other]
+        strength: { type: integer, minimum: 0, maximum: 100, default: 50 }
+        description: { type: string }
+    RelationshipUpdateRequest:
+      type: object
+      properties:
+        relation_type:
+          type: string
+          enum: [family, friend, lover, enemy, mentor, student, colleague, rival, organization, other]
+        strength: { type: integer, minimum: 1, maximum: 100 }
+        description: { type: string }
+    Relationship:
+      type: object
+      required: [id, original_work_id, source_character_id, target_character_id, relation_type, strength]
+      properties:
+        id: { type: string, format: uuid }
+        original_work_id: { type: string, format: uuid }
+        source_character_id: { type: string, format: uuid }
+        target_character_id: { type: string, format: uuid }
+        relation_type:
+          type: string
+          enum: [family, friend, lover, enemy, mentor, student, colleague, rival, organization, other]
+        strength: { type: integer, minimum: 0, maximum: 100 }
+        description: { type: string }
+        source: { type: string, enum: [MANUAL, AI] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RelationshipList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Relationship"
+        total: { type: integer }

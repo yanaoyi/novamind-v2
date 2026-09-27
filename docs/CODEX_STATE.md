@@ -41,7 +41,7 @@
 | P2-3 | 仓储：原著 CRUD + 事务化章节替换（幂等） | ✅ |
 | P2-4 | 原著 API×5 + OpenAPI + 类型 | ✅ |
 | P2-5 | 前端：原著总览 / 章节列表 / 章节阅读 / 上传入口 | ✅ |
-| P2-6 | 原著其余模型：人物、人物关系、世界观、事件、时间线、剧情 | 待做 |
+| P2-6 | 原著其余模型 | 人物 / 人物 DNA / 人物关系 ✅；世界观、事件、时间线、剧情 待做 |
 | — | PDF 解析 | 待做（已知缺口） |
 
 运行现状：PostgreSQL 15.19（集群 `15 main 5432 online`）与 Redis 7.0.15 均 active；
@@ -92,7 +92,7 @@
 | 后端 | **P1-5 完成**：config / infra / domain / repository / service / api 六层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4 |
 | 数据库 | **P1-4 完成**：`projects` 表 + `schema_migrations`（版本 1）；迁移可 up/down/重建 |
 | API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
-| 原著系统 | **P2-1 ~ P2-5 完成**：导入 TXT/DOCX（编码探测 GB18030/Big5/UTF-16/BOM）、章节识别、事务化幂等入库；5 个 API；前端总览/目录/阅读页可用；**PDF 未支持** |
+| 原著系统 | **P2-1 ~ P2-5 完成 + P2-6 第一片**：导入与章节（5 API）、**人物/人物 DNA/人物关系（9 API）**、前端总览·目录·阅读；**PDF 未支持** |
 | 解析与存储 | `internal/parser`（编码/切章/DOCX）、`internal/storage`（本地文件系统 + SHA256 + 路径安全） |
 | 前端 | **P1-6 完成**：Vite 7 + React 18 + antd 5 + Zustand 5；工程管理页可增删改查；5 个组件测试 |
 | 工程化 | `scripts/dev-backend.sh` / `dev-frontend.sh` / `setup-local-db.sh`；`frontend/.npmrc` 走 npmmirror |

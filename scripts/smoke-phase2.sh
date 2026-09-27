@@ -49,6 +49,8 @@ PID=""
 CPID=""
 OID=""
 cleanup() {
+  [ -n "$OID" ] && psqlq "delete from character_relationships where original_work_id='$OID'" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from original_characters where original_work_id='$OID'" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from original_chapters where original_work_id='$OID'" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from original_works where id='$OID'" >/dev/null 2>&1
   [ -n "$PID" ] && psqlq "delete from files where project_id='$PID'" >/dev/null 2>&1
@@ -98,6 +100,57 @@ CPID=$(curl -sf -X POST "$API/projects" -H 'Content-Type: application/json' -d '
 check "给 CREATIVE 工程建原著" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/projects/$CPID/original" -H 'Content-Type: application/json' -d '{"title":"不该成功"}')"
 check "不存在的原著" "404" "$(curl -s -o /dev/null -w '%{http_code}' "$API/original/00000000-0000-7000-8000-000000000000")"
 check "不存在的章节" "404" "$(curl -s -o /dev/null -w '%{http_code}' "$API/original/$OID/chapters/99")"
+
+# ---------- 7. 人物与人物 DNA ----------
+echo "== 7. 人物与人物 DNA"
+CHAR_A=$(curl -sf -X POST "$API/original/$OID/characters" -H 'Content-Type: application/json' -d '{
+  "name":"林默","aliases":[" 小默 ","小默"],"role":"主角","gender":"女","age":"24",
+  "personality":"外冷内热","importance":5,
+  "dna":{"personality":{"text":"克制而敏锐","weight":90},"values":{"text":"守信","weight":80}}
+}')
+CID_A=$(echo "$CHAR_A" | getid)
+check "创建人物 A" "36" "${#CID_A}"
+check "别名去重（去掉空白与重复）" "['小默']" "$(echo "$CHAR_A" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["aliases"])')"
+check "DNA 权重保留" "90" "$(echo "$CHAR_A" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["dna"]["personality"]["weight"])')"
+
+CID_B=$(curl -sf -X POST "$API/original/$OID/characters" -H 'Content-Type: application/json' \
+  -d '{"name":"陈述","role":"配角","importance":3}' | getid)
+check "创建人物 B" "36" "${#CID_B}"
+
+check "同名人物（应 409）" "409" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/characters" -H 'Content-Type: application/json' -d '{"name":"林默"}')"
+check "DNA 权重 120（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/characters" -H 'Content-Type: application/json' -d '{"name":"越界者","dna":{"personality":{"text":"x","weight":120}}}')"
+check "人物列表 total" "2" "$(curl -sf "$API/original/$OID/characters" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+check "关键字搜索" "1" "$(curl -sf "$API/original/$OID/characters?keyword=林" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+
+UPDATED=$(curl -sf -X PUT "$API/characters/$CID_A" -H 'Content-Type: application/json' -d '{
+  "name":"林默","role":"主角","importance":5,
+  "dna":{"personality":{"text":"克制而敏锐","weight":70}}
+}')
+check "更新 DNA 权重" "70" "$(echo "$UPDATED" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["dna"]["personality"]["weight"])')"
+
+# ---------- 8. 人物关系 ----------
+echo "== 8. 人物关系"
+REL=$(curl -sf -X POST "$API/original/$OID/relationships" -H 'Content-Type: application/json' \
+  -d "{\"source_character_id\":\"$CID_A\",\"target_character_id\":\"$CID_B\",\"relation_type\":\"friend\",\"strength\":80,\"description\":\"自幼相识\"}")
+RID=$(echo "$REL" | getid)
+check "创建关系" "36" "${#RID}"
+check "关系强度" "80" "$(echo "$REL" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["strength"])')"
+check "重复关系（应 409）" "409" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/relationships" -H 'Content-Type: application/json' -d "{\"source_character_id\":\"$CID_A\",\"target_character_id\":\"$CID_B\",\"relation_type\":\"friend\"}")"
+check "自己连自己（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/relationships" -H 'Content-Type: application/json' -d "{\"source_character_id\":\"$CID_A\",\"target_character_id\":\"$CID_A\",\"relation_type\":\"friend\"}")"
+PROJ2=$(curl -sf -X POST "$API/projects" -H 'Content-Type: application/json' -d '{"name":"跨原著冒烟","type":"ORIGINAL"}' | getid)
+OID2=$(curl -sf -X POST "$API/projects/$PROJ2/original" -H 'Content-Type: application/json' -d '{"title":"另一部"}' | getid)
+CID_C=$(curl -sf -X POST "$API/original/$OID2/characters" -H 'Content-Type: application/json' -d '{"name":"异书人物"}' | getid)
+check "跨原著建立关系" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/relationships" -H 'Content-Type: application/json' -d "{\"source_character_id\":\"$CID_A\",\"target_character_id\":\"$CID_C\",\"relation_type\":\"friend\"}")"
+check "关系列表 total" "1" "$(curl -sf "$API/original/$OID/relationships" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+check "更新关系强度" "55" "$(curl -sf -X PUT "$API/relationships/$RID" -H 'Content-Type: application/json' -d '{"strength":55}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["strength"])')"
+check "删除人物（应 200）" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API/characters/$CID_B")"
+check "人物删除后其关系也消失" "0" "$(curl -sf "$API/original/$OID/relationships" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+
+# 清理第二部原著
+psqlq "delete from character_relationships where original_work_id='$OID2'" >/dev/null 2>&1
+psqlq "delete from original_characters where original_work_id='$OID2'" >/dev/null 2>&1
+psqlq "delete from original_works where id='$OID2'" >/dev/null 2>&1
+psqlq "delete from projects where id='$PROJ2'" >/dev/null 2>&1
 
 echo
 echo "== 结果：通过 ${PASS} 项，失败 ${FAIL} 项（清理由 trap 自动完成）"

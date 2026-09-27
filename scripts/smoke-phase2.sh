@@ -49,6 +49,10 @@ PID=""
 CPID=""
 OID=""
 cleanup() {
+  [ -n "$OID" ] && psqlq "delete from factions where world_id in (select id from original_worlds where original_work_id='$OID')" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from locations where world_id in (select id from original_worlds where original_work_id='$OID')" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from world_rules where world_id in (select id from original_worlds where original_work_id='$OID')" >/dev/null 2>&1
+  [ -n "$OID" ] && psqlq "delete from original_worlds where original_work_id='$OID'" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from character_relationships where original_work_id='$OID'" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from original_characters where original_work_id='$OID'" >/dev/null 2>&1
   [ -n "$OID" ] && psqlq "delete from original_chapters where original_work_id='$OID'" >/dev/null 2>&1
@@ -145,6 +149,46 @@ check "关系列表 total" "1" "$(curl -sf "$API/original/$OID/relationships" | 
 check "更新关系强度" "55" "$(curl -sf -X PUT "$API/relationships/$RID" -H 'Content-Type: application/json' -d '{"strength":55}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["strength"])')"
 check "删除人物（应 200）" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API/characters/$CID_B")"
 check "人物删除后其关系也消失" "0" "$(curl -sf "$API/original/$OID/relationships" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["total"])')"
+
+# ---------- 9. 世界观：世界 / 规则 / 地点 / 势力 ----------
+echo "== 9. 世界观"
+WORLD=$(curl -sf -X PUT "$API/original/$OID/world" -H 'Content-Type: application/json' \
+  -d '{"name":"九州","description":"架空大陆，灵力是唯一超自然力量"}')
+check "保存世界设定" "九州" "$(echo "$WORLD" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["name"])')"
+check "初始规则数" "0" "$(echo "$WORLD" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["rule_count"])')"
+
+RULE=$(curl -sf -X POST "$API/original/$OID/rules" -H 'Content-Type: application/json' \
+  -d '{"category":"力量体系","name":"灵力不可凭空产生","description":"必须从灵脉汲取","importance":5}')
+RID_W=$(echo "$RULE" | getid)
+check "新增规则" "36" "${#RID_W}"
+check "重复规则（应 409）" "409" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/rules" -H 'Content-Type: application/json' -d '{"name":"灵力不可凭空产生"}')"
+check "规则重要度 9（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/rules" -H 'Content-Type: application/json' -d '{"name":"越界规则","importance":9}')"
+
+PARENT=$(curl -sf -X POST "$API/original/$OID/locations" -H 'Content-Type: application/json' \
+  -d '{"name":"青云城","type":"城市"}' | getid)
+check "新增顶层地点" "36" "${#PARENT}"
+CHILD=$(curl -sf -X POST "$API/original/$OID/locations" -H 'Content-Type: application/json' \
+  -d "{\"name\":\"青云城南门\",\"type\":\"城门\",\"parent_location_id\":\"$PARENT\"}" | getid)
+check "新增子地点" "36" "${#CHILD}"
+check "自己当自己的上级（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$API/locations/$PARENT" -H 'Content-Type: application/json' -d "{\"name\":\"青云城\",\"parent_location_id\":\"$PARENT\"}")"
+check "层级成环（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$API/locations/$PARENT" -H 'Content-Type: application/json' -d "{\"name\":\"青云城\",\"parent_location_id\":\"$CHILD\"}")"
+
+# 跨世界引用：用另一部原著的的地点当上级
+OTHER_LOC=$(curl -sf -X POST "$API/original/$OID2/locations" -H 'Content-Type: application/json' -d '{"name":"异界城池"}' | getid)
+check "跨世界上级（应 400）" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$API/locations/$PARENT" -H 'Content-Type: application/json' -d "{\"name\":\"青云城\",\"parent_location_id\":\"$OTHER_LOC\"}")"
+
+FACTION=$(curl -sf -X POST "$API/original/$OID/factions" -H 'Content-Type: application/json' \
+  -d '{"name":"天枢阁","type":"宗门","goals":"垄断灵矿","relationships":"与玄冥教敌对"}' | getid)
+check "新增势力" "36" "${#FACTION}"
+check "重复势力（应 409）" "409" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/original/$OID/factions" -H 'Content-Type: application/json' -d '{"name":"天枢阁"}')"
+
+SUMMARY=$(curl -sf "$API/original/$OID/world")
+check "世界统计-规则" "1" "$(echo "$SUMMARY" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["rule_count"])')"
+check "世界统计-地点" "2" "$(echo "$SUMMARY" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["location_count"])')"
+check "世界统计-势力" "1" "$(echo "$SUMMARY" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["faction_count"])')"
+check "更新规则重要度" "4" "$(curl -sf -X PUT "$API/world-rules/$RID_W" -H 'Content-Type: application/json' -d '{"name":"灵力不可凭空产生","category":"力量体系","importance":4}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["importance"])')"
+check "删除势力（应 200）" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$API/factions/$FACTION")"
+check "删除后势力数" "0" "$(curl -sf "$API/original/$OID/world" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["faction_count"])')"
 
 # 清理第二部原著
 psqlq "delete from character_relationships where original_work_id='$OID2'" >/dev/null 2>&1

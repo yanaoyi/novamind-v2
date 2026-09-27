@@ -281,9 +281,20 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "CHARACTER_NOT_FOUND", true
 	case errors.Is(err, domain.ErrRelationNotFound):
 		return http.StatusNotFound, "RELATION_NOT_FOUND", true
+	case errors.Is(err, domain.ErrWorldNotFound):
+		return http.StatusNotFound, "WORLD_NOT_FOUND", true
+	case errors.Is(err, domain.ErrWorldRuleNotFound):
+		return http.StatusNotFound, "WORLD_RULE_NOT_FOUND", true
+	case errors.Is(err, domain.ErrLocationNotFound):
+		return http.StatusNotFound, "LOCATION_NOT_FOUND", true
+	case errors.Is(err, domain.ErrFactionNotFound):
+		return http.StatusNotFound, "FACTION_NOT_FOUND", true
 	case errors.Is(err, domain.ErrOriginalAlreadyExists),
 		errors.Is(err, domain.ErrCharacterDuplicate),
-		errors.Is(err, domain.ErrRelationDuplicate):
+		errors.Is(err, domain.ErrRelationDuplicate),
+		errors.Is(err, domain.ErrWorldRuleDuplicate),
+		errors.Is(err, domain.ErrLocationDuplicate),
+		errors.Is(err, domain.ErrFactionDuplicate):
 		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrOriginalNotOriginalProj),
 		errors.Is(err, domain.ErrOriginalTitleRequired),
@@ -299,6 +310,13 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrRelationSelfReference),
 		errors.Is(err, domain.ErrRelationStrength),
 		errors.Is(err, domain.ErrRelationCrossWork),
+		errors.Is(err, domain.ErrWorldRuleNameEmpty),
+		errors.Is(err, domain.ErrWorldRuleImportance),
+		errors.Is(err, domain.ErrLocationNameEmpty),
+		errors.Is(err, domain.ErrLocationParentCross),
+		errors.Is(err, domain.ErrLocationSelfParent),
+		errors.Is(err, domain.ErrLocationCycle),
+		errors.Is(err, domain.ErrFactionNameEmpty),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

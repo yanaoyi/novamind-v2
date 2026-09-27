@@ -164,3 +164,39 @@ PUT|DELETE     /api/v1/relationships/{id}
 
 - P2-6（第二片）：世界观（World / WorldRule / Location / Faction）、事件、时间线、剧情弧
 - PDF 解析支持
+
+### 2026-09-27 · P2-6（第二片）世界观：世界 / 规则 / 地点 / 势力
+
+**数据模型**（迁移 `0004_create_world`）
+
+- `original_worlds`：一个原著一个世界（部分唯一索引）
+- `world_rules`：分类、名称、描述、重要度 1-5；同世界内**名称唯一**
+- `locations`：支持 `parent_location_id` 形成「大陆 → 国家 → 城市」层级；**禁止自环**（CHECK），同世界内名称唯一；删除地点时子地点上级自动置空
+- `factions`：类型、描述、目标、与其他势力的关系；同世界内名称唯一
+
+**后端**：`repository.OriginalWorldRepo` + `service.OriginalWorldService`（世界 upsert、统计、地点层级校验）+ **14 个 API**：
+
+```
+GET|PUT        /api/v1/original/{id}/world        概览（含 3 个计数）/ 创建或更新
+GET|POST       /api/v1/original/{id}/rules        规则列表 / 新增
+PUT|DELETE     /api/v1/world-rules/{id}
+GET|POST       /api/v1/original/{id}/locations    地点列表 / 新增
+PUT|DELETE     /api/v1/locations/{id}
+GET|POST       /api/v1/original/{id}/factions     势力列表 / 新增
+PUT|DELETE     /api/v1/factions/{id}
+```
+
+关键设计：**世界不存在时自动创建空世界**（`ensureWorld`），所以可以直接新增规则/地点而不用先保存世界设定；列表接口在世界不存在时返回空数组而不是 404，前端无需处理两种错误态。
+
+地点层级做了两层防护：数据库 CHECK 拦自环，service **沿上级链向上走查环**（深度上限 100）并校验上级与自身同属一个世界。
+
+**验证**
+
+- 单元测试：规则/地点/势力/世界的清洗与校验（含空白名称、重要度越界、地点自环、空白上级归一为 nil）
+- 端到端冒烟扩展到 **51 项全过**，世界观部分新增 18 项：保存世界设定、初始计数、新增规则、重复规则 409、重要度 9 → 400、顶层与子地点、自己当上级 400、**层级成环 400**、**跨世界上级 400**、势力新增与重复 409、三项统计正确、规则更新、势力删除后计数归零
+
+### 待办（Phase 2 剩余）
+
+- 「人物」与「世界观」前端页面（后端已就绪，界面仍是占位页）
+- 原著事件、时间线（含分叉点前置数据）、剧情弧
+- PDF 解析支持

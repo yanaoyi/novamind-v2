@@ -585,6 +585,332 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /original/{id}/world:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [world]
+      summary: 世界观概览
+      description: 返回世界设定与规则/地点/势力数量；尚未创建世界时返回 404。
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/World"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [world]
+      summary: 创建/更新世界观
+      description: 一个原著只有一个世界；重复调用为更新（upsert）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorldUpsertRequest"
+      responses:
+        "200":
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/World"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/rules:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [world]
+      summary: 世界规则列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WorldRuleList"
+    post:
+      tags: [world]
+      summary: 新增世界规则
+      description: 世界不存在时自动创建空世界；同一世界内规则名称唯一。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorldRuleRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WorldRule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /world-rules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [world]
+      summary: 更新世界规则
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorldRuleRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WorldRule"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [world]
+      summary: 删除世界规则
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/locations:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [world]
+      summary: 地点列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/LocationList"
+    post:
+      tags: [world]
+      summary: 新增地点
+      description: parent_location_id 可选，用于建立「大陆 → 国家 → 城市」层级；同世界内名称唯一。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Location"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /locations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [world]
+      summary: 更新地点
+      description: 修改上级地点时会校验同世界且不形成环。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Location"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [world]
+      summary: 删除地点
+      description: 子地点的上级会被置空，不产生悬挂引用。
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /original/{id}/factions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 原著 ID
+        schema: { type: string, format: uuid }
+    get:
+      tags: [world]
+      summary: 势力列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/FactionList"
+    post:
+      tags: [world]
+      summary: 新增势力
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FactionRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Faction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /factions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [world]
+      summary: 更新势力
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FactionRequest"
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Faction"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [world]
+      summary: 删除势力
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   responses:
     BadRequest:
@@ -869,4 +1195,104 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Relationship"
+        total: { type: integer }
+    WorldUpsertRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 200, example: 九州 }
+        description: { type: string, example: 架空大陆，灵力是唯一超自然力量 }
+    World:
+      type: object
+      required: [id, original_work_id, rule_count, location_count, faction_count]
+      properties:
+        id: { type: string, format: uuid }
+        original_work_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        rule_count: { type: integer }
+        location_count: { type: integer }
+        faction_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    WorldRuleRequest:
+      type: object
+      required: [name]
+      properties:
+        category: { type: string, example: 力量体系 }
+        name: { type: string, maxLength: 200, example: 灵力不可凭空产生 }
+        description: { type: string }
+        importance: { type: integer, minimum: 1, maximum: 5, default: 3 }
+    WorldRule:
+      allOf:
+        - $ref: "#/components/schemas/WorldRuleRequest"
+        - type: object
+          required: [id, world_id]
+          properties:
+            id: { type: string, format: uuid }
+            world_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    WorldRuleList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorldRule"
+        total: { type: integer }
+    LocationRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 200, example: 青云城 }
+        type: { type: string, example: 城市 }
+        description: { type: string }
+        parent_location_id: { type: string, format: uuid, nullable: true }
+    Location:
+      allOf:
+        - $ref: "#/components/schemas/LocationRequest"
+        - type: object
+          required: [id, world_id]
+          properties:
+            id: { type: string, format: uuid }
+            world_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    LocationList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Location"
+        total: { type: integer }
+    FactionRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 200, example: 天枢阁 }
+        type: { type: string, example: 宗门 }
+        description: { type: string }
+        goals: { type: string, example: 垄断灵矿 }
+        relationships: { type: string, example: 与玄冥教敌对 }
+    Faction:
+      allOf:
+        - $ref: "#/components/schemas/FactionRequest"
+        - type: object
+          required: [id, world_id]
+          properties:
+            id: { type: string, format: uuid }
+            world_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    FactionList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Faction"
         total: { type: integer }

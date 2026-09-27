@@ -19,6 +19,7 @@ type Server struct {
 	projects   *service.ProjectService
 	originals  *service.OriginalService
 	characters *service.OriginalCharacterService
+	worlds     *service.OriginalWorldService
 }
 
 // NewServer 构建 HTTP 服务。
@@ -29,10 +30,11 @@ func NewServer(
 	projects *service.ProjectService,
 	originals *service.OriginalService,
 	characters *service.OriginalCharacterService,
+	worlds *service.OriginalWorldService,
 ) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, deps: deps,
-		projects: projects, originals: originals, characters: characters,
+		projects: projects, originals: originals, characters: characters, worlds: worlds,
 	}
 }
 
@@ -75,6 +77,14 @@ func (s *Server) Router() *gin.Engine {
 			original.POST("/:id/characters", s.createCharacter)
 			original.GET("/:id/relationships", s.listRelationships)
 			original.POST("/:id/relationships", s.createRelationship)
+			original.GET("/:id/world", s.getWorld)
+			original.PUT("/:id/world", s.upsertWorld)
+			original.GET("/:id/rules", s.listWorldRules)
+			original.POST("/:id/rules", s.createWorldRule)
+			original.GET("/:id/locations", s.listLocations)
+			original.POST("/:id/locations", s.createLocation)
+			original.GET("/:id/factions", s.listFactions)
+			original.POST("/:id/factions", s.createFaction)
 		}
 
 		// 人物与关系（规格书 §10-§12）
@@ -89,6 +99,23 @@ func (s *Server) Router() *gin.Engine {
 			relationships.PUT("/:id", s.updateRelationship)
 			relationships.DELETE("/:id", s.deleteRelationship)
 		}
+
+		// 世界观：规则 / 地点 / 势力（规格书 §13）
+		worldRules := v1.Group("/world-rules")
+		{
+			worldRules.PUT("/:id", s.updateWorldRule)
+			worldRules.DELETE("/:id", s.deleteWorldRule)
+		}
+		locations := v1.Group("/locations")
+		{
+			locations.PUT("/:id", s.updateLocation)
+			locations.DELETE("/:id", s.deleteLocation)
+		}
+		factions := v1.Group("/factions")
+		{
+			factions.PUT("/:id", s.updateFaction)
+			factions.DELETE("/:id", s.deleteFaction)
+		}
 	}
 
 	r.NoRoute(func(c *gin.Context) {
@@ -102,7 +129,7 @@ func (s *Server) Router() *gin.Engine {
 // requireServices 确认业务服务已就绪（数据库已连接）。
 // 未就绪时返回 503，而不是让请求打到 nil 上 panic 或静默 404。
 func (s *Server) requireServices(c *gin.Context) bool {
-	if s.projects == nil || s.originals == nil || s.characters == nil {
+	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

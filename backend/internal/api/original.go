@@ -306,6 +306,15 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "PROPOSAL_NOT_FOUND", true
 	case errors.Is(err, domain.ErrProposalAlreadyDecided):
 		return http.StatusConflict, CodeConflict, true
+	case errors.Is(err, domain.ErrCreativeNotFound),
+		errors.Is(err, domain.ErrCreativeCharacterNotFound),
+		errors.Is(err, domain.ErrSourceCharacterNotFound),
+		errors.Is(err, domain.ErrMappingNotFound):
+		return http.StatusNotFound, "CREATIVE_NOT_FOUND", true
+	case errors.Is(err, domain.ErrCreativeAlreadyExists),
+		errors.Is(err, domain.ErrCreativeCharacterDup),
+		errors.Is(err, domain.ErrCreativeCharacterLocked):
+		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrOriginalAlreadyExists),
 		errors.Is(err, domain.ErrCharacterDuplicate),
 		errors.Is(err, domain.ErrRelationDuplicate),
@@ -357,6 +366,13 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrProposalPayloadInvalid),
 		errors.Is(err, service.ErrModelJSONInvalid),
 		errors.Is(err, service.ErrNoChapters),
+		errors.Is(err, domain.ErrCreativeTitleEmpty),
+		errors.Is(err, domain.ErrCreativeNotCreativeProj),
+		errors.Is(err, domain.ErrCreativeCharacterName),
+		errors.Is(err, domain.ErrSourceCharacterCrossWork),
+		errors.Is(err, domain.ErrInheritanceWeightInvalid),
+		errors.Is(err, domain.ErrInheritanceNoDimension),
+		errors.Is(err, domain.ErrFusionNeedsTwoSources),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
 	default:

@@ -1728,6 +1728,340 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /original/{id}/create-creative:
+    post:
+      tags: [creative]
+      summary: 创建二创作品
+      description: 给一个 CREATIVE 类型工程绑定原著，创建二创作品。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 原著 ID
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCreativeRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CreativeWork"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /original/{id}/creative-works:
+    get:
+      tags: [creative]
+      summary: 原著下的二创作品
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: "#/components/schemas/CreativeWork" } }
+                          total: { type: integer }
+
+  /creative/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [creative]
+      summary: 二创作品详情
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeWork" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [creative]
+      summary: 更新二创作品
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                status: { type: string, enum: [DRAFT, WRITING, FINISHED] }
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeWork" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative/{id}/characters:
+    get:
+      tags: [creative]
+      summary: 二创人物列表
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: "#/components/schemas/CreativeCharacter" } }
+                          total: { type: integer }
+
+  /creative/{id}/characters/inherit:
+    post:
+      tags: [creative]
+      summary: 继承原著人物
+      description: 按各维度权重从原著人物 DNA 派生二创人物 DNA（0 表示不继承该维度）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 二创作品 ID
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InheritCharacterRequest"
+      responses:
+        "201":
+          description: 继承成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeCharacter" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /creative/{id}/characters/new:
+    post:
+      tags: [creative]
+      summary: 创建原创二创人物
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: 苏晚 }
+                description: { type: string }
+                importance: { type: integer, minimum: 1, maximum: 5 }
+                dna: { $ref: "#/components/schemas/CharacterDNA" }
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeCharacter" }
+
+  /creative/{id}/characters/fuse:
+    post:
+      tags: [creative]
+      summary: 人物融合
+      description: 把多个二创人物融合成一个新人物，并给出每个 DNA 维度的来源说明。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FuseCharacterRequest"
+      responses:
+        "201":
+          description: 融合成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeCharacter" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /creative/{id}/mappings:
+    get:
+      tags: [creative]
+      summary: 原著↔二创映射列表
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: "#/components/schemas/Mapping" } }
+                          total: { type: integer }
+
+  /creative-characters/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [creative]
+      summary: 二创人物详情（含继承权重）
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeCharacter" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [creative]
+      summary: 更新二创人物
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                dna: { $ref: "#/components/schemas/CharacterDNA" }
+                importance: { type: integer, minimum: 1, maximum: 5 }
+                is_locked: { type: boolean }
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreativeCharacter" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [creative]
+      summary: 删除二创人物
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /mappings/{id}:
+    delete:
+      tags: [creative]
+      summary: 删除映射
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   responses:
     BadRequest:
@@ -2337,3 +2671,122 @@ components:
         total: { type: integer, format: int64 }
         page: { type: integer }
         page_size: { type: integer }
+    CreateCreativeRequest:
+      type: object
+      required: [project_id, title]
+      properties:
+        project_id: { type: string, format: uuid, description: 必须是 CREATIVE 类型工程 }
+        title: { type: string, maxLength: 200, example: 暗涌·另一个结局 }
+        description: { type: string }
+    CreativeWork:
+      type: object
+      required: [id, project_id, original_work_id, title, status]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        original_work_id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [DRAFT, WRITING, FINISHED] }
+        divergence_point_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    InheritanceWeights:
+      type: object
+      description: 各维度继承权重 0-100，0 表示不继承
+      properties:
+        personality: { type: integer, minimum: 0, maximum: 100, example: 90 }
+        values: { type: integer, minimum: 0, maximum: 100, example: 80 }
+        motivation: { type: integer, minimum: 0, maximum: 100, example: 70 }
+        behavior: { type: integer, minimum: 0, maximum: 100, example: 60 }
+        speech_style: { type: integer, minimum: 0, maximum: 100, example: 30 }
+        background: { type: integer, minimum: 0, maximum: 100, example: 10 }
+        ability: { type: integer, minimum: 0, maximum: 100, example: 0 }
+        relationship_pattern: { type: integer, minimum: 0, maximum: 100, example: 50 }
+    InheritCharacterRequest:
+      type: object
+      required: [source_character_id]
+      properties:
+        source_character_id: { type: string, format: uuid }
+        name: { type: string, description: 留空沿用原著人物姓名 }
+        description: { type: string }
+        importance: { type: integer, minimum: 1, maximum: 5, default: 3 }
+        weights: { $ref: "#/components/schemas/InheritanceWeights" }
+    FuseSource:
+      type: object
+      required: [character_id, weight]
+      properties:
+        character_id: { type: string, format: uuid, description: 二创人物 ID }
+        weight: { type: integer, minimum: 1, maximum: 100, example: 60 }
+    FuseCharacterRequest:
+      type: object
+      required: [name, sources]
+      properties:
+        name: { type: string, example: 林述 }
+        description: { type: string }
+        importance: { type: integer, minimum: 1, maximum: 5 }
+        sources:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/FuseSource" }
+    InheritanceRule:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        source_character_id: { type: string, format: uuid }
+        personality: { type: integer }
+        values: { type: integer }
+        motivation: { type: integer }
+        behavior: { type: integer }
+        speech_style: { type: integer }
+        background: { type: integer }
+        ability: { type: integer }
+        relationship_pattern: { type: integer }
+    CreativeCharacter:
+      type: object
+      required: [id, creative_work_id, name, source_type, dna]
+      properties:
+        id: { type: string, format: uuid }
+        creative_work_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        source_type:
+          type: string
+          enum: [ORIGINAL_INHERITED, MODIFIED, FUSED, NEW]
+        source_character_id: { type: string, format: uuid, nullable: true }
+        dna: { $ref: "#/components/schemas/CharacterDNA" }
+        fusion_sources:
+          type: array
+          items: { $ref: "#/components/schemas/FuseSource" }
+        fusion_detail:
+          type: array
+          description: 每个 DNA 维度最终取自哪个来源
+          items:
+            type: object
+            properties:
+              dimension: { type: string }
+              from_name: { type: string }
+              from_id: { type: string, format: uuid }
+              weight: { type: integer }
+        importance: { type: integer, minimum: 1, maximum: 5 }
+        is_locked: { type: boolean }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/InheritanceRule" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Mapping:
+      type: object
+      required: [id, creative_work_id, original_id, creative_id, mapping_type]
+      properties:
+        id: { type: string, format: uuid }
+        creative_work_id: { type: string, format: uuid }
+        original_type: { type: string, example: character }
+        original_id: { type: string, format: uuid }
+        creative_type: { type: string, example: creative_character }
+        creative_id: { type: string, format: uuid }
+        mapping_type:
+          type: string
+          enum: [INHERITED, MODIFIED, REPLACED, FUSED, REMOVED, NEW]
+        description: { type: string }
+        created_at: { type: string, format: date-time }

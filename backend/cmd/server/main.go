@@ -136,6 +136,14 @@ func run() error {
 	)
 	task.RegisterAnalysisHandlers(registry, analysis, invoker)
 
+	// 二创（规格书 §17-§23）：人物继承、融合、映射
+	creative := service.NewCreativeService(
+		repository.NewCreativeRepo(pg.DB),
+		projectRepo,
+		originalRepo,
+		characterRepo,
+	)
+
 	// Redis
 	if cfg.RedisAddr == "" {
 		logger.Warn("REDIS_ADDR 未配置，跳过 Redis 连接")
@@ -155,6 +163,7 @@ func run() error {
 		providers, promptEngine,
 		tasks, registry.Types,
 		analysis,
+		creative,
 	)
 
 	workerCtx, stopWorker := context.WithCancel(context.Background())

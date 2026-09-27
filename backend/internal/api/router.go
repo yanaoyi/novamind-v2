@@ -27,6 +27,7 @@ type Server struct {
 	tasks      *service.TaskService
 	taskTypes  func() []string
 	analysis   *service.AnalysisService
+	creative   *service.CreativeService
 }
 
 // NewServer 构建 HTTP 服务。
@@ -44,12 +45,13 @@ func NewServer(
 	tasks *service.TaskService,
 	taskTypes func() []string,
 	analysis *service.AnalysisService,
+	creative *service.CreativeService,
 ) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, deps: deps,
 		projects: projects, originals: originals, characters: characters, worlds: worlds,
 		events: events, providers: providers, prompts: promptEngine,
-		tasks: tasks, taskTypes: taskTypes, analysis: analysis,
+		tasks: tasks, taskTypes: taskTypes, analysis: analysis, creative: creative,
 	}
 }
 
@@ -110,6 +112,30 @@ func (s *Server) Router() *gin.Engine {
 			original.POST("/:id/analysis", s.enqueueAnalysis)
 			original.GET("/:id/proposals", s.listProposals)
 			original.GET("/:id/analysis/summary", s.analysisSummary)
+			// 二创（规格书 §17-§23）
+			original.POST("/:id/create-creative", s.createCreativeWork)
+			original.GET("/:id/creative-works", s.listCreativeWorks)
+		}
+
+		creative := v1.Group("/creative")
+		{
+			creative.GET("/:id", s.getCreativeWork)
+			creative.PUT("/:id", s.updateCreativeWork)
+			creative.GET("/:id/characters", s.listCreativeCharacters)
+			creative.POST("/:id/characters/inherit", s.inheritCreativeCharacter)
+			creative.POST("/:id/characters/new", s.createNewCreativeCharacter)
+			creative.POST("/:id/characters/fuse", s.fuseCreativeCharacters)
+			creative.GET("/:id/mappings", s.listCreativeMappings)
+		}
+		creativeCharacters := v1.Group("/creative-characters")
+		{
+			creativeCharacters.GET("/:id", s.getCreativeCharacter)
+			creativeCharacters.PUT("/:id", s.updateCreativeCharacter)
+			creativeCharacters.DELETE("/:id", s.deleteCreativeCharacter)
+		}
+		mappings := v1.Group("/mappings")
+		{
+			mappings.DELETE("/:id", s.deleteCreativeMapping)
 		}
 
 		// AI 提案审核（规格书 §52：AI 结果必须经作者确认）
@@ -200,7 +226,7 @@ func (s *Server) Router() *gin.Engine {
 // 未就绪时返回 503，而不是让请求打到 nil 上 panic 或静默 404。
 func (s *Server) requireServices(c *gin.Context) bool {
 	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
-		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil {
+		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil || s.creative == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

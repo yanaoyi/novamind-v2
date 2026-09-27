@@ -4,7 +4,10 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Placeholder from './pages/Placeholder'
 import ProjectsPage from './pages/ProjectsPage'
+import SettingsPage from './pages/SettingsPage'
+import TasksPage from './pages/TasksPage'
 import ChapterReaderPage from './pages/original/ChapterReaderPage'
+import OriginalAnalysisPage from './pages/original/OriginalAnalysisPage'
 import OriginalCharactersPage from './pages/original/OriginalCharactersPage'
 import OriginalChaptersPage from './pages/original/OriginalChaptersPage'
 import OriginalOverviewPage from './pages/original/OriginalOverviewPage'
@@ -18,6 +21,7 @@ const { Header, Sider, Content } = Layout
 const ORIGINAL_PAGES: Array<{ path: string; label: string; phase: string }> = [
   { path: 'overview', label: '总览', phase: 'Phase 2' },
   { path: 'chapters', label: '章节', phase: 'Phase 2' },
+  { path: 'analysis', label: 'AI 分析', phase: 'Phase 3' },
   { path: 'characters', label: '人物', phase: 'Phase 2' },
   { path: 'relationships', label: '人物关系', phase: 'Phase 2' },
   { path: 'world', label: '世界观', phase: 'Phase 2' },
@@ -46,8 +50,8 @@ const SIMPLE_PAGES: Array<{ path: string; label: string; phase?: string }> = [
   { path: '/editor', label: '编辑器', phase: 'Phase 5' },
   { path: '/ai', label: 'AI 助手', phase: 'Phase 3' },
   { path: '/consistency', label: '一致性检查', phase: 'Phase 6' },
-  { path: '/tasks', label: '任务中心', phase: 'Phase 3' },
-  { path: '/settings', label: '设置', phase: 'Phase 3' },
+  { path: '/tasks', label: '任务中心' },
+  { path: '/settings', label: '模型设置' },
 ]
 
 function buildMenu() {
@@ -119,6 +123,7 @@ export default function App() {
             <Route path="/original/factions" element={<OriginalWorldPage key="factions" defaultTab="factions" />} />
             <Route path="/original/timeline" element={<OriginalTimelinePage />} />
             <Route path="/original/plot" element={<OriginalPlotPage />} />
+            <Route path="/original/analysis" element={<OriginalAnalysisPage />} />
 
             {ORIGINAL_PAGES.filter(
               (p) =>
@@ -131,6 +136,7 @@ export default function App() {
                   'factions',
                   'timeline',
                   'plot',
+                  'analysis',
                 ].includes(p.path),
             ).map((p) => (
               <Route
@@ -150,12 +156,10 @@ export default function App() {
             <Route path="/creative" element={<Navigate to="/creative/overview" replace />} />
 
             {SIMPLE_PAGES.map((p) => (
-              <Route
-                key={p.path}
-                path={p.path}
-                element={<Placeholder title={p.label} phase={p.phase} />}
-              />
+              <Route key={p.path} path={p.path} element={<Placeholder title={p.label} phase={p.phase} />} />
             ))}
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
 
             <Route path="*" element={<Placeholder title="页面不存在" />} />
           </Routes>

@@ -427,3 +427,182 @@ export interface PlotArcInput {
   start_event_id?: string | null
   end_event_id?: string | null
 }
+
+// ---------- 模型接入（对应后端 /model-providers、/prompts） ----------
+
+export type ProviderType = 'OPENAI_COMPATIBLE' | 'ANTHROPIC'
+export type ProviderPurpose = 'chat' | 'embedding' | 'both'
+
+export const PROVIDER_LABELS: Record<ProviderType, string> = {
+  OPENAI_COMPATIBLE: 'OpenAI 兼容（DeepSeek / 智谱 / Kimi / vLLM…）',
+  ANTHROPIC: 'Anthropic（Claude）',
+}
+
+export interface ModelProvider {
+  id: string
+  name: string
+  provider: ProviderType
+  api_base: string
+  model_name: string
+  purpose: ProviderPurpose
+  temperature: number
+  max_tokens: number
+  timeout_sec: number
+  enabled: boolean
+  is_default: boolean
+  notes: string
+  /** 后端只暴露这个布尔值，永不返回密钥本身 */
+  has_api_key: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ModelProviderInput {
+  name: string
+  provider: ProviderType
+  api_base: string
+  /** 留空表示保持原密钥不变 */
+  api_key?: string
+  model_name: string
+  purpose?: ProviderPurpose
+  temperature?: number
+  max_tokens?: number
+  timeout_sec?: number
+  enabled?: boolean
+  is_default?: boolean
+  notes?: string
+}
+
+export interface ModelProviderTestResult {
+  ok: boolean
+  model: string
+  reply: string
+  latency_ms: number
+  total_tokens: number
+  error_message?: string
+}
+
+export interface PromptMeta {
+  name: string
+  version: string
+  path: string
+}
+
+// ---------- 异步任务（对应后端 /tasks） ----------
+
+export type TaskStatus = 'PENDING' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+
+export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
+  PENDING: '排队中',
+  RUNNING: '执行中',
+  PAUSED: '已暂停',
+  COMPLETED: '已完成',
+  FAILED: '失败',
+  CANCELLED: '已取消',
+}
+
+export const TASK_STATUS_COLOR: Record<TaskStatus, string> = {
+  PENDING: 'default',
+  RUNNING: 'processing',
+  PAUSED: 'warning',
+  COMPLETED: 'success',
+  FAILED: 'error',
+  CANCELLED: 'default',
+}
+
+export interface Task {
+  id: string
+  project_id: string | null
+  work_id: string | null
+  type: string
+  status: TaskStatus
+  progress: number
+  progress_message: string
+  input: Record<string, unknown>
+  output: Record<string, unknown>
+  error: string
+  attempts: number
+  max_attempts: number
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  updated_at: string
+}
+
+export interface TaskList {
+  items: Task[]
+  total: number
+  page: number
+  page_size: number
+}
+
+// ---------- AI 分析提案（对应后端 /proposals 与 /analysis） ----------
+
+export type AnalysisStage = 'chapter_summary' | 'character_extract' | 'world_extract' | 'plot_extract'
+
+export const STAGE_LABELS: Record<AnalysisStage, string> = {
+  chapter_summary: '章节摘要',
+  character_extract: '人物提取',
+  world_extract: '世界观提取',
+  plot_extract: '剧情与事件提取',
+}
+
+export type ProposalEntity =
+  | 'chapter_summary'
+  | 'character'
+  | 'world'
+  | 'world_rule'
+  | 'location'
+  | 'faction'
+  | 'event'
+  | 'plot_arc'
+
+export const ENTITY_LABELS: Record<ProposalEntity, string> = {
+  chapter_summary: '章节摘要',
+  character: '人物',
+  world: '世界设定',
+  world_rule: '世界规则',
+  location: '地点',
+  faction: '势力',
+  event: '事件',
+  plot_arc: '剧情弧',
+}
+
+export type ProposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = {
+  PENDING: '待审核',
+  APPROVED: '已通过',
+  REJECTED: '已驳回',
+}
+
+export interface Proposal {
+  id: string
+  work_id: string
+  task_id: string | null
+  stage: AnalysisStage
+  entity_type: ProposalEntity
+  title: string
+  payload: Record<string, unknown>
+  evidence: string
+  confidence: number
+  status: ProposalStatus
+  review_note: string
+  reviewed_at: string | null
+  applied_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProposalList {
+  items: Proposal[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface ProposalSummary {
+  pending: number
+  approved: number
+  rejected: number
+}

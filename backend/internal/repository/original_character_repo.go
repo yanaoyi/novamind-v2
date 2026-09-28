@@ -469,3 +469,9 @@ func isForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23503"
 }
+
+// isDuplicateKey 判断唯一约束冲突（PostgreSQL 23505）。
+func isDuplicateKey(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}

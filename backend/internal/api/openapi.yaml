@@ -2062,6 +2062,298 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+
+  /creative-characters/{id}/versions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [versions]
+      summary: 人物版本列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: "#/components/schemas/EntityVersion" }
+                          total: { type: integer }
+    post:
+      tags: [versions]
+      summary: 人物存档（手动）
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, example: 定稿前存档 }
+      responses:
+        "201":
+          description: 已存档
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "200":
+          description: 与最新一版相同，未新建版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /creative-characters/{id}/versions/{no}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [versions]
+      summary: 人物版本详情（含快照内容）
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/EntityVersion" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative-characters/{id}/versions/{no}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [versions]
+      summary: 恢复人物到指定版本
+      responses:
+        "200":
+          description: 恢复成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative/{id}/world/versions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [versions]
+      summary: 世界观版本列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: "#/components/schemas/EntityVersion" }
+                          total: { type: integer }
+    post:
+      tags: [versions]
+      summary: 世界观存档（手动）
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        "201":
+          description: 已存档
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "200":
+          description: 与最新一版相同，未新建版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /creative/{id}/world/versions/{no}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [versions]
+      summary: 世界观版本详情（含快照内容）
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/EntityVersion" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative/{id}/world/versions/{no}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [versions]
+      summary: 恢复世界观到指定版本
+      responses:
+        "200":
+          description: 恢复成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative/{id}/outline/versions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [versions]
+      summary: 大纲版本列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: "#/components/schemas/EntityVersion" }
+                          total: { type: integer }
+    post:
+      tags: [versions]
+      summary: 大纲存档（手动）
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        "201":
+          description: 已存档
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "200":
+          description: 与最新一版相同，未新建版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /creative/{id}/outline/versions/{no}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [versions]
+      summary: 大纲版本详情（含快照内容）
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/EntityVersion" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /creative/{id}/outline/versions/{no}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [versions]
+      summary: 恢复大纲到指定版本
+      responses:
+        "200":
+          description: 恢复成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -3296,6 +3588,27 @@ components:
         creative_work_id: { type: string, format: uuid, nullable: true }
         input: { type: object, additionalProperties: true, example: { work_id: "uuid" } }
         max_attempts: { type: integer, default: 3 }
+
+    EntityVersion:
+      type: object
+      description: |
+        人物 / 世界观 / 大纲的状态快照（规格书 §59）。
+        恢复只回填快照里记录到的字段，不回滚删除动作。
+      required: [id, entity_type, entity_id, creative_work_id, version_no, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        entity_type:
+          type: string
+          enum: [creative_character, creative_world, creative_outline]
+        entity_id: { type: string, format: uuid }
+        creative_work_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        payload:
+          type: object
+          additionalProperties: true
+          description: 仅详情接口返回；列表接口不带，避免一次拉回几十份快照
+        note: { type: string, example: "作者修改人物" }
+        created_at: { type: string, format: date-time }
     Task:
       allOf:
         - $ref: "#/components/schemas/TaskCreateRequest"

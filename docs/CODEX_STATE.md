@@ -1,14 +1,13 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-27（**Phase 1 ~ Phase 7 全部完成**，唯一缺口是 PDF 解析）
+> 最后更新：2026-09-28（**Phase 1 ~ Phase 7 全部完成，三项遗留缺口已补齐**：PDF 解析、富文本编辑器、人物/世界/大纲版本历史）
 > **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
 
 ## 1. 一句话状态
 
-**Phase 5 / 6 / 7 全部完成**：写作系统（卷 / 章节 / 场景 / 自动保存编辑器 / AI 写本章 / 编辑器内 AI 操作）、一致性检查（逐章送审 → 问题清单 → 逐条处理）、版本与导出（正文变更自动留版、恢复前自动备份、txt/md/docx 导出）。
-至此规格书 §63 的七个 Phase 全部落地，**唯一未做的是 PDF 解析（BOSS 决定暂缓）**。
+**全部完成，无待办缺口。** 规格书 §63 的七个 Phase 全部落地，收尾时如实列出的三项缺口（PDF 解析、富文本编辑器、人物/世界/大纲版本历史）已于 2026-09-28 补齐：PDF 导入走自研解析器（真实样本对照 PyMuPDF：整体字符召回 0.9569 / 准确 0.9595，120 个样本里 67 个可用文件 ≥0.98）；编辑器换成 Tiptap 富文本但正文仍以 Markdown 存储；版本历史从章节扩展到人物/世界观/大纲。
 
 ---
 
@@ -112,6 +111,9 @@
 | P3 | v1（`novamind-pro`）是否复用 | **不复用，全部重新做**；v1 只作为产品交互参考，一行不动 | 已定 |
 | P4 | PDF 解析 | BOSS 2026-09-27 决定**暂缓**，不做 | 待做 |
 | P5 | 「调试服务器」指哪台 | `47.237.18.94`（阿里云轻量，root 免密）；旧 `8.145.62.78` 已废弃 | 已定 |
+| P6 | PDF 解析 | ✅ 已实现：自研解析器（ToUnicode CMap / 编码名兜底 / 内嵌字体 cmap 反查 / 注释外观流 / 空密码解密） | ✅ 已完成 |
+| P7 | 富文本编辑器 | ✅ 已实现：Tiptap + Markdown↔HTML 双向转换，正文仍存 Markdown | ✅ 已完成 |
+| P8 | 人物/世界/大纲版本 | ✅ 已实现：`entity_versions` 通用快照表 + 12 个 API + 通用版本抽屉 | ✅ 已完成 |
 
 其他已知限制：
 
@@ -126,7 +128,7 @@
 | 子系统 | 状态 |
 |---|---|
 | 后端 | **全 Phase 完成**：config / infra / domain / repository / service / api / ai / task 各层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4；`go test ./...` 8 个包全绿 |
-| 数据库 | **迁移版本 12**：projects → originals/characters/world/events → model_providers → tasks（+creative_work_id）→ analysis_proposals → creative core/world/timeline → writing（卷/章节/场景/版本/一致性问题）；全部可 up/down/重建 |
+| 数据库 | **迁移版本 13**：projects → originals/characters/world/events → model_providers → tasks（+creative_work_id）→ analysis_proposals → creative core/world/timeline → writing（卷/章节/场景/版本/一致性问题）→ entity_versions（人物/世界/大纲快照）；全部可 up/down/重建 |
 | API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
 | 原著系统 | **P2-1 ~ P2-6 基本完成**：导入与章节（5 API）、人物/DNA/关系（9 API）、世界观（14 API）、事件/时间线/剧情弧（11 API）；前端全链路可用；**仅剩 PDF 解析（BOSS 决定暂缓）** |
 | AI 层 | **Phase 3 P3-1 完成**：Model Gateway（OpenAI 兼容 + Anthropic，含重试与错误语义）、Prompt Engine（7 个版本化模板，编译进二进制）、模型配置 CRUD + 连通性测试；密钥 AES-256-GCM 加密，接口不返回密钥 |
@@ -136,7 +138,9 @@
 | 一致性引擎 | **P6 完成**：`consistency_check` 任务逐章送审 → `consistency_issues`（severity/type/evidence/suggestion）→ 逐条「已解决/忽略/重新打开」 |
 | 导出 | **P7 完成**：txt / md / docx（自建最小 OOXML，无第三方依赖），按「卷 → 章」输出；非法格式 400 |
 | 解析与存储 | `internal/parser`（编码/切章/DOCX）、`internal/storage`（本地文件系统 + SHA256 + 路径安全） |
-| 前端 | Vite 7 + React 18 + antd 5 + Zustand 5；已实现：工程管理、原著总览/上传、章节目录/阅读、人物（含 DNA 编辑器）与关系、世界观（世界/规则/地点/势力）、事件/时间线/剧情、模型设置、任务中心、AI 分析审核、二创工作区、**写作工作台与章节编辑器（自动保存 / 版本 / AI / 导出）**、**一致性问题页**；6 个测试文件 19 例全绿 |
+| PDF 解析 | **已完成**：`internal/parser/pdf.go`（对象扫描/对象流/滤镜/页树/内容流/Form XObject）、`pdf_crypt.go`（标准安全处理器 RC4/AESV2 解密）、`pdf_ttf.go`（内嵌 TrueType cmap 反查）、`pdf_debug.go`（诊断）；配套 `cmd/pdftext` 与 `scripts/check-pdf-extract.sh`（PyMuPDF 对照） |
+| 版本历史 | **已完成**：章节版本（0011）+ 人物/世界观/大纲快照（0013）；`service/version_service.go`、`components/EntityVersions.tsx`；语义=「只回填快照字段，不回滚删除」 |
+| 前端 | Vite 7 + React 18 + antd 5 + **Tiptap 3** + Zustand 5；已实现：工程管理、原著总览/上传（TXT/DOCX/**PDF**）、章节目录/阅读、人物（含 DNA 编辑器）与关系、世界观（世界/规则/地点/势力）、事件/时间线/剧情、模型设置、任务中心、AI 分析审核、二创工作区、写作工作台与章节编辑器（**富文本/Markdown 双模式**、自动保存、版本、AI、导出）、一致性问题页、**通用版本抽屉（人物/世界/大纲）**；8 个测试文件 30 例全绿 |
 | 工程化 | `scripts/dev-backend.sh` / `dev-frontend.sh` / `setup-local-db.sh`；`frontend/.npmrc` 走 npmmirror |
 | AI 模型 | 未接入；Phase 1 只做 Model Gateway 骨架与配置表，不接真实 Key（真实接入在 Phase 3） |
 | Prompt 库 | 目录规划完成，模板未写 |
@@ -186,3 +190,4 @@
 | 2026-09-27 | P4-4 完成：前端二创工作区（人物继承滑杆含实时派生预览、融合、世界规则状态、分叉点与时间线、映射）；**Phase 4 收官**，下一步 Phase 5 写作系统 |
 | 2026-09-27 | P5-1~P5-4 / P6 / P7 完成：写作系统（卷·章节·场景·版本·AI 写本章·编辑器 AI 操作）、一致性检查、txt/md/docx 导出；冒烟 30 项、后端 8 包、前端 19 例全绿；**Phase 5/6/7 收官，全项目仅剩 PDF 解析** |
 | 2026-09-27 | 修掉两个真 bug：① 写作任务入队 500（`tasks.work_id` 外键指向原著，改用新增的 `tasks.creative_work_id`，迁移 `0012`）；② 版本/场景/问题接口直接返回领域结构体导致 JSON 键名是 Go 字段名（补 4 个响应 DTO + 1 个请求 DTO） |
+| 2026-09-28 | 补齐三项缺口：**PDF 解析**（自研解析器 + 空密码解密 + 内嵌字体 cmap 反查；120 个真实样本对照 PyMuPDF：召回 0.9569 / 准确 0.9595）、**富文本编辑器**（Tiptap，正文仍存 Markdown）、**人物/世界/大纲版本历史**（迁移 `0013`，12 个 API + 通用版本抽屉）。9 个冒烟脚本 268 项、后端 8 包、前端 30 例全绿；迁移版本 **13** |

@@ -29,6 +29,7 @@ type Server struct {
 	analysis   *service.AnalysisService
 	creative   *service.CreativeService
 	writing    *service.WritingService
+	versions   *service.VersionService
 	invoker    *service.ModelInvoker
 }
 
@@ -49,6 +50,7 @@ func NewServer(
 	analysis *service.AnalysisService,
 	creative *service.CreativeService,
 	writing *service.WritingService,
+	versions *service.VersionService,
 	invoker *service.ModelInvoker,
 ) *Server {
 	return &Server{
@@ -57,6 +59,7 @@ func NewServer(
 		events: events, providers: providers, prompts: promptEngine,
 		tasks: tasks, taskTypes: taskTypes, analysis: analysis, creative: creative,
 		writing: writing, invoker: invoker,
+		versions: versions,
 	}
 }
 
@@ -149,6 +152,15 @@ func (s *Server) Router() *gin.Engine {
 			creative.POST("/:id/consistency/check", s.checkConsistency)
 			creative.GET("/:id/consistency/issues", s.listConsistencyIssues)
 			creative.GET("/:id/export", s.exportCreative)
+			// 版本历史（规格书 §59）：世界观 / 大纲
+			creative.GET("/:id/world/versions", s.listWorldVersions)
+			creative.POST("/:id/world/versions", s.snapshotWorldHandler)
+			creative.GET("/:id/world/versions/:no", s.getWorldVersion)
+			creative.POST("/:id/world/versions/:no/restore", s.restoreWorldVersion)
+			creative.GET("/:id/outline/versions", s.listOutlineVersions)
+			creative.POST("/:id/outline/versions", s.snapshotOutlineHandler)
+			creative.GET("/:id/outline/versions/:no", s.getOutlineVersion)
+			creative.POST("/:id/outline/versions/:no/restore", s.restoreOutlineVersion)
 		}
 		chapters := v1.Group("/chapters")
 		{
@@ -177,6 +189,10 @@ func (s *Server) Router() *gin.Engine {
 			creativeCharacters.GET("/:id", s.getCreativeCharacter)
 			creativeCharacters.PUT("/:id", s.updateCreativeCharacter)
 			creativeCharacters.DELETE("/:id", s.deleteCreativeCharacter)
+			creativeCharacters.GET("/:id/versions", s.listCharacterVersions)
+			creativeCharacters.POST("/:id/versions", s.snapshotCharacterHandler)
+			creativeCharacters.GET("/:id/versions/:no", s.getCharacterVersion)
+			creativeCharacters.POST("/:id/versions/:no/restore", s.restoreCharacterVersion)
 		}
 		mappings := v1.Group("/mappings")
 		{
@@ -272,7 +288,7 @@ func (s *Server) Router() *gin.Engine {
 func (s *Server) requireServices(c *gin.Context) bool {
 	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
 		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil ||
-		s.creative == nil || s.writing == nil {
+		s.creative == nil || s.writing == nil || s.versions == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

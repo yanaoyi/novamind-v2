@@ -432,6 +432,29 @@ func (s *CreativeService) GetCharacter(ctx context.Context, id string) (*Charact
 	return &CharacterDetail{Character: *character, Rules: rules}, nil
 }
 
+// SaveCharacter 直接落盘一个人物实体（给版本恢复用：快照回填后整条写回）。
+// 不在这里做业务改写，避免"恢复"被当成一次编辑而改变来源类型等语义。
+func (s *CreativeService) SaveCharacter(ctx context.Context, c *domain.CreativeCharacter) error {
+	if c == nil {
+		return domain.ErrCreativeCharacterNotFound
+	}
+	return s.repo.UpdateCharacter(ctx, c)
+}
+
+// WorkIDByCreativeWorld 由二创世界 ID 反查所属二创作品 ID（版本快照要用）。
+func (s *CreativeService) WorkIDByCreativeWorld(ctx context.Context, creativeWorldID string) (string, error) {
+	return s.repo.GetWorkIDByCreativeWorld(ctx, creativeWorldID)
+}
+
+// WorkIDByWorldRule 由二创世界规则 ID 反查所属二创作品 ID。
+func (s *CreativeService) WorkIDByWorldRule(ctx context.Context, ruleID string) (string, error) {
+	rule, err := s.repo.GetWorldRule(ctx, ruleID)
+	if err != nil {
+		return "", err
+	}
+	return s.repo.GetWorkIDByCreativeWorld(ctx, rule.CreativeWorldID)
+}
+
 // UpdateCharacterInput 是二创人物更新入参（作者手改 DNA/描述）。
 type UpdateCharacterInput struct {
 	Name        *string

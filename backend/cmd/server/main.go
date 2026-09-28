@@ -152,6 +152,8 @@ func run() error {
 		creative,
 	)
 	task.RegisterWritingHandlers(registry, writing, invoker)
+	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
+	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)
 
 	// Redis
 	if cfg.RedisAddr == "" {
@@ -174,6 +176,7 @@ func run() error {
 		analysis,
 		creative,
 		writing,
+		versions,
 		invoker,
 	)
 

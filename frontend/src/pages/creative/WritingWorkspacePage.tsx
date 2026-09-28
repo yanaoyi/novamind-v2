@@ -31,6 +31,7 @@ import { Link } from 'react-router-dom'
 
 import { pollTask } from '../../api/taskPoll'
 import { downloadExport, writingApi } from '../../api/writing'
+import EntityVersions from '../../components/EntityVersions'
 import {
   CHAPTER_STATUS_COLOR,
   CHAPTER_STATUS_LABEL,
@@ -294,6 +295,16 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
               { value: 'chapters', label: '章节写作' },
             ]}
           />
+          {tab === 'outline' && workId && (
+            <Space style={{ marginLeft: 12 }}>
+              <EntityVersions
+                entityType="creative_outline"
+                entityId={workId}
+                label="大纲版本"
+                onRestored={() => void loadWorkData(workId, true)}
+              />
+            </Space>
+          )}
 
           {tab === 'outline' && (
             <Row gutter={16} style={{ marginTop: 16 }}>

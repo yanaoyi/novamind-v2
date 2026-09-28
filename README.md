@@ -2,7 +2,19 @@
 
 面向"基于原著进行二次创作"的专业 AI 写作系统。按 `docs/PRODUCT_SPEC.md` / `docs/ARCHITECTURE.md` 分阶段实现，规格书见 `../novamind-pro/NovaMind_V1_开发规格说明书.md`。
 
-**当前状态（2026-09-27）**：规格书 §63 的 Phase 1–7 全部完成 —— 工程管理、原著导入与结构化、AI 分析（提案→作者审核）、二创（继承/融合/分叉点/时间线）、写作（卷·章节·场景·版本·AI 写作）、一致性检查、导出（txt/md/docx）。唯一未做的是 **PDF 解析**（BOSS 决定暂缓）。详见 `docs/CODEX_STATE.md`。
+**当前状态（2026-09-28）**：规格书 §63 的 Phase 1–7 全部完成，且**无遗留缺口** —— 工程管理、原著导入（TXT / DOCX / **PDF**）与结构化、AI 分析（提案→作者审核）、二创（继承/融合/分叉点/时间线）、写作（卷·章节·场景·**富文本编辑器**·版本·AI 写作）、一致性检查、导出（txt/md/docx）、**人物/世界观/大纲版本历史**。
+
+验证方式（都可复跑）：
+
+```bash
+bash scripts/dev-up.sh                    # 起服务
+cd backend && go test ./... -count=1      # 后端 8 个包
+cd frontend && npx vitest run             # 前端 8 个文件 30 例
+bash scripts/smoke-phase5.sh              # 各阶段端到端冒烟（共 9 个脚本 268 项）
+bash scripts/check-pdf-extract.sh 120 777 # PDF 解析质量（与 PyMuPDF 对照）
+```
+
+详见 `docs/CODEX_STATE.md`。
 
 ## 技术栈
 

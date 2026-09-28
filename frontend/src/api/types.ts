@@ -858,3 +858,25 @@ export interface ConsistencyIssue {
 export type RewriteAction = '改写' | '扩写' | '缩写' | '润色' | '增强冲突' | '增强情绪'
 
 export const REWRITE_ACTIONS: RewriteAction[] = ['改写', '扩写', '缩写', '润色', '增强冲突', '增强情绪']
+
+// ---------- 版本历史（规格书 §59） ----------
+
+export type EntityVersionType = 'creative_character' | 'creative_world' | 'creative_outline'
+
+export const ENTITY_VERSION_LABEL: Record<EntityVersionType, string> = {
+  creative_character: '人物',
+  creative_world: '世界观',
+  creative_outline: '大纲',
+}
+
+export interface EntityVersion {
+  id: string
+  entity_type: EntityVersionType
+  entity_id: string
+  creative_work_id: string
+  version_no: number
+  /** 仅详情接口返回 */
+  payload?: Record<string, unknown>
+  note: string
+  created_at: string
+}

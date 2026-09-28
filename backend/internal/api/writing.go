@@ -220,6 +220,7 @@ func (s *Server) createVolume(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotOutline(c.Request.Context(), c.Param("id"), "新增卷")
 	Created(c, gin.H{"id": v.ID, "title": v.Title, "summary": v.Summary, "sequence": v.Sequence})
 }
 
@@ -276,6 +277,7 @@ func (s *Server) createChapter(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotOutline(c.Request.Context(), c.Param("id"), "新增章节")
 	Created(c, toChapterResponse(*chapter))
 }
 
@@ -360,6 +362,7 @@ func (s *Server) updateCreativeChapter(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotOutline(c.Request.Context(), chapter.CreativeWorkID, "更新章节大纲")
 	resp := toChapterResponse(*chapter)
 	OK(c, gin.H{"chapter": resp, "version_created": versioned})
 }

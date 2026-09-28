@@ -353,6 +353,7 @@ func (s *Server) inheritCreativeCharacter(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotCharacter(c.Request.Context(), character.ID, "继承原著人物")
 	Created(c, toCreativeCharacterResponse(*character, nil))
 }
 
@@ -383,6 +384,7 @@ func (s *Server) createNewCreativeCharacter(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotCharacter(c.Request.Context(), character.ID, "新增二创人物")
 	Created(c, toCreativeCharacterResponse(*character, nil))
 }
 
@@ -418,6 +420,7 @@ func (s *Server) fuseCreativeCharacters(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotCharacter(c.Request.Context(), character.ID, "人物融合")
 	Created(c, toCreativeCharacterResponse(*character, nil))
 }
 
@@ -470,6 +473,7 @@ func (s *Server) updateCreativeCharacter(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotCharacter(c.Request.Context(), character.ID, "作者修改人物")
 	OK(c, toCreativeCharacterResponse(*character, nil))
 }
 

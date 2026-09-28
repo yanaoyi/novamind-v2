@@ -317,9 +317,12 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrVolumeNotFound),
 		errors.Is(err, domain.ErrCreativeChapterNotFound),
 		errors.Is(err, domain.ErrChapterVersionNotFound),
+		errors.Is(err, domain.ErrVersionNotFound),
 		errors.Is(err, domain.ErrSceneNotFound),
 		errors.Is(err, domain.ErrIssueNotFound):
 		return http.StatusNotFound, "CREATIVE_WORLD_NOT_FOUND", true
+	case errors.Is(err, domain.ErrVersionTypeBad), errors.Is(err, domain.ErrVersionNoInvalid):
+		return http.StatusBadRequest, CodeBadRequest, true
 	case errors.Is(err, domain.ErrCreativeAlreadyExists),
 		errors.Is(err, domain.ErrCreativeCharacterDup),
 		errors.Is(err, domain.ErrCreativeCharacterLocked),

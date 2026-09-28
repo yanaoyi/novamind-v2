@@ -27,6 +27,7 @@ import { characterApi } from '../api/characters'
 import { creativeApi, createCreativeWork } from '../api/creative'
 import { eventApi } from '../api/events'
 import { projectApi } from '../api/projects'
+import EntityVersions from '../components/EntityVersions'
 import {
   CREATIVE_RULE_STATUS_LABEL,
   CREATIVE_SOURCE_LABEL,
@@ -296,6 +297,11 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
           >
             {r.is_locked ? '解锁' : '锁定'}
           </Button>
+          <EntityVersions
+            entityType="creative_character"
+            entityId={r.id}
+            onRestored={() => void loadAll(work ?? undefined)}
+          />
           <Popconfirm
             title={`删除「${r.name}」？`}
             okText="确认删除"
@@ -551,6 +557,13 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                       <Typography.Text type="secondary">
                         当前模式：{world?.inheritance_mode ? WORLD_MODE_LABEL[world.inheritance_mode] : '未建世界'}
                       </Typography.Text>
+                      {world?.id && work && (
+                        <EntityVersions
+                          entityType="creative_world"
+                          entityId={work.id}
+                          onRestored={() => void loadAll(work)}
+                        />
+                      )}
                     </Space>
                     {world?.id && (
                       <>

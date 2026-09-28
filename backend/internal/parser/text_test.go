@@ -147,8 +147,9 @@ func TestDecodeTextEmpty(t *testing.T) {
 }
 
 func TestParseByFilenameUnsupported(t *testing.T) {
+	// 只有文件头、没有任何对象的 PDF 应当报错（而不是静默返回空文本）
 	if _, _, err := ParseByFilename("a.pdf", []byte("%PDF-1.4")); err == nil {
-		t.Error("PDF 目前应返回未实现错误")
+		t.Error("残缺 PDF 应返回错误")
 	}
 	if _, _, err := ParseByFilename("a.doc", []byte("x")); err == nil {
 		t.Error(".doc 应返回不支持")

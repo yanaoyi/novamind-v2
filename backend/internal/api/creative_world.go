@@ -212,6 +212,7 @@ func (s *Server) inheritCreativeWorld(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotWorld(c.Request.Context(), c.Param("id"), "继承原著世界")
 	OK(c, toCreativeWorldResponse(*detail))
 }
 
@@ -245,6 +246,7 @@ func (s *Server) updateCreativeWorld(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotWorld(c.Request.Context(), c.Param("id"), "作者修改世界设定")
 	OK(c, toCreativeWorldResponse(*detail))
 }
 
@@ -279,6 +281,7 @@ func (s *Server) createCreativeWorldRule(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotWorld(c.Request.Context(), c.Param("id"), "新增世界规则")
 	Created(c, gin.H{
 		"id": rule.ID, "status": string(rule.Status), "name": rule.Name,
 		"category": rule.Category, "description": rule.Description, "importance": rule.Importance,
@@ -314,6 +317,7 @@ func (s *Server) updateCreativeWorldRule(c *gin.Context) {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotWorldByRule(c.Request.Context(), rule.ID, "修改世界规则")
 	OK(c, gin.H{
 		"id": rule.ID, "status": string(rule.Status), "name": rule.Name,
 		"category": rule.Category, "description": rule.Description, "importance": rule.Importance,
@@ -334,10 +338,13 @@ func (s *Server) deleteCreativeWorldRule(c *gin.Context) {
 	if !s.requireServices(c) {
 		return
 	}
+	// 规则删掉后就查不到它属于哪个作品了，所以先把作品 ID 记下来
+	workID, _ := s.creative.WorkIDByWorldRule(c.Request.Context(), c.Param("id"))
 	if err := s.creative.RemoveWorldRule(c.Request.Context(), c.Param("id")); err != nil {
 		s.failFromError(c, err)
 		return
 	}
+	s.snapshotWorld(c.Request.Context(), workID, "删除世界规则")
 	OK(c, gin.H{"deleted": true})
 }
 

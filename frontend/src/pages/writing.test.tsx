@@ -142,7 +142,11 @@ describe('写作工作台', () => {
     expect(screen.getByText('2. 对峙')).toBeInTheDocument()
     // 右侧编辑器标题 + 正文
     expect(await screen.findByText('第 1 章 · 旧信')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('雨下了三天。林默在抽屉最里面摸到一封信。')).toBeInTheDocument()
+    // 正文现在是 Tiptap 富文本（Markdown 渲染成段落），不是 textarea
+    expect(
+      screen.getByText('雨下了三天。林默在抽屉最里面摸到一封信。'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('rich-editor')).toBeInTheDocument()
     // 一致性问题计数（顶部标签）
     expect(await screen.findByText('一致性问题：1')).toBeInTheDocument()
   })

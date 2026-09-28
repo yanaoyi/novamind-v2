@@ -65,7 +65,9 @@ func (s *OriginalService) Reparse(ctx context.Context, workID string, report fun
 		switch {
 		case errors.Is(err, parser.ErrEmptyText):
 			return nil, domain.ErrImportEmpty
-		case errors.Is(err, parser.ErrUnsupportedFormat), errors.Is(err, parser.ErrPDFNotImplemented):
+		case errors.Is(err, parser.ErrUnsupportedFormat),
+			errors.Is(err, parser.ErrPDFNoTextLayer),
+			errors.Is(err, parser.ErrPDFEncrypted):
 			return nil, fmt.Errorf("%w：%v", domain.ErrImportSourceInvalid, err)
 		default:
 			return nil, err
@@ -213,7 +215,9 @@ func (s *OriginalService) Import(ctx context.Context, workID, fileName string, r
 		switch {
 		case errors.Is(err, parser.ErrEmptyText):
 			return nil, domain.ErrImportEmpty
-		case errors.Is(err, parser.ErrUnsupportedFormat), errors.Is(err, parser.ErrPDFNotImplemented):
+		case errors.Is(err, parser.ErrUnsupportedFormat),
+			errors.Is(err, parser.ErrPDFNoTextLayer),
+			errors.Is(err, parser.ErrPDFEncrypted):
 			return nil, fmt.Errorf("%w：%v", domain.ErrImportSourceInvalid, err)
 		default:
 			return nil, err

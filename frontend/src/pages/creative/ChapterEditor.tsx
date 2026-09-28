@@ -33,6 +33,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { pollTask } from '../../api/taskPoll'
 import { writingApi } from '../../api/writing'
+import RichTextEditor from '../../editor/RichTextEditor'
 import {
   CHAPTER_STATUS_COLOR,
   CHAPTER_STATUS_LABEL,
@@ -438,11 +439,11 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
         ]}
       />
 
-      <Input.TextArea
+      <RichTextEditor
         value={draft.content}
-        onChange={(e) => patch({ content: e.target.value })}
-        autoSize={{ minRows: 16, maxRows: 40 }}
+        onChange={(md) => patch({ content: md })}
         placeholder="在此写正文，或点右上角「让 AI 写本章」起草"
+        minRows={16}
       />
 
       <Space wrap style={{ marginTop: 12 }}>

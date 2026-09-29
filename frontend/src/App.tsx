@@ -8,6 +8,7 @@ import SettingsPage from './pages/SettingsPage'
 import TasksPage from './pages/TasksPage'
 import CreativePage from './pages/CreativePage'
 import ConsistencyPage from './pages/creative/ConsistencyPage'
+import CreativeOverviewPage from './pages/creative/CreativeOverviewPage'
 import WritingWorkspacePage from './pages/creative/WritingWorkspacePage'
 import ChapterReaderPage from './pages/original/ChapterReaderPage'
 import OriginalAnalysisPage from './pages/original/OriginalAnalysisPage'
@@ -155,7 +156,9 @@ export default function App() {
                 key={p.path}
                 path={`/creative/${p.path}`}
                 element={
-                  p.path === 'outline' ? (
+                  p.path === 'overview' ? (
+                    <CreativeOverviewPage key="creative-overview" />
+                  ) : p.path === 'outline' ? (
                     <WritingWorkspacePage key="creative-outline" defaultTab="outline" />
                   ) : p.path === 'chapters' ? (
                     <WritingWorkspacePage key="creative-chapters" defaultTab="chapters" />

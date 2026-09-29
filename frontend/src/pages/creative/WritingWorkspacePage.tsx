@@ -271,7 +271,8 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
             message="这部原著还没有二创作品"
             description={
               <span>
-                到 <Link to="/creative/overview">二创 · 总览</Link> 从原著创建一个二创作品后即可开始写。
+                到 <Link to="/creative/characters">二创 · 人物</Link> 点右上角「新建二创作品」
+                （从当前原著派生，会自动继承人物与世界观）后即可开始写。
               </span>
             }
           />

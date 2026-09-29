@@ -611,6 +611,12 @@ export interface ProposalSummary {
 // ---------- 二创（对应后端 /creative） ----------
 
 export type CreativeWorkStatus = 'DRAFT' | 'WRITING' | 'FINISHED'
+
+export const CREATIVE_STATUS_LABEL: Record<CreativeWorkStatus, string> = {
+  DRAFT: '草稿',
+  WRITING: '连载中',
+  FINISHED: '已完结',
+}
 export type CreativeSourceType = 'ORIGINAL_INHERITED' | 'MODIFIED' | 'FUSED' | 'NEW'
 export type MappingType = 'INHERITED' | 'MODIFIED' | 'REPLACED' | 'FUSED' | 'REMOVED' | 'NEW'
 export type WorldInheritanceMode = 'FULL' | 'PARTIAL' | 'MODIFIED' | 'NEW'

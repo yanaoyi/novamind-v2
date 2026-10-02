@@ -46,7 +46,7 @@ type openAIChatResponse struct {
 }
 
 // chatOpenAI 调用 OpenAI 兼容的 /chat/completions。
-// 覆盖 OpenAI / DeepSeek / 智谱 / Kimi / one-api / vLLM 等（规格书 §6）。
+// 覆盖 OpenAI / DeepSeek / 智谱 / Kimi / one-api / vLLM 等（SPEC.md §23）。
 func (g *Gateway) chatOpenAI(ctx context.Context, cfg ProviderConfig, req ChatRequest) (ChatResponse, error) {
 	body := openAIChatRequest{
 		Model:       cfg.ModelName,

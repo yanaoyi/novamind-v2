@@ -331,7 +331,7 @@ func (s *Server) getCreativeChapter(c *gin.Context) {
 // updateCreativeChapter 更新章节。
 //
 //	@Summary		更新章节
-//	@Description	正文有变化时会自动存一个新版本（规格书 §59）。
+//	@Description	正文有变化时会自动存一个新版本（SPEC.md §13）。
 //	@Tags			writing
 //	@Accept			json
 //	@Produce		json

@@ -540,7 +540,7 @@ func (s *CreativeService) findByWorkAndName(ctx context.Context, workID, name st
 	return nil, nil
 }
 
-// ---------- 二创世界（规格书 §21-§22） ----------
+// ---------- 二创世界（SPEC.md §10.1-§10.2） ----------
 
 // WorldDetail 是二创世界详情。
 type WorldDetail struct {
@@ -766,7 +766,7 @@ func (s *CreativeService) RemoveWorldRule(ctx context.Context, id string) error 
 	return s.repo.DeleteWorldRule(ctx, id)
 }
 
-// ---------- 分叉点与二创时间线（规格书 §24-§25） ----------
+// ---------- 分叉点与二创时间线（SPEC.md §10.3-§10.4） ----------
 
 // DivergenceInput 是分叉点入参。
 type DivergenceInput struct {

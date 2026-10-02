@@ -1,4 +1,4 @@
-// Package task 是异步任务执行框架（规格书 §53、§54）。
+// Package task 是异步任务执行框架（SPEC.md §27、§22.1）。
 //
 // 设计要点：
 //   - 队列落在 PostgreSQL（领取用 FOR UPDATE SKIP LOCKED）：任务状态与业务数据同库，

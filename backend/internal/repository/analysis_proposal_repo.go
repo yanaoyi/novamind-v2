@@ -198,7 +198,7 @@ func (r *AnalysisProposalRepo) CountByStatus(ctx context.Context, workID string)
 // Approve 审核通过：把提案内容写入正式表 + 标记状态，**同一个事务**完成。
 //
 // apply 由 service 提供（按实体类型写入对应仓储），签名里带 tx 是为了让写入
-// 复用同一个事务；payloadOverride 支持"作者修改后再通过"（规格书 §40）。
+// 复用同一个事务；payloadOverride 支持"作者修改后再通过"（SPEC.md §22.3）。
 func (r *AnalysisProposalRepo) Approve(
 	ctx context.Context,
 	id string,

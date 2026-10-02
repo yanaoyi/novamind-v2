@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// ProjectType 区分原著工程与二创工程（规格书 §7）。
+// ProjectType 区分原著工程与二创工程（SPEC.md §4）。
 type ProjectType string
 
 const (
@@ -53,7 +53,7 @@ var (
 )
 
 // Project 是工程实体。
-// 说明：ID 使用 UUID 字符串；DeletedAt 非空表示已软删除（规格书 §51）。
+// 说明：ID 使用 UUID 字符串；DeletedAt 非空表示已软删除（SPEC.md §25）。
 type Project struct {
 	ID          string
 	Name        string

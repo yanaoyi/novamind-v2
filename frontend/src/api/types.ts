@@ -750,7 +750,7 @@ export interface CreativeMapping {
   created_at: string
 }
 
-// ---------- 写作系统（Phase 5/6/7，规格书 §27-§29、§39、§59） ----------
+// ---------- 写作系统（Phase 5/6/7，SPEC.md §12.1-§12.3、§13、§14） ----------
 
 export type ChapterStatus = 'DRAFT' | 'REVIEW' | 'FINAL'
 
@@ -860,12 +860,12 @@ export interface ConsistencyIssue {
   updated_at: string
 }
 
-/** 编辑器内的 AI 操作（规格书 §38） */
+/** 编辑器内的 AI 操作（SPEC.md §12.5） */
 export type RewriteAction = '改写' | '扩写' | '缩写' | '润色' | '增强冲突' | '增强情绪'
 
 export const REWRITE_ACTIONS: RewriteAction[] = ['改写', '扩写', '缩写', '润色', '增强冲突', '增强情绪']
 
-// ---------- 版本历史（规格书 §59） ----------
+// ---------- 版本历史（SPEC.md §13） ----------
 
 export type EntityVersionType = 'creative_character' | 'creative_world' | 'creative_outline'
 

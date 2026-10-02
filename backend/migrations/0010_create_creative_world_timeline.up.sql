@@ -1,5 +1,5 @@
 -- 0010_create_creative_world_timeline
--- 二创世界（规格书 §21 二创世界、§22 二创世界规则）、分叉点（§24）、二创时间线（§25）。
+-- 二创世界（SPEC.md §10.1 二创世界、§10.2 二创世界规则）、分叉点（§10.3）、二创时间线（§10.4）。
 
 CREATE TABLE IF NOT EXISTS creative_worlds (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,5 +81,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_creative_timeline_source
     WHERE deleted_at IS NULL AND source_original_event_id IS NOT NULL;
 
 COMMENT ON TABLE creative_worlds IS '二创世界：标注继承模式（FULL/PARTIAL/MODIFIED/NEW），规则逐条可改';
-COMMENT ON TABLE divergence_points IS '分叉点（规格书 §24）：二创从哪里离开原著';
-COMMENT ON TABLE creative_timeline_events IS '二创时间线（规格书 §25）：分叉点之前继承原著事件，之后是二创新事件';
+COMMENT ON TABLE divergence_points IS '分叉点（SPEC.md §10.3）：二创从哪里离开原著';
+COMMENT ON TABLE creative_timeline_events IS '二创时间线（SPEC.md §10.4）：分叉点之前继承原著事件，之后是二创新事件';

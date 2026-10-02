@@ -1,5 +1,5 @@
 -- 0003_create_characters
--- 原著人物（规格书 §10）、人物 DNA（§11）、人物关系（§12）。
+-- 原著人物（SPEC.md §6.1）、人物 DNA（§6.2）、人物关系（§6.3）。
 -- AI 提取结果与人工录入共用同一张表，用 source 字段区分（Phase 3 用 AI，Phase 2 手工录入）。
 
 CREATE TABLE IF NOT EXISTS original_characters (
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS original_characters (
     abilities        TEXT         NOT NULL DEFAULT '',
     first_appearance VARCHAR(200) NOT NULL DEFAULT '',
     last_appearance  VARCHAR(200) NOT NULL DEFAULT '',
-    -- 人物 DNA：各维度 {text, weight}，weight 0-100（规格书 §11）
+    -- 人物 DNA：各维度 {text, weight}，weight 0-100（SPEC.md §6.2）
     dna              JSONB        NOT NULL DEFAULT '{}'::jsonb,
     importance       SMALLINT     NOT NULL DEFAULT 3,
     source           VARCHAR(20)  NOT NULL DEFAULT 'MANUAL',

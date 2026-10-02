@@ -80,7 +80,7 @@ func (s *Server) Router() *gin.Engine {
 		v1.GET("/health", s.handleHealth)
 		v1.GET("/openapi.yaml", s.handleOpenAPISpec)
 
-		// 工程管理（规格书 §49 Projects）
+		// 工程管理（SPEC.md §26 Projects）
 		projects := v1.Group("/projects")
 		{
 			projects.GET("", s.listProjects)
@@ -91,7 +91,7 @@ func (s *Server) Router() *gin.Engine {
 			projects.POST("/:id/original", s.createOriginal)
 		}
 
-		// 原著（规格书 §49 Original）
+		// 原著（SPEC.md §26 Original）
 		original := v1.Group("/original")
 		{
 			original.GET("/:id", s.getOriginal)
@@ -120,7 +120,7 @@ func (s *Server) Router() *gin.Engine {
 			original.POST("/:id/analysis", s.enqueueAnalysis)
 			original.GET("/:id/proposals", s.listProposals)
 			original.GET("/:id/analysis/summary", s.analysisSummary)
-			// 二创（规格书 §17-§23）
+			// 二创（SPEC.md §9.1-§9.5）
 			original.POST("/:id/create-creative", s.createCreativeWork)
 			original.GET("/:id/creative-works", s.listCreativeWorks)
 		}
@@ -134,7 +134,7 @@ func (s *Server) Router() *gin.Engine {
 			creative.POST("/:id/characters/new", s.createNewCreativeCharacter)
 			creative.POST("/:id/characters/fuse", s.fuseCreativeCharacters)
 			creative.GET("/:id/mappings", s.listCreativeMappings)
-			// 二创世界 / 分叉点 / 二创时间线（规格书 §21-§25）
+			// 二创世界 / 分叉点 / 二创时间线（SPEC.md §10.1-§10.4）
 			creative.GET("/:id/world", s.getCreativeWorld)
 			creative.PUT("/:id/world", s.updateCreativeWorld)
 			creative.POST("/:id/world/inherit", s.inheritCreativeWorld)
@@ -144,7 +144,7 @@ func (s *Server) Router() *gin.Engine {
 			creative.GET("/:id/timeline", s.getCreativeTimeline)
 			creative.PUT("/:id/timeline", s.setCreativeTimeline)
 			creative.POST("/:id/timeline/build", s.buildCreativeTimeline)
-			// 写作系统（规格书 §27-§29、§38、§39、§61）
+			// 写作系统（SPEC.md §12.1-§12.3、§12.5、§14、§30）
 			creative.POST("/:id/volumes", s.createVolume)
 			creative.GET("/:id/volumes", s.listVolumes)
 			creative.POST("/:id/chapters", s.createChapter)
@@ -152,7 +152,7 @@ func (s *Server) Router() *gin.Engine {
 			creative.POST("/:id/consistency/check", s.checkConsistency)
 			creative.GET("/:id/consistency/issues", s.listConsistencyIssues)
 			creative.GET("/:id/export", s.exportCreative)
-			// 版本历史（规格书 §59）：世界观 / 大纲
+			// 版本历史（SPEC.md §13）：世界观 / 大纲
 			creative.GET("/:id/world/versions", s.listWorldVersions)
 			creative.POST("/:id/world/versions", s.snapshotWorldHandler)
 			creative.GET("/:id/world/versions/:no", s.getWorldVersion)
@@ -199,7 +199,7 @@ func (s *Server) Router() *gin.Engine {
 			mappings.DELETE("/:id", s.deleteCreativeMapping)
 		}
 
-		// AI 提案审核（规格书 §52：AI 结果必须经作者确认）
+		// AI 提案审核（SPEC.md §22.2：AI 结果必须经作者确认）
 		proposals := v1.Group("/proposals")
 		{
 			proposals.GET("/:id", s.getProposal)
@@ -207,7 +207,7 @@ func (s *Server) Router() *gin.Engine {
 			proposals.POST("/:id/reject", s.rejectProposal)
 		}
 
-		// 事件 / 剧情弧（规格书 §14、§16）
+		// 事件 / 剧情弧（SPEC.md §8.1、§8.3）
 		events := v1.Group("/events")
 		{
 			events.GET("/:id", s.getEvent)
@@ -220,7 +220,7 @@ func (s *Server) Router() *gin.Engine {
 			plotArcs.DELETE("/:id", s.deletePlotArc)
 		}
 
-		// AI 接入配置（规格书 §36 Model Gateway）与 Prompt 清单（§37）
+		// AI 接入配置（SPEC.md §16 Model Gateway）与 Prompt 清单（§17）
 		modelProviders := v1.Group("/model-providers")
 		{
 			modelProviders.GET("", s.listModelProviders)
@@ -233,7 +233,7 @@ func (s *Server) Router() *gin.Engine {
 		}
 		v1.GET("/prompts", s.listPrompts)
 
-		// 异步任务（规格书 §53）
+		// 异步任务（SPEC.md §27）
 		tasks := v1.Group("/tasks")
 		{
 			tasks.GET("", s.listTasks)
@@ -244,7 +244,7 @@ func (s *Server) Router() *gin.Engine {
 		}
 		v1.GET("/task-types", s.listTaskTypes)
 
-		// 人物与关系（规格书 §10-§12）
+		// 人物与关系（SPEC.md §6.1-§6.3）
 		characters := v1.Group("/characters")
 		{
 			characters.GET("/:id", s.getCharacter)
@@ -257,7 +257,7 @@ func (s *Server) Router() *gin.Engine {
 			relationships.DELETE("/:id", s.deleteRelationship)
 		}
 
-		// 世界观：规则 / 地点 / 势力（规格书 §13）
+		// 世界观：规则 / 地点 / 势力（SPEC.md §7）
 		worldRules := v1.Group("/world-rules")
 		{
 			worldRules.PUT("/:id", s.updateWorldRule)

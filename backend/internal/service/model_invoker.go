@@ -22,7 +22,7 @@ func NewModelInvoker(providers *ModelProviderService, prompts *ai.Engine, gatewa
 }
 
 // RunPrompt 用指定模板跑一次模型调用，返回模型输出的原始文本。
-// promptName 用 <name>（自动取最新版本）；JSONMode 默认开启（规格书 §57：输出必须结构化）。
+// promptName 用 <name>（自动取最新版本）；JSONMode 默认开启（SPEC.md §21.1：输出必须结构化）。
 func (m *ModelInvoker) RunPrompt(ctx context.Context, promptName string, data any) (string, error) {
 	if m.prompts == nil {
 		return "", errors.New("Prompt 引擎未初始化")

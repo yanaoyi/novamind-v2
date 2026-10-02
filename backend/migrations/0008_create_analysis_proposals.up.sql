@@ -1,5 +1,5 @@
 -- 0008_create_analysis_proposals
--- AI 分析提案（规格书 §52 的红线落地）：
+-- AI 分析提案（SPEC.md §22.2 的红线落地）：
 -- 模型产出**不直接写原著模型**，先落在这张表里等作者审核；作者通过（可带修改）后才写入正式表。
 -- 这样"AI 提取结果必须经过作者确认"就不是一句约束，而是数据库层面的事实。
 
@@ -39,5 +39,5 @@ CREATE INDEX IF NOT EXISTS idx_proposals_task
 CREATE UNIQUE INDEX IF NOT EXISTS uq_proposals_task_entity
     ON analysis_proposals (task_id, entity_type, lower(title)) WHERE deleted_at IS NULL AND task_id IS NOT NULL;
 
-COMMENT ON TABLE analysis_proposals IS 'AI 分析提案；只有作者 approve 后才写入原著正式表（规格书 §52）';
+COMMENT ON TABLE analysis_proposals IS 'AI 分析提案；只有作者 approve 后才写入原著正式表（SPEC.md §22.2）';
 COMMENT ON COLUMN analysis_proposals.applied_id IS '审核通过后写入正式表得到的记录 ID';

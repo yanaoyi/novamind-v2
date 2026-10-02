@@ -1,8 +1,8 @@
 -- 0002_create_originals
--- Phase 2 原著系统三张基础表：上传文件、原著作品、原著章节（规格书 §8.1 / §9）。
+-- Phase 2 原著系统三张基础表：上传文件、原著作品、原著章节（SPEC.md §5.1 / §5.2）。
 -- 约定同 0001：UUID 主键、时间戳、软删除、CHECK 约束、可重复执行。
 
--- 上传文件登记表（文件管理，规格书 §3.5）
+-- 上传文件登记表（文件管理，SPEC.md §4.3）
 CREATE TABLE IF NOT EXISTS files (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id    UUID REFERENCES projects(id),
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS original_works (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_original_works_project
     ON original_works (project_id) WHERE deleted_at IS NULL;
 
--- 原著章节（含原文位置，支持回溯；规格书 §9）
+-- 原著章节（含原文位置，支持回溯；SPEC.md §5.2）
 CREATE TABLE IF NOT EXISTS original_chapters (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     original_work_id UUID        NOT NULL REFERENCES original_works(id) ON DELETE CASCADE,

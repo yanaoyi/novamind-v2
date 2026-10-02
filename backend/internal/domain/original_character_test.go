@@ -49,7 +49,7 @@ func TestCharacterDNAValidate(t *testing.T) {
 }
 
 func TestCharacterDNADimensionsCoversAllFields(t *testing.T) {
-	// 11 个维度（规格书 §11）一个都不能漏
+	// 11 个维度（SPEC.md §6.2）一个都不能漏
 	if got := len(CharacterDNA{}.Dimensions()); got != 11 {
 		t.Fatalf("DNA 维度应为 11 个，实际 %d 个", got)
 	}

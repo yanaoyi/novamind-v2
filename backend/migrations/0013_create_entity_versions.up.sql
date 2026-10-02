@@ -1,5 +1,5 @@
 -- 0013_create_entity_versions
--- 人物 / 世界观 / 大纲的版本历史（规格书 §59：版本管理覆盖 Chapter / Character / World / Outline）。
+-- 人物 / 世界观 / 大纲的版本历史（SPEC.md §13：版本管理覆盖 Chapter / Character / World / Outline）。
 -- 章节版本已经在 0011 里用 chapter_versions 单独存了（正文大、读写频繁）；
 -- 这里用一张通用表存"结构化实体"的状态快照（payload 是 JSONB）。
 

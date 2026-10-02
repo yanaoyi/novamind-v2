@@ -1,5 +1,5 @@
 -- 0004_create_world
--- 原著世界观（规格书 §13）：世界、世界规则、地点、势力。
+-- 原著世界观（SPEC.md §7）：世界、世界规则、地点、势力。
 -- 一个原著对应一个世界（软删除不占用名额）；规则/地点/势力挂在世界下。
 
 CREATE TABLE IF NOT EXISTS original_worlds (

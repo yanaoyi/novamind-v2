@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// SourceType 是原著来源类型（规格书 §8.1 source_type）。
+// SourceType 是原著来源类型（SPEC.md §5.1 source_type）。
 type SourceType string
 
 const (
@@ -131,7 +131,7 @@ func CharCountOf(content string) int {
 	return len([]rune(content))
 }
 
-// UploadedFile 是上传文件登记（规格书 §3.5 文件管理）。
+// UploadedFile 是上传文件登记（SPEC.md §4.3 文件管理）。
 type UploadedFile struct {
 	ID           string
 	ProjectID    *string

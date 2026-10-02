@@ -1,13 +1,17 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-09-29（**Phase 1 ~ Phase 7 全部完成，三项遗留缺口已补齐**；二创侧新增「导入书 → 一键开同人」入口）
-> **每次 Codex 重启，先读这三份**：`docs/CODEX_STATE.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
+> 最后更新：2026-10-03（**规格自持：V2 改用 `docs/SPEC.md` 作为唯一开发规格，不再引用 v1 规格书**）
+> **每次 Codex 重启，先读这四份**：`docs/CODEX_STATE.md` → `docs/SPEC.md` → `docs/ARCHITECTURE.md` → `docs/PRODUCT_SPEC.md`。
 
 ---
 
 ## 1. 一句话状态
 
-**全部完成，无待办缺口。** 规格书 §63 的七个 Phase 全部落地，收尾时如实列出的三项缺口（PDF 解析、富文本编辑器、人物/世界/大纲版本历史）已于 2026-09-28 补齐：PDF 导入走自研解析器（真实样本对照 PyMuPDF：整体字符召回 0.9569 / 准确 0.9595，120 个样本里 67 个可用文件 ≥0.98）；编辑器换成 Tiptap 富文本但正文仍以 Markdown 存储；版本历史从章节扩展到人物/世界观/大纲。
+**主体全部完成。** SPEC.md §35 的七个 Phase 全部落地，收尾时如实列出的三项缺口（PDF 解析、富文本编辑器、人物/世界/大纲版本历史）已于 2026-09-28 补齐：PDF 导入走自研解析器（真实样本对照 PyMuPDF：整体字符召回 0.9569 / 准确 0.9595，120 个样本里 67 个可用文件 ≥0.98）；编辑器换成 Tiptap 富文本但正文仍以 Markdown 存储；版本历史从章节扩展到人物/世界观/大纲。
+
+**规格基准变更（2026-10-03）**：V2 自持规格 `docs/SPEC.md` 落地，全仓 158 处「v1 规格书 §N」引用已改为「SPEC.md §N」；V2 不再引用 v1 的《NovaMind V1 开发规格说明书》（该文档降级为历史归档，仅作交互参考）。
+
+**仍未实现（如实登记，见 SPEC.md §36.2）**：二创侧「设定 / 剧情 / 素材」、原著侧「人物关系（独立页）/ 知识库」、全局「AI 助手」共 6 个页面仍是占位页 —— 后端模型与接口大多也未建，属 SPEC.md §35 的 Phase 8 范围。
 
 2026-09-29 补：**二创 · 总览**从占位页变成真页面，二创侧直接提供「导入一本书 → 一键开同人」（原著工程 → 导入原文 → 同人作品 → 继承人物与世界观全自动）。
 
@@ -17,13 +21,13 @@
 
 | 项 | 说明 |
 |---|---|
-| 规格书通读 | `../../novamind-pro/NovaMind_V1_开发规格说明书.md`（2571 行 / 72 节）已逐节读完，未跳读 |
+| 规格书通读（历史） | v1 规格书 `../../novamind-pro/NovaMind_V1_开发规格说明书.md`（2571 行 / 72 节）已于 Phase 0 逐节读完；**2026-10-03 起 V2 不再引用该文档**，开发基准改为 `docs/SPEC.md` |
 | 现有代码勘查 | v1 项目 `../../novamind-pro/` 已勘查：Next.js 15 + SQLite + React 19，71 个 TS/TSX 文件 10597 行，13 个测试文件，git 最近提交「多用户登录 + 每用户模型 Key（阶段 1–5）」；**结论：不复用** |
 | 环境勘查 | Go 1.19.8（系统）/ Node v22.18.0 / npm 10.9.3 / Python 3.11.2；**无 PostgreSQL、无 Redis、无 Docker**；sudo 需密码；网络可达 Go/npm 源；磁盘剩 1.1T |
 | 目录建立 | 最终位置 `codex/novamindv2/`（与 v1 平级），`docs/` 已建 |
-| 治理文档 | `PRODUCT_SPEC.md`、`ARCHITECTURE.md`、本文件 已落盘 |
+| 治理文档 | `PRODUCT_SPEC.md`、`ARCHITECTURE.md`、本文件 已落盘；2026-10-03 追加 V2 自持规格 `SPEC.md` |
 | Phase 5 / 6 / 7 | 写作系统 + 一致性检查 + 版本与导出：后端 4 个模块（domain/repository/service/task+api）、迁移 `0011`/`0012`、端到端冒烟 30 项全过；前端写作工作台 + 编辑器 + 一致性问题页，测试 19 例全绿 |
-| 仓库骨架（P1-1） | 目录结构对齐规格书 §50；`.gitignore` / `README.md` / `scripts/dev-env.sh` 就位；Git 仓库已初始化，首提交 `0bc38a7` |
+| 仓库骨架（P1-1） | 目录结构对齐SPEC.md §24；`.gitignore` / `README.md` / `scripts/dev-env.sh` 就位；Git 仓库已初始化，首提交 `0bc38a7` |
 | Go 工具链（P1-2） | Go **1.26.8** 装在 `~/.local/go`（系统 1.19.8 不动） |
 | 后端骨架（P1-2） | `config` / `domain.Project` / `api`（统一响应+中间件+健康检查）/ `cmd/server`；`go build`+`go vet`+`gofmt` 全通过；服务实测 200 与统一 404 正常 |
 
@@ -84,14 +88,14 @@
 
 > Phase 1 早已收官，此表保留作为最初的拆分依据，便于回溯。
 
-**剩余工作（全项目）**：只有 **PDF 解析** 一项（规格书 §15 支持 PDF，当前只支持 TXT/DOCX；BOSS 2026-09-27 决定暂缓）。其余 §63 的 Phase 1–7 全部完成。
+**剩余工作（全项目）**：Phase 1–7 全部完成；**Phase 8**（补齐 6 个占位页：二创设定/剧情/素材、原著人物关系/知识库、AI 助手）待做，明细见 SPEC.md §36.2。（PDF 解析已于 2026-09-28 补齐，见 SPEC.md §5.3。）
 
-规格书 §63 定义 Phase 1 = Go Backend + React Frontend + PostgreSQL + Redis + Docker + 基础 API + 项目管理。
+SPEC.md §35 定义 Phase 1 = Go Backend + React Frontend + PostgreSQL + Redis + Docker + 基础 API + 项目管理。
 本文把它拆成 7 个可验收的任务：
 
 | # | 任务 | 交付物 | 验收方式 |
 |---|---|---|---|
-| ~~P1-1~~ ✅ | 仓库骨架 | `backend/ cmd+internal+migrations`、`prompts/`、`scripts/`、`docker/`、`.gitignore`、`README.md` | 目录与规格书 §50 一致；已提交 `0bc38a7` |
+| ~~P1-1~~ ✅ | 仓库骨架 | `backend/ cmd+internal+migrations`、`prompts/`、`scripts/`、`docker/`、`.gitignore`、`README.md` | 目录与SPEC.md §24 一致；已提交 `0bc38a7` |
 | ~~P1-2~~ ✅ | Go 工具链与后端可编译 | `~/.local/go`（go1.26.8）+ `backend/go.mod` + `cmd/server/main.go` | `go build`/`go vet`/`gofmt` 通过；实测 health 200、404 统一包、trace_id 贯通 |
 | ~~P1-3~~ ✅ | 配置与基础设施层 | `internal/infra`（Postgres 连接池 + Redis 客户端 + 健康检查）+ 接入 main | 实测 health：`postgres=ok`、`redis=ok` |
 | ~~P1-4~~ ✅ | 数据层 | `projects` 迁移 + `cmd/migrate`(up/down/down-all/version/force) + `repository.ProjectRepo` | up 幂等、down 可回滚、可重建；13 个测试全绿；测试不污染库 |
@@ -170,7 +174,7 @@
 |---|---|
 | 2026-09-27 | Phase 0 完成：通读规格书、勘查 v1 与环境、建立 `novamindv2/`、落盘三份治理文档；提出 Phase 1 计划与 3 项待决策 |
 | 2026-09-27 | 三项决策拍板：P1=A（BOSS 装 PG/Redis）、P2=目录移至 `codex/novamindv2/`（与 v1 平级）、P3=不复用 v1 代码。Phase 1 开工 |
-| 2026-09-27 | P1-1 仓库骨架完成（目录对齐规格书 §50，Git 首提交 `0bc38a7`） |
+| 2026-09-27 | P1-1 仓库骨架完成（目录对齐SPEC.md §24，Git 首提交 `0bc38a7`） |
 | 2026-09-27 | P1-2 完成：Go 1.26.8 装到 `~/.local/go`；后端骨架编译/vet/gofmt 通过；实测 `/api/v1/health` 200、统一 404、trace_id 贯通 |
 | 2026-09-27 | BOSS 执行方案 A：PostgreSQL 15.19 与 Redis 7.0.15 已安装（服务 enabled 但未启动） |
 | 2026-09-27 | P1-3 代码落地：`internal/infra` 的 Postgres/Redis 连接与健康检查，接入 main；编译/vet 通过。另写入 P1-4 迁移 `0001_create_projects` |
@@ -187,7 +191,7 @@
 | 2026-09-27 | P2-6 第四/五片完成：事件 / 时间线 / 剧情弧（11 个 API + 前端时间线页与剧情页）；冒烟 72 项、前端 11 项全过；Phase 2 仅剩 PDF |
 | 2026-09-27 | Phase 3 开工（BOSS 决定 PDF 暂缓）：P3-1 Model Gateway + Prompt Engine 完成；密钥加密存储、协议分发与重试、7 个模板；单元测试 17 例 + 冒烟 25 项全过 |
 | 2026-09-27 | P3-2 任务系统完成：PG 队列 + worker 池 + 重试/取消/进度；`original_reparse` 任务打通；单元测试 9 例 + 集成测试 6 例 + 端到端冒烟 19 项全过 |
-| 2026-09-27 | P3-3 完成：AI 分析只产提案、作者通过才写入原著（规格书 §52 落地）；4 个阶段 + 6 个 API；冒烟 24 项全过，并修复统计聚合与错误码两个真 bug |
+| 2026-09-27 | P3-3 完成：AI 分析只产提案、作者通过才写入原著（SPEC.md §22.2 落地）；4 个阶段 + 6 个 API；冒烟 24 项全过，并修复统计聚合与错误码两个真 bug |
 | 2026-09-27 | P3-4 完成：前端模型设置（真实连通测试）、任务中心（自动刷新/取消/重试）、AI 分析审核页（可改 JSON 后通过）；前端测试 14 例全绿。**Phase 3 收官，下一步 Phase 4 二创系统** |
 | 2026-09-27 | P4-2/P4-3 完成：二创世界继承（FULL/PARTIAL/MODIFIED/NEW + 规则 INHERITED/MODIFIED/REMOVED/NEW）+ 分叉点 + 二创时间线（按分叉点自动切分、不覆盖二创新内容）；冒烟 32 项全过；修复空指针与空 ID 两个真 bug |
 | 2026-09-27 | P4-4 完成：前端二创工作区（人物继承滑杆含实时派生预览、融合、世界规则状态、分叉点与时间线、映射）；**Phase 4 收官**，下一步 Phase 5 写作系统 |
@@ -195,3 +199,4 @@
 | 2026-09-27 | 修掉两个真 bug：① 写作任务入队 500（`tasks.work_id` 外键指向原著，改用新增的 `tasks.creative_work_id`，迁移 `0012`）；② 版本/场景/问题接口直接返回领域结构体导致 JSON 键名是 Go 字段名（补 4 个响应 DTO + 1 个请求 DTO） |
 | 2026-09-28 | 补齐三项缺口：**PDF 解析**（自研解析器 + 空密码解密 + 内嵌字体 cmap 反查；120 个真实样本对照 PyMuPDF：召回 0.9569 / 准确 0.9595）、**富文本编辑器**（Tiptap，正文仍存 Markdown）、**人物/世界/大纲版本历史**（迁移 `0013`，12 个 API + 通用版本抽屉）。9 个冒烟脚本 268 项、后端 8 包、前端 30 例全绿；迁移版本 **13** |
 | 2026-09-29 | 二创 · 总览从占位页变真页面：二创侧新增「导入一本书 → 一键开同人」（原著工程 → 导入原文 → 同人作品 → 继承人物 DNA 与世界观全自动，走既有接口不绕边界）；顺带修掉两处指向占位页的死引导。前端 9 文件 33 例全绿 |
+| 2026-10-03 | **规格自持**：新建 `docs/SPEC.md`（NovaMind V2 开发规格说明书，36 节，自洽可裁定）；全仓 158 处「规格书 §N」引用按对照表统一改为「SPEC.md §N」（代码注释、SQL 迁移注释、OpenAPI 描述、冒烟脚本、四份文档）；README / PRODUCT_SPEC / ARCHITECTURE 的"规格来源"与裁定关系同步改写，v1 规格书降级为历史归档。回归：后端 8 包、前端 9 文件 33 例全绿 |

@@ -9,7 +9,7 @@ import (
 // TraceIDKey 是贯穿请求与日志的 trace id 键名。
 const TraceIDKey = "trace_id"
 
-// Envelope 是全部 API 的统一响应包（规格书 §49 / ARCHITECTURE §5）。
+// Envelope 是全部 API 的统一响应包（SPEC.md §26 / ARCHITECTURE §5）。
 type Envelope struct {
 	Data    any       `json:"data"`
 	Error   *APIError `json:"error"`

@@ -12,7 +12,7 @@ func TestApplyInheritanceScalesWeights(t *testing.T) {
 		Ability:     DNADimension{Text: "会修车", Weight: 50},
 		SpeechStyle: DNADimension{Text: "短句", Weight: 40},
 	}
-	// 规格书 §19 的示例：性格 80%、价值观 80%、语言风格 30%、能力 0%
+	// SPEC.md §9.3 的示例：性格 80%、价值观 80%、语言风格 30%、能力 0%
 	rule := InheritanceRule{
 		PersonalityWeight: 80, ValueWeight: 80, SpeechWeight: 30, AbilityWeight: 0,
 	}

@@ -33,7 +33,7 @@ type PromptRunner interface {
 
 // AnalysisService 负责分阶段分析、提案落库与审核应用。
 //
-// 红线（规格书 §52）：本服务**不会**在分析阶段直接写原著正式表，
+// 红线（SPEC.md §22.2）：本服务**不会**在分析阶段直接写原著正式表，
 // 只有 ApproveProposal 在作者确认后才写，且与状态更新在同一事务内。
 type AnalysisService struct {
 	proposals AnalysisProposalRepository

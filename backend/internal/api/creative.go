@@ -391,7 +391,7 @@ func (s *Server) createNewCreativeCharacter(c *gin.Context) {
 // fuseCreativeCharacters 人物融合。
 //
 //	@Summary		人物融合
-//	@Description	把多个二创人物融合成一个新人物，并生成每个 DNA 维度的来源说明（规格书 §20）。
+//	@Description	把多个二创人物融合成一个新人物，并生成每个 DNA 维度的来源说明（SPEC.md §9.4）。
 //	@Tags			creative
 //	@Accept			json
 //	@Produce		json

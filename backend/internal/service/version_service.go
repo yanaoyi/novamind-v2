@@ -12,7 +12,7 @@ import (
 	"github.com/yanaoyi/novamindv2/backend/internal/repository"
 )
 
-// VersionService 负责「人物 / 世界观 / 大纲」的状态快照与恢复（规格书 §59）。
+// VersionService 负责「人物 / 世界观 / 大纲」的状态快照与恢复（SPEC.md §13）。
 //
 // 语义（刻意保守）：
 //   - 快照 = 某一刻该实体的完整状态；每次改动完成后再存一份，内容与上一版相同则跳过（不产生噪声版本）；

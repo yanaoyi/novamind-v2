@@ -24,7 +24,7 @@ var (
 	ErrExportFormatInvalid     = errors.New("导出格式不支持")
 )
 
-// ChapterStatus 是章节状态（规格书 §28）。
+// ChapterStatus 是章节状态（SPEC.md §12.2）。
 type ChapterStatus string
 
 const (
@@ -38,7 +38,7 @@ func (s ChapterStatus) Valid() bool {
 	return s == ChapterDraft || s == ChapterReview || s == ChapterFinal
 }
 
-// CreativeVolume 是卷（规格书 §27 大纲的第一层）。
+// CreativeVolume 是卷（SPEC.md §12.1 大纲的第一层）。
 type CreativeVolume struct {
 	ID             string
 	CreativeWorkID string
@@ -67,7 +67,7 @@ func (v *CreativeVolume) Validate() error {
 	return nil
 }
 
-// CreativeChapter 是二创章节（含大纲信息，规格书 §27-§28）。
+// CreativeChapter 是二创章节（含大纲信息，SPEC.md §12.1-§12.2）。
 type CreativeChapter struct {
 	ID             string
 	CreativeWorkID string
@@ -125,7 +125,7 @@ func CountWords(content string) int {
 	return count
 }
 
-// ChapterVersion 是章节版本（规格书 §59）。
+// ChapterVersion 是章节版本（SPEC.md §13）。
 type ChapterVersion struct {
 	ID        string
 	ChapterID string
@@ -136,7 +136,7 @@ type ChapterVersion struct {
 	CreatedAt time.Time
 }
 
-// CreativeScene 是场景（规格书 §29）。
+// CreativeScene 是场景（SPEC.md §12.3）。
 type CreativeScene struct {
 	ID            string
 	ChapterID     string
@@ -168,7 +168,7 @@ func (s *CreativeScene) Normalize() {
 	}
 }
 
-// ConsistencyIssue 是一致性检查发现的问题（规格书 §39）。
+// ConsistencyIssue 是一致性检查发现的问题（SPEC.md §14）。
 type ConsistencyIssue struct {
 	ID             string
 	CreativeWorkID string

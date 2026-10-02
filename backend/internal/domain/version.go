@@ -12,7 +12,7 @@ var (
 	ErrVersionNoInvalid = errors.New("版本号必须为正整数")
 )
 
-// EntityVersionType 是可版本化的实体类型（规格书 §59）。
+// EntityVersionType 是可版本化的实体类型（SPEC.md §13）。
 type EntityVersionType string
 
 const (

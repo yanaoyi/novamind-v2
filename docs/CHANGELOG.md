@@ -1,10 +1,56 @@
 # CHANGELOG
 
+## [2026-10-03] 规格自持 · NovaMind V2 不再引用 v1 规格书
+
+**背景**：V2 立项时以 v1 的《NovaMind V1 开发规格说明书》为规格来源，代码注释、迁移脚本、OpenAPI 描述里累计 158 处「规格书 §N」引用。这个依赖有两个问题：一是 V2 的技术线（Go + PG + Redis + React）与 v1 规格书的语境已经分叉，二是指向仓库外的 `novamind-pro/` 文档，改一处规则要跨项目对齐。
+
+**本轮改动**：
+
+1. 新建 `docs/SPEC.md` —— **NovaMind V2 开发规格说明书**，36 节，涵盖产品原则与红线、领域模型（Project / 原著 / 人物 DNA / 世界观 / 事件时间线 / 二创 / 写作 / 版本 / 一致性）、AI 层（Model Gateway / Prompt Engine / Context / Memory / Agent 边界 / 结构化输出 / 分析流水线）、工程规范（技术栈 / 目录 / 数据与迁移 / API / 任务系统 / 检索 / 存储 / 导出 / 页面契约 / 测试 / 安全 / 交付纪律）与 Phase 划分、当前对账。**自洽、可裁定，不指向任何外部文档。**
+2. 全仓引用重定向：`规格书 §N` → `SPEC.md §M`，共 158 处、54 个文件（含后端注释 40+ 处、SQL 迁移注释 13 处、OpenAPI 描述、冒烟脚本注释、文档）。
+3. 文档地位改写：README / PRODUCT_SPEC / ARCHITECTURE 的"规格来源"与"唯一裁定文件"表述改为以 `SPEC.md` 为准；ARCHITECTURE §14 明确「v1 规格书不再作为 V2 开发依据，仅历史归档」。
+4. 如实登记未实现项：`SPEC.md` §36.2 列出 6 个仍是占位页的模块（二创设定/剧情/素材、原著人物关系/知识库、AI 助手），并列为 Phase 8。
+
+**v1 § → V2 § 对照表**（历史追溯用，之后不再维护）：
+
+| v1 | V2 | v1 | V2 |
+|---|---|---|---|
+| §3.5 文件管理 | §4.3 | §31 Context Engine | §18.1 |
+| §6 技术栈 | §23 | §32 Context Snapshot | §18.4 |
+| §7 Project | §4 | §33 Memory | §19 |
+| §8.1 OriginalWork | §5.1 | §34 Agent | §20.1 |
+| §9 章节 | §5.2 | §35 Agent Runtime | §20.2 |
+| §10 人物 | §6.1 | §36 Model Gateway | §16 |
+| §11 Character DNA | §6.2 | §37 Prompt Engine | §17 |
+| §12 人物关系 | §6.3 | §38 AI 写作功能 | §12.5 |
+| §13 世界观 | §7 | §39 一致性检查 | §14 |
+| §14 事件 | §8.1 | §40 分析流程（作者可改） | §22.3 |
+| §15 时间线 | §8.2 | §41 二创创建流程 | §9.6 |
+| §16 剧情结构 | §8.3 | §46/§47 页面与主界面 | §31 |
+| §17 二创作品 | §9.1 | §48 编辑器 | §12.4 |
+| §18 二创人物 | §9.2 | §49 API | §26 |
+| §19 继承规则 | §9.3 | §50 文件结构 | §24 |
+| §20 人物融合 | §9.4 | §51 数据库原则 | §25 |
+| §21 二创世界 | §10.1 | §52 数据权限边界 | §22.2 |
+| §22 二创世界规则 | §10.2 | §53 任务系统 | §27 |
+| §23 原著↔二创映射 | §9.5 | §54 分阶段任务 | §22.1 |
+| §24 分叉点 | §10.3 | §55 检索 | §28 |
+| §25 二创时间线 | §10.4 | §56 上下文组装 | §18.2 |
+| §26 二创剧情 | §11 | §57/§58 结构化输出 | §21.1 / §21.2 |
+| §27 大纲 | §12.1 | §59 版本管理 | §13 |
+| §28 Chapter | §12.2 | §61 导出 | §30 |
+| §29 Scene | §12.3 | §63 Phase 划分 | §35 |
+| §30 素材 | §15 | §64.4 OpenAPI | §26.5 |
+| | | §64.13/14 密钥 | §33 |
+| | | §67 测试 | §32 |
+
+**回归验证**：后端 `go test ./...` 8 个包全绿；前端 `npx vitest run` 9 文件 33 例全绿；`gofmt` / `go vet` 无输出。代码与迁移里「规格书」已清零，剩下 9 处都在文档中，且全部是"不再引用 v1 规格书"这类说明性表述。
+
 ## [Unreleased] Phase 1 · 基础框架
 
 ### 2026-09-27 · P1-1 仓库骨架
 
-- 建成目录结构（对齐规格书 §50）：`backend/{cmd,internal,migrations,testdata}`、`prompts/{original,character,world,plot,outline,writing,review}`、`docs/`、`scripts/`、`docker/`
+- 建成目录结构（对齐SPEC.md §24）：`backend/{cmd,internal,migrations,testdata}`、`prompts/{original,character,world,plot,outline,writing,review}`、`docs/`、`scripts/`、`docker/`
 - `internal` 预置分层：`api / config / domain / repository / service / agent / ai / context / memory / task / retrieval / consistency`（Phase 2–6 逐层填充）
 - 新增 `.gitignore`（忽略 `.env`、`node_modules`、`data/`、构建产物、覆盖率）、`README.md`、`scripts/dev-env.sh`
 - Git 仓库初始化，首个提交 `0bc38a7`
@@ -81,7 +127,7 @@
 
 ### 2026-09-27 · Phase 2 开工：原著导入闭环（P2-1 ~ P2-4）
 
-按规格书 §63 Phase 2 拆分，先交付"上传 → 解析 → 切章 → 入库 → 查询"这条闭环。
+按SPEC.md §35 Phase 2 拆分，先交付"上传 → 解析 → 切章 → 入库 → 查询"这条闭环。
 
 **P2-1 数据模型**（迁移 `0002_create_originals`）：`files`（上传登记）、`original_works`（原著，一工程一部，部分唯一索引）、`original_chapters`（章节，含原文字节偏移 start_position/end_position，支持回溯）；全部沿用 UUID + 时间戳 + 软删除 + CHECK 约束。
 
@@ -142,7 +188,7 @@
 - `original_characters`：姓名、别名（JSONB）、角色/性别/年龄/外貌、性格/动机/价值观/恐惧/欲望/行为模式/语言风格/能力、首次与最后出场、**人物 DNA（JSONB）**、重要度 1-5、来源（MANUAL/AI）、备注；同原著内**姓名唯一**（大小写不敏感，软删除不占用）
 - `character_relationships`：有向边（source → target）、10 种关系类型、强度 0-100、描述、来源；**禁止自环**，同一对人物的同一关系类型唯一
 
-**人物 DNA**（规格书 §11 的核心数据结构）：11 个维度（personality / values / motivation / behavior / speech_style / background / ability / decision_style / conflict_response / emotional_response / relationship_pattern），每维一句描述 + **0-100 权重**；权重越界直接拒绝写入。这是后续二创"人物继承"（§19 InheritanceRule）的计算基础。
+**人物 DNA**（SPEC.md §6.2 的核心数据结构）：11 个维度（personality / values / motivation / behavior / speech_style / background / ability / decision_style / conflict_response / emotional_response / relationship_pattern），每维一句描述 + **0-100 权重**；权重越界直接拒绝写入。这是后续二创"人物继承"（§9.3 InheritanceRule）的计算基础。
 
 **后端**：`repository.OriginalCharacterRepo`（PostgreSQL 唯一/外键冲突 → 领域错误翻译）、`service.OriginalCharacterService`（关系两端必须同属一部原著）、9 个 API：
 
@@ -307,7 +353,7 @@ PUT|DELETE     /plot-arcs/{id}
 ### 待办（Phase 3 剩余）
 
 - P3-2 任务系统（异步任务 + 进度 + 重试）
-- P3-3 分阶段原著分析流水线 + **AI 提案与作者审核**（AI 不得直接改原著模型，规格书 §52）
+- P3-3 分阶段原著分析流水线 + **AI 提案与作者审核**（AI 不得直接改原著模型，SPEC.md §22.2）
 - P3-4 前端：模型配置页 / 任务中心 / 分析提案审核页
 
 ### 2026-09-27 · P3-4 前端：模型设置 / 任务中心 / AI 分析审核（Phase 3 完成）
@@ -330,7 +376,7 @@ PUT|DELETE     /plot-arcs/{id}
 - 顶部四个阶段按钮（章节摘要 / 人物提取 / 世界观提取 / 剧情与事件提取），点击前二次确认（会消耗模型额度）
 - 统计三块：待审核 / 已通过 / 已驳回
 - 提案表格：状态、实体类型、标题 + **模型给出的原文依据**、来源阶段
-- **审核弹窗**：显示原文依据；人物提案额外用标签展示 DNA 各维度权重；**内容是可编辑的 JSON**（作者改完再通过，对应规格书 §40）；可填审核备注；两个动作「通过并写入原著」「驳回」
+- **审核弹窗**：显示原文依据；人物提案额外用标签展示 DNA 各维度权重；**内容是可编辑的 JSON**（作者改完再通过，对应SPEC.md §22.3）；可填审核备注；两个动作「通过并写入原著」「驳回」
 
 **测试**：新增 `phase3Pages.test.tsx` 3 例 —— 模型设置页（列表/密钥状态/模板清单/测连通/新增配置并断言提交含 api_key）、任务中心（进度与错误展示、取消运行中任务、重试失败任务）、分析审核页（统计与依据渲染、**在弹窗里改 JSON 后通过，并断言提交的 payload 就是改过的内容**）。前端累计 **14 个用例（5 个文件）全绿**，构建通过。
 
@@ -344,18 +390,18 @@ PUT|DELETE     /plot-arcs/{id}
 |---|---|
 | `creative_works` | 二创作品：挂在 CREATIVE 工程下，**必须指向一部原著**；一个工程一部 |
 | `creative_characters` | 二创人物：来源类型（`ORIGINAL_INHERITED` / `MODIFIED` / `FUSED` / `NEW`）、派生 DNA、融合来源与逐维度归属、锁定标记 |
-| `inheritance_rules` | 人物继承权重（规格书 §19）：8 个维度各 0-100 |
-| `original_creative_mappings` | 原著↔二创映射（规格书 §23）：显式记录每个二创元素从哪来 |
+| `inheritance_rules` | 人物继承权重（SPEC.md §9.3）：8 个维度各 0-100 |
+| `original_creative_mappings` | 原著↔二创映射（SPEC.md §9.5）：显式记录每个二创元素从哪来 |
 
-**继承算法**（`domain.ApplyInheritance`，规格书 §19 的落地）
+**继承算法**（`domain.ApplyInheritance`，SPEC.md §9.3 的落地）
 
 ```
 新权重 = 原著该维度权重 × 继承权重 ÷ 100      // 0 表示完全不带过来
 ```
 
-规格书示例（性格 90%、价值观 80%、语言风格 30%、能力 0%）实测：原著人格 90 → 派生 72；价值观 80 → 64；语言风格 40 → 12；能力不带过来。
+SPEC.md §9.3 示例（性格 90%、价值观 80%、语言风格 30%、能力 0%）实测：原著人格 90 → 派生 72；价值观 80 → 64；语言风格 40 → 12；能力不带过来。
 
-**融合算法**（`domain.FuseCharacters`，规格书 §20）
+**融合算法**（`domain.FuseCharacters`，SPEC.md §9.4）
 
 每个 DNA 维度取"来源该维度权重 × 来源整体权重 ÷ 100"最大者的来源，并**逐维度记录来自谁**（`fusion_detail`）；同分保留先出现的来源以保证结果可复现。实测：林默（整体 60%）与陈述（整体 100%）融合，人格取自陈述（60 > 43），价值观取自林默（只有他有）。
 
@@ -413,11 +459,11 @@ PUT|DELETE     /plot-arcs/{id}
 
 ### 2026-09-27 · P3-3 分析流水线 + AI 提案与作者审核（Phase 3 核心）
 
-**把规格书 §52 那条红线做成了数据库事实**：AI 产出**只写入 `analysis_proposals` 提案表**，作者审核通过后才写进原著正式表；两者在同一事务内完成，不存在"审核过了但没写进去"或反之的中间态。
+**把SPEC.md §22.2 那条红线做成了数据库事实**：AI 产出**只写入 `analysis_proposals` 提案表**，作者审核通过后才写进原著正式表；两者在同一事务内完成，不存在"审核过了但没写进去"或反之的中间态。
 
 **数据模型**（迁移 `0008_create_analysis_proposals`）：`work_id`、`task_id`、阶段、实体类型、标题、`payload`（JSONB）、原文依据 `evidence`、置信度、状态（PENDING/APPROVED/REJECTED）、审核备注与时间、`applied_id`（通过后写入正式表的记录 ID）；同一任务内同实体只留一条（部分唯一索引）。
 
-**四个分析阶段**（规格书 §54 的分阶段任务，各自是一个任务类型）
+**四个分析阶段**（SPEC.md §22.1 的分阶段任务，各自是一个任务类型）
 
 | 阶段 | 任务类型 | 产出提案 |
 |---|---|---|
@@ -428,7 +474,7 @@ PUT|DELETE     /plot-arcs/{id}
 
 **模型输出容错**（`service/analysis_json.go`）：模型即使被要求"只输出 JSON"，也常包 ```json 代码块或带解释文字 —— 这里做容错提取（去代码块 → 取首个 `{` 到末个 `}`），单章解析失败只跳过该条而不拖垮整批。结构化校验按实体类型要求最小字段（人物必须有名字、事件必须有标题…），不合法直接跳过。
 
-**审核通过即写入**：`ApproveProposal` 支持**作者修改后再通过**（payload override，规格书 §40），写入时按实体类型分派：人物→人物表（DNA 一起落）、规则/地点/势力→世界观、事件→**参与者按姓名解析成人物 ID、地点按名称关联**、剧情弧→**起止事件按标题匹配**、章节摘要→回写章节。所有写入都在 `Approve` 的事务里，`apply` 闭包接收 `tx` 复用同一事务。
+**审核通过即写入**：`ApproveProposal` 支持**作者修改后再通过**（payload override，SPEC.md §22.3），写入时按实体类型分派：人物→人物表（DNA 一起落）、规则/地点/势力→世界观、事件→**参与者按姓名解析成人物 ID、地点按名称关联**、剧情弧→**起止事件按标题匹配**、章节摘要→回写章节。所有写入都在 `Approve` 的事务里，`apply` 闭包接收 `tx` 复用同一事务。
 
 **API**（6 个）：`POST /original/{id}/analysis`（入队）、`GET /original/{id}/proposals`、`GET /original/{id}/analysis/summary`、`GET /proposals/{id}`、`POST /proposals/{id}/approve`、`POST /proposals/{id}/reject`。
 
@@ -442,7 +488,7 @@ PUT|DELETE     /plot-arcs/{id}
 
 **数据模型**（迁移 `0007_create_tasks`）：`tasks` 表 —— 类型、状态（PENDING/RUNNING/PAUSED/COMPLETED/FAILED/CANCELLED）、进度 0-100、进度文案、input/output（JSONB）、错误、`attempts`/`max_attempts`、开始与结束时间；`(status, created_at)` 部分索引供 worker 领取。
 
-**队列实现的选择**：规格书给的是「Asynq 或等价任务队列」。我用 **PostgreSQL 自身做队列**（`UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)`），理由是：任务状态与业务数据同库同事务，**重启不丢任务**，部署不需要再依赖一个中间件；将来要换 Asynq 只需替换 worker 的取任务方式，上层接口不变。
+**队列实现的选择**：原方案给的是「Asynq 或等价任务队列」。我用 **PostgreSQL 自身做队列**（`UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)`），理由是：任务状态与业务数据同库同事务，**重启不丢任务**，部署不需要再依赖一个中间件；将来要换 Asynq 只需替换 worker 的取任务方式，上层接口不变。
 
 **执行框架**（`internal/task`）
 
@@ -463,9 +509,9 @@ PUT|DELETE     /plot-arcs/{id}
 
 **数据模型**（迁移 `0011_create_writing`）：`creative_volumes`（卷）、`creative_chapters`（章节，含大纲三要素 purpose/conflict/outcome 与 word_count）、`chapter_versions`（版本快照）、`creative_scenes`（场景，人物数组）、`consistency_issues`（一致性问题，severity/type/status + 依据 + 建议）。所有表带软删除与部分索引，约束（标题非空、状态枚举、章号为正）落在数据库层。
 
-**章节与版本**（`service/writing_service.go`）：章节 CRUD、按卷/章号排序的列表（默认不带正文，`?full=true` 才带，避免列表把几十万字正文一起吐出来）、**正文变化才留版本**（标题/大纲改动不产生噪声版本）、`NextVersionNo` 取号、**恢复版本前先把当前正文自动备份一版**（规格书 §59 的"误操作可回退"）。字数统计按去空白字符计，中文按字。
+**章节与版本**（`service/writing_service.go`）：章节 CRUD、按卷/章号排序的列表（默认不带正文，`?full=true` 才带，避免列表把几十万字正文一起吐出来）、**正文变化才留版本**（标题/大纲改动不产生噪声版本）、`NextVersionNo` 取号、**恢复版本前先把当前正文自动备份一版**（SPEC.md §13 的"误操作可回退"）。字数统计按去空白字符计，中文按字。
 
-**写作上下文组装**（`BuildContext`，规格书 §31 的裁剪版）：本章大纲（目的/冲突/结果）+ 已登记场景 + 前 3 章摘要 + 相关二创人物 DNA（按重要度取前若干位）+ 二创世界规则。三块拼进 `writing/chapter_generate.v1.md`，让"AI 写本章"有据可依而不是自由发挥。
+**写作上下文组装**（`BuildContext`，SPEC.md §18.1 的裁剪版）：本章大纲（目的/冲突/结果）+ 已登记场景 + 前 3 章摘要 + 相关二创人物 DNA（按重要度取前若干位）+ 二创世界规则。三块拼进 `writing/chapter_generate.v1.md`，让"AI 写本章"有据可依而不是自由发挥。
 
 **任务化**：`writing_chapter`（写本章，进度分 3 段上报：组装上下文 → 调用模型 → 写入版本）与 `consistency_check`（一致性检查）。异步、可取消、失败可重试，都复用 P3-2 的 PG 队列。
 
@@ -526,7 +572,7 @@ PUT|DELETE     /plot-arcs/{id}
 * 编辑器挂在章节编辑器里替换原 textarea；AI 改写、恢复版本、切换章节时外部改动会同步进编辑器（用 `lastEmitted` 防止回环）
 * 测试：`src/editor/editor.test.tsx` 7 例（转换正确性、HTML 转义不执行标签、往返不丢字、渲染成 `<strong>`、工具条齐全、源码模式向上抛 Markdown）
 
-#### 3. 人物 / 世界观 / 大纲的版本历史（规格书 §59）
+#### 3. 人物 / 世界观 / 大纲的版本历史（SPEC.md §13）
 
 * 迁移 `0013_create_entity_versions`：通用快照表 `entity_versions`（entity_type / entity_id / version_no / payload JSONB / note），带唯一约束与两条索引
 * `service/version_service.go`：三类的快照、列表、详情、恢复；**内容与最新一版相同则不建版本**（去重靠 payload 深比较），恢复前会先留一版（内容不同才建）

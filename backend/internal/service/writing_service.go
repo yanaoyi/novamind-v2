@@ -141,7 +141,7 @@ type UpdateChapterInput struct {
 	Outcome  *string
 }
 
-// UpdateChapter 更新章节；正文变化时会新建一个版本（规格书 §59）。
+// UpdateChapter 更新章节；正文变化时会新建一个版本（SPEC.md §13）。
 func (s *WritingService) UpdateChapter(ctx context.Context, id string, in UpdateChapterInput) (*domain.CreativeChapter, bool, error) {
 	c, err := s.repo.GetChapter(ctx, id)
 	if err != nil {
@@ -295,7 +295,7 @@ func (s *WritingService) ListScenes(ctx context.Context, chapterID string) ([]do
 	return items, nil
 }
 
-// ChapterContext 是喂给写作 Agent 的上下文（规格书 §31 的裁剪版）。
+// ChapterContext 是喂给写作 Agent 的上下文（SPEC.md §18.1 的裁剪版）。
 type ChapterContext struct {
 	WorkTitle        string
 	ChapterGoal      string
@@ -435,7 +435,7 @@ type RewriteInput struct {
 	Instruction string
 }
 
-// RewriteText 对选中文本做 AI 处理（同步返回，规格书 §38）。
+// RewriteText 对选中文本做 AI 处理（同步返回，SPEC.md §12.5）。
 func (s *WritingService) RewriteText(ctx context.Context, runner PromptRunner, in RewriteInput) (string, error) {
 	if !in.Action.Valid() {
 		return "", fmt.Errorf("不支持的 AI 操作：%s", in.Action)
@@ -456,7 +456,7 @@ func (s *WritingService) RewriteText(ctx context.Context, runner PromptRunner, i
 	})
 }
 
-// CheckConsistency 对指定章节做一致性检查，结果写入问题列表（规格书 §39）。
+// CheckConsistency 对指定章节做一致性检查，结果写入问题列表（SPEC.md §14）。
 func (s *WritingService) CheckConsistency(
 	ctx context.Context,
 	workID string,
@@ -583,7 +583,7 @@ func (s *WritingService) UpdateIssueStatus(ctx context.Context, id, status strin
 	return s.repo.UpdateIssueStatus(ctx, id, status)
 }
 
-// Export 导出作品（TXT / Markdown / DOCX，规格书 §61）。
+// Export 导出作品（TXT / Markdown / DOCX，SPEC.md §30）。
 func (s *WritingService) Export(ctx context.Context, workID, format string) ([]byte, string, string, error) {
 	work, err := s.creative.GetWorkByID(ctx, workID)
 	if err != nil {

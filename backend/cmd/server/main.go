@@ -99,7 +99,7 @@ func run() error {
 		worldRepo,
 	)
 
-	// AI 接入（规格书 §36 Model Gateway / §37 Prompt Engine）
+	// AI 接入（SPEC.md §16 Model Gateway / §17 Prompt Engine）
 	gateway := ai.NewGateway()
 	providers := service.NewModelProviderService(
 		repository.NewModelProviderRepo(pg.DB),
@@ -115,7 +115,7 @@ func run() error {
 	}
 	logger.Info("Prompt 模板已加载", slog.Int("count", len(promptEngine.List())))
 
-	// 异步任务：注册处理函数并启动 worker（规格书 §53）
+	// 异步任务：注册处理函数并启动 worker（SPEC.md §27）
 	taskRepo := repository.NewTaskRepo(pg.DB)
 	registry := task.NewRegistry()
 	task.RegisterOriginalHandlers(registry, originals)
@@ -136,7 +136,7 @@ func run() error {
 	)
 	task.RegisterAnalysisHandlers(registry, analysis, invoker)
 
-	// 二创（规格书 §17-§23）：人物继承、融合、映射
+	// 二创（SPEC.md §9.1-§9.5）：人物继承、融合、映射
 	creative := service.NewCreativeService(
 		repository.NewCreativeRepo(pg.DB),
 		projectRepo,
@@ -152,7 +152,7 @@ func run() error {
 		creative,
 	)
 	task.RegisterWritingHandlers(registry, writing, invoker)
-	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
+	// 版本历史：人物 / 世界观 / 大纲的状态快照（SPEC.md §13）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)
 
 	// Redis

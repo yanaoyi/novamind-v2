@@ -1,5 +1,5 @@
 -- 0001_create_projects
--- 工程表（SPEC.md §4.1、§25）。
+-- 工程表（规格书 §7.1、§51）。
 -- 约定：UUID 主键、created_at/updated_at、软删除 deleted_at、枚举用 CHECK 约束。
 -- 本迁移必须可重复执行：使用 IF NOT EXISTS 与约束判空。
 -- 说明：主键默认值使用 gen_random_uuid()，PG 13+ 已内置，无需 pgcrypto 扩展，

@@ -1,5 +1,5 @@
 -- 0009_create_creative_core
--- 二创核心（SPEC.md §9.1 二创作品、§9.2 二创人物、§9.3 人物继承规则、§9.5 原著↔二创映射）。
+-- 二创核心（规格书 §17 二创作品、§18 二创人物、§19 人物继承规则、§23 原著↔二创映射）。
 -- 铁律：二创数据独立成表，原著表只读引用；继承关系用映射表显式记录，不靠"隐含推断"。
 
 CREATE TABLE IF NOT EXISTS creative_works (
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS creative_characters (
     source_character_id UUID REFERENCES original_characters(id),
     -- 派生后的 DNA（按继承权重算出来的结果，作者可继续改）
     dna                 JSONB        NOT NULL DEFAULT '{}'::jsonb,
-    -- 融合说明：每个维度取自哪个来源（SPEC.md §9.4）
+    -- 融合说明：每个维度取自哪个来源（规格书 §20）
     fusion_sources      JSONB        NOT NULL DEFAULT '[]'::jsonb,
     fusion_detail       JSONB        NOT NULL DEFAULT '[]'::jsonb,
     modifications       JSONB        NOT NULL DEFAULT '{}'::jsonb,
@@ -111,5 +111,5 @@ CREATE INDEX IF NOT EXISTS idx_mappings_original
 
 COMMENT ON TABLE creative_works  IS '二创作品：挂在 CREATIVE 类型工程下，必须指向一部原著';
 COMMENT ON TABLE creative_characters IS '二创人物：DNA 由继承权重派生，作者可继续修改';
-COMMENT ON TABLE inheritance_rules IS '人物继承权重（SPEC.md §9.3）：各维度 0-100，0 表示不继承';
-COMMENT ON TABLE original_creative_mappings IS '原著↔二创映射（SPEC.md §9.5）：显式记录每个二创元素从哪来';
+COMMENT ON TABLE inheritance_rules IS '人物继承权重（规格书 §19）：各维度 0-100，0 表示不继承';
+COMMENT ON TABLE original_creative_mappings IS '原著↔二创映射（规格书 §23）：显式记录每个二创元素从哪来';

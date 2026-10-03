@@ -20,7 +20,7 @@ var (
 	ErrCreativeTimelineBad       = errors.New("二创时间线数据不合法")
 )
 
-// WorldInheritanceMode 是二创世界的继承模式（SPEC.md §10.1）。
+// WorldInheritanceMode 是二创世界的继承模式（规格书 §21）。
 type WorldInheritanceMode string
 
 const (
@@ -45,7 +45,7 @@ func (m WorldInheritanceMode) CopiesRules() bool {
 	return m == WorldInheritFull || m == WorldInheritPartial
 }
 
-// CreativeWorld 是二创世界（SPEC.md §10.1）。
+// CreativeWorld 是二创世界（规格书 §21）。
 type CreativeWorld struct {
 	ID              string
 	CreativeWorkID  string
@@ -75,7 +75,7 @@ func (w *CreativeWorld) Validate() error {
 	return nil
 }
 
-// CreativeWorldRuleStatus 是二创世界规则的状态（SPEC.md §10.2）。
+// CreativeWorldRuleStatus 是二创世界规则的状态（规格书 §22）。
 type CreativeWorldRuleStatus string
 
 const (
@@ -137,7 +137,7 @@ func (r *CreativeWorldRule) Validate() error {
 	return nil
 }
 
-// DivergencePoint 是分叉点（SPEC.md §10.3）。
+// DivergencePoint 是分叉点（规格书 §24）。
 type DivergencePoint struct {
 	ID                string
 	CreativeWorkID    string
@@ -165,7 +165,7 @@ func (d *DivergencePoint) Validate() error {
 	return nil
 }
 
-// CreativeTimelineEventStatus 是二创时间线事件状态（SPEC.md §10.4）。
+// CreativeTimelineEventStatus 是二创时间线事件状态（规格书 §25）。
 type CreativeTimelineEventStatus string
 
 const (

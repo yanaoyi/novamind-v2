@@ -160,7 +160,7 @@ func (s *Server) getProposal(c *gin.Context) {
 // approveProposal 审核通过（可带作者修改）。
 //
 //	@Summary		通过提案
-//	@Description	作者确认后写入原著正式表；payload 可传修改后的内容（SPEC.md §22.3：AI 结果允许作者修改）。
+//	@Description	作者确认后写入原著正式表；payload 可传修改后的内容（规格书 §40：AI 结果允许作者修改）。
 //	@Tags			analysis
 //	@Accept			json
 //	@Produce		json

@@ -24,7 +24,7 @@ var (
 //
 // OPENAI_COMPATIBLE 覆盖 OpenAI / DeepSeek / 智谱 / Kimi / one-api / vLLM 等
 // 所有兼容 /chat/completions 的服务；ANTHROPIC 走 Messages API。
-// 业务层只认这个枚举，不认任何厂商 SDK（SPEC.md §16）。
+// 业务层只认这个枚举，不认任何厂商 SDK（规格书 §36）。
 type ProviderType string
 
 const (
@@ -54,7 +54,7 @@ func (p ProviderPurpose) Valid() bool {
 // ModelProvider 是模型接入配置。
 //
 // 注意：结构体里**没有明文密钥字段** —— 密钥只在 service 层解密后直接交给
-// gateway 使用，不进入任何返回值或日志（SPEC.md §33）。
+// gateway 使用，不进入任何返回值或日志（规格书 §64.13）。
 type ModelProvider struct {
 	ID          string
 	Name        string

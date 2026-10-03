@@ -1,5 +1,5 @@
 // Package storage 提供上传文件的存储抽象。
-// Phase 2 使用本地文件系统（SPEC.md §23「文件：V1 本地文件系统」）；
+// Phase 2 使用本地文件系统（规格书 §6「文件：V1 本地文件系统」）；
 // 生产可替换为 OSS / S3 / MinIO——接口不变，故 service 只依赖 Store。
 package storage
 

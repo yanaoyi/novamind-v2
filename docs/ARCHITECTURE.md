@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — 技术架构与代码规范
 
 > 项目：NovaMind V2
-> 本文件是技术层面的唯一裁定文件。开发中如与 `docs/SPEC.md`（V2 自持开发规格）冲突，以 `SPEC.md` 为准；如与本文件冲突，先改本文件再改代码。
+> 本文件是技术层面的唯一裁定文件。开发中如与根目录规格书 `NovaMind_V2_开发规格说明书.md` 冲突，以规格书为准；如与本文件冲突，先改本文件再改代码。
 
 ---
 
@@ -9,14 +9,14 @@
 
 | 层 | 选型 | 说明 |
 |---|---|---|
-| Backend | **Go + Gin + GORM** | SPEC.md §23 |
+| Backend | **Go + Gin + GORM** | 规格书 §6 |
 | 数据库 | **PostgreSQL 16**（+ pgvector） | JSONB 存 AI 半结构化结果 |
 | 缓存/队列 | **Redis + Asynq** | 异步任务 |
 | Frontend | **React 18 + TypeScript + Vite** | SPA；React 18 为与 antd v5 完全兼容（React 19 需额外补丁包），后续可评估升级 |
 | UI | **Ant Design** | 先求稳，不追求视觉定制 |
 | 状态 | **Zustand** | 轻量，够 V1 |
-| 编辑器 | **Tiptap** | SPEC.md §12.4 |
-| API 文档 | **OpenAPI 3 / Swagger** | SPEC.md §26.5 强制 |
+| 编辑器 | **Tiptap** | 规格书 §48 |
+| API 文档 | **OpenAPI 3 / Swagger** | 规格书 §64.4 强制 |
 | 迁移 | **golang-migrate（SQL 文件）** | 必须可重复执行 |
 | 文件 | 本地文件系统（抽象成 Storage 接口） | 生产可换 OSS/S3/MinIO |
 
@@ -77,7 +77,7 @@ HTTP → api → service → repository → DB
 * `domain` 不依赖任何外层（不 import gin/gorm）。
 * `api` 只做参数校验 + 调用 service + 组装响应，**不写业务逻辑**。
 * `repository` 只管数据存取，**不写业务判断**。
-* Agent 调用链（SPEC.md §20.2 强制）：
+* Agent 调用链（规格书 §35 强制）：
 
 ```
 Agent → Tool → Service → Repository → DB
@@ -92,7 +92,7 @@ Agent → Tool → Service → Repository → DB
 
 ## 4. 数据与迁移
 
-强制规则（SPEC.md §25）：
+强制规则（规格书 §51）：
 
 1. 所有表 **UUID 主键**；
 2. `created_at` / `updated_at`；
@@ -113,8 +113,8 @@ Agent → Tool → Service → Repository → DB
 
 ## 5. API 规范
 
-* 前缀固定 `/api/v1`（SPEC.md §26）。
-* REST 风格资源路径，与 `SPEC.md` §26 列举的端点保持一致。
+* 前缀固定 `/api/v1`（规格书 §49）。
+* REST 风格资源路径，与规格书 §49 列举的端点保持一致。
 * 统一响应包：
 
 ```json
@@ -149,7 +149,7 @@ Prompt 模板文件化 + 版本化：`prompts/<域>/<name>.<version>.md`，代�
 
 ### 6.3 Context Engine（写给 Agent 的上下文）
 
-优先级固定（SPEC.md §18.1）：
+优先级固定（规格书 §31）：
 
 ```
 1 用户当前指令 → 2 当前章节/场景 → 3 二创人物 → 4 二创世界 → 5 二创时间线
@@ -168,7 +168,7 @@ Prompt 模板文件化 + 版本化：`prompts/<域>/<name>.<version>.md`，代�
 | Project | 本作品设定 |
 | Short-term | 当前章节、当前场景、最近几轮对话 |
 
-### 6.5 结构化输出与容错（SPEC.md §21.1、§21.2）
+### 6.5 结构化输出与容错（规格书 §57、§58）
 
 AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试 → 仍失败则任务失败。
 **绝不把未通过校验的 AI 输出写入数据库。**
@@ -177,7 +177,7 @@ AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试
 
 ## 7. 任务系统
 
-所有长任务异步（SPEC.md §27）：`Task{id, project_id, type, status, progress, input, output, error, created_at, started_at, finished_at}`，
+所有长任务异步（规格书 §53）：`Task{id, project_id, type, status, progress, input, output, error, created_at, started_at, finished_at}`，
 状态 `PENDING/RUNNING/PAUSED/COMPLETED/FAILED/CANCELLED`，进度需可分阶段展示（原著分析示例：章节解析 ✓ / 人物提取 ✓ / 世界观分析 运行中 / 时间线 等待）。
 
 原著分析必须切成 9 个阶段任务，每阶段可单独重试。
@@ -187,7 +187,7 @@ AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试
 ## 8. 检索
 
 `原著章节 → Chunk → Embedding → pgvector`；检索时组合：语义搜索 + 章节范围 + 人物 + 时间 + 场景。
-**不要只靠向量相似度**（SPEC.md §28）。
+**不要只靠向量相似度**（规格书 §55）。
 
 ---
 
@@ -265,7 +265,7 @@ AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试
 
 ---
 
-## 11. 测试策略（SPEC.md §32）
+## 11. 测试策略（规格书 §67）
 
 | 层 | 要求 |
 |---|---|
@@ -285,7 +285,7 @@ AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试
 * 命名：Go 用惯用短名，导出符号必须有注释；TS 组件 PascalCase、hooks `useXxx`。
 * 错误：Go 侧 `fmt.Errorf("...: %w", err)` 包装，统一在 api 层翻译成错误码；不吞错。
 * 日志：结构化（`log/slog`），含 `trace_id / project_id / task_id`；重要操作必须记录。
-* 配置：全部走环境变量 + `.env`；**`.env` 不提交 Git**；密钥不得硬编码（SPEC.md §33/14）。
+* 配置：全部走环境变量 + `.env`；**`.env` 不提交 Git**；密钥不得硬编码（规格书 §64.13/14）。
 * 纪律：不许"为实现一个功能顺手重构全项目"；改动前先读模块、判断能否复用、先设计再改、再测、再更新状态。
 
 ---
@@ -319,4 +319,4 @@ AI 返回 **JSON** → 后端用 JSON Schema 校验 → 失败自动修复重试
 v1 是 Next.js + SQLite 的单体实现，与 V2 的技术路线（Go + PG + Redis + React）不同。
 v2 的目标是把「Original/Creative 分离、Character DNA、分叉点、映射」这些结构化模型真正落到数据层。
 
-**规格自持（2026-10-03 起）**：NovaMind V2 的开发规格基准是 `docs/SPEC.md`，由 V2 自己维护；`novamind-pro/` 里的《NovaMind V1 开发规格说明书》**不再作为 V2 的开发依据**，它只作为历史归档与产品交互参考保留，v1 代码**保持不变、不动一行**。
+**规格基准（2026-10-04 定）**：v1 与 v2 是同一套规格，唯一验收基准是仓库根目录的 `NovaMind_V2_开发规格说明书.md`（原 v1 规格书，已改名移入本仓库）。`docs/SPEC.md` 只是实施状态对账表，不构成规格。v1 代码（`../novamind-pro/`）**保持不变、不动一行**，仅作交互参考。

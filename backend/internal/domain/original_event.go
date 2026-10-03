@@ -22,7 +22,7 @@ var (
 	ErrPlotArcTypeInvalid = errors.New("剧情弧类型非法")
 )
 
-// PlotArcType 是剧情弧类型（SPEC.md §8.3）。
+// PlotArcType 是剧情弧类型（规格书 §16）。
 type PlotArcType string
 
 const (
@@ -43,7 +43,7 @@ func (t PlotArcType) Valid() bool {
 	}
 }
 
-// OriginalEvent 是原著事件（SPEC.md §8.1）。
+// OriginalEvent 是原著事件（规格书 §14）。
 type OriginalEvent struct {
 	ID             string
 	OriginalWorkID string
@@ -135,7 +135,7 @@ func (t *TimelineEntry) Normalize() {
 	t.Duration = strings.TrimSpace(t.Duration)
 }
 
-// PlotArc 是剧情弧（SPEC.md §8.3）。
+// PlotArc 是剧情弧（规格书 §16）。
 type PlotArc struct {
 	ID             string
 	OriginalWorkID string

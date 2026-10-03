@@ -257,7 +257,7 @@ func (s *Server) testModelProvider(c *gin.Context) {
 	})
 }
 
-// listPrompts Prompt 模板清单（版本化，SPEC.md §17）。
+// listPrompts Prompt 模板清单（版本化，规格书 §37）。
 //
 //	@Summary	Prompt 模板清单
 //	@Tags		ai

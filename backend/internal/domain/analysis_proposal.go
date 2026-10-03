@@ -16,7 +16,7 @@ var (
 	ErrProposalPayloadInvalid = errors.New("提案内容不合法")
 )
 
-// AnalysisStage 是分析阶段（SPEC.md §22.1 的分阶段任务）。
+// AnalysisStage 是分析阶段（规格书 §54 的分阶段任务）。
 type AnalysisStage string
 
 const (

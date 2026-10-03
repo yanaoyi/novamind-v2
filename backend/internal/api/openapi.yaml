@@ -1534,7 +1534,7 @@ paths:
       tags: [analysis]
       summary: 触发原著分析（异步）
       description: |
-        按阶段分析原著。**AI 产出只进入待审核提案，不会直接改写原著数据**（SPEC.md §22.2）。
+        按阶段分析原著。**AI 产出只进入待审核提案，不会直接改写原著数据**（规格书 §52）。
         阶段：chapter_summary / character_extract / world_extract / plot_extract。
       parameters:
         - name: id
@@ -3592,7 +3592,7 @@ components:
     EntityVersion:
       type: object
       description: |
-        人物 / 世界观 / 大纲的状态快照（SPEC.md §13）。
+        人物 / 世界观 / 大纲的状态快照（规格书 §59）。
         恢复只回填快照里记录到的字段，不回滚删除动作。
       required: [id, entity_type, entity_id, creative_work_id, version_no, created_at]
       properties:

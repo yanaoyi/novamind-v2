@@ -15,7 +15,7 @@ var (
 	ErrTaskStatusInvalid  = errors.New("任务状态非法")
 )
 
-// TaskStatus 是任务状态（SPEC.md §27）。
+// TaskStatus 是任务状态（规格书 §53）。
 type TaskStatus string
 
 const (

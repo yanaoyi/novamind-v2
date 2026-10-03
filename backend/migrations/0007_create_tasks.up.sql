@@ -1,5 +1,5 @@
 -- 0007_create_tasks
--- 异步任务（SPEC.md §27）：所有长任务异步执行，可查看进度、可重试、可取消。
+-- 异步任务（规格书 §53）：所有长任务异步执行，可查看进度、可重试、可取消。
 -- 实现方式：PostgreSQL 做队列（UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)），
 -- 好处是任务状态与业务数据同库同事务，重启不丢任务；将来要换 Asynq 也只需替换 worker 层。
 

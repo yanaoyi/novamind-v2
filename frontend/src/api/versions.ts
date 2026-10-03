@@ -1,7 +1,7 @@
 import { request } from './client'
 import type { EntityVersion, EntityVersionType, ListOf } from './types'
 
-/** 版本历史（SPEC.md §13）：人物 / 世界观 / 大纲 */
+/** 版本历史（规格书 §59）：人物 / 世界观 / 大纲 */
 export const versionApi = {
   /** 列表（不带 payload，避免一次拉回几十份快照） */
   list(entityType: EntityVersionType, entityId: string) {

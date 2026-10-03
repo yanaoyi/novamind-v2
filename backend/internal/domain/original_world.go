@@ -24,7 +24,7 @@ var (
 	ErrFactionDuplicate    = errors.New("同名势力已存在")
 )
 
-// OriginalWorld 是原著世界观（SPEC.md §7）。
+// OriginalWorld 是原著世界观（规格书 §13）。
 type OriginalWorld struct {
 	ID             string
 	OriginalWorkID string
@@ -75,7 +75,7 @@ func (r *WorldRule) Validate() error {
 	return nil
 }
 
-// Location 是地点，支持父子层级（SPEC.md §7 Location）。
+// Location 是地点，支持父子层级（规格书 §13 Location）。
 type Location struct {
 	ID               string
 	WorldID          string

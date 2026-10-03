@@ -39,7 +39,7 @@ func (s CreativeWorkStatus) Valid() bool {
 	return s == CreativeDraft || s == CreativeWriting || s == CreativeFinished
 }
 
-// CreativeSourceType 是二创人物的来源类型（SPEC.md §9.2）。
+// CreativeSourceType 是二创人物的来源类型（规格书 §18）。
 type CreativeSourceType string
 
 const (
@@ -59,7 +59,7 @@ func (t CreativeSourceType) Valid() bool {
 	}
 }
 
-// MappingType 是映射类型（SPEC.md §9.5）。
+// MappingType 是映射类型（规格书 §23）。
 type MappingType string
 
 const (
@@ -81,7 +81,7 @@ func (m MappingType) Valid() bool {
 	}
 }
 
-// CreativeWork 是二创作品（SPEC.md §9.1）。
+// CreativeWork 是二创作品（规格书 §17）。
 type CreativeWork struct {
 	ID                string
 	ProjectID         string
@@ -115,7 +115,7 @@ func (w *CreativeWork) Validate() error {
 	return nil
 }
 
-// InheritanceRule 是人物继承权重（SPEC.md §9.3）。
+// InheritanceRule 是人物继承权重（规格书 §19）。
 // 每个维度 0-100：0 表示不继承该维度，100 表示完全保留。
 type InheritanceRule struct {
 	ID                  string
@@ -165,7 +165,7 @@ func (r InheritanceRule) Validate() error {
 	return nil
 }
 
-// FusionSource 是融合的一个来源（SPEC.md §9.4）。
+// FusionSource 是融合的一个来源（规格书 §20）。
 type FusionSource struct {
 	CharacterID string `json:"character_id"`
 	Name        string `json:"name"`
@@ -180,7 +180,7 @@ type FusionAttribution struct {
 	Weight    int    `json:"weight"`
 }
 
-// CreativeCharacter 是二创人物（SPEC.md §9.2）。
+// CreativeCharacter 是二创人物（规格书 §18）。
 type CreativeCharacter struct {
 	ID                string
 	CreativeWorkID    string
@@ -232,7 +232,7 @@ func (c *CreativeCharacter) Validate() error {
 	return c.DNA.Validate()
 }
 
-// OriginalCreativeMapping 是原著↔二创映射（SPEC.md §9.5）。
+// OriginalCreativeMapping 是原著↔二创映射（规格书 §23）。
 type OriginalCreativeMapping struct {
 	ID             string
 	CreativeWorkID string
@@ -261,7 +261,7 @@ func (m *OriginalCreativeMapping) Validate() error {
 // ApplyInheritance 按继承权重从原著人物 DNA 派生出二创人物 DNA。
 //
 // 规则：新权重 = 原著该维度权重 × 继承权重 ÷ 100；继承权重为 0 的维度直接丢弃。
-// 这就是SPEC.md §9.3 示例（性格 90%、语言风格 30%、能力 0%）的落地算法。
+// 这就是规格书 §19 示例（性格 90%、语言风格 30%、能力 0%）的落地算法。
 func ApplyInheritance(source CharacterDNA, rule InheritanceRule) CharacterDNA {
 	scale := func(d DNADimension, w int) DNADimension {
 		if w <= 0 {

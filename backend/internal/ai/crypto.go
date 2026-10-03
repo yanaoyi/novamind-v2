@@ -1,6 +1,6 @@
 // Package ai 是 Model Gateway 与 Prompt Engine 的实现。
 //
-// 铁律（SPEC.md §16 / §33）：
+// 铁律（规格书 §36 / §64.13）：
 //   - 业务层只能通过本包的 Gateway 调模型，不得直接依赖任何厂商 SDK；
 //   - API Key 只以密文入库、只在内存中解密使用，绝不进日志或响应。
 package ai

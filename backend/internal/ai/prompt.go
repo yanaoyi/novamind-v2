@@ -15,7 +15,7 @@ import (
 	"github.com/yanaoyi/novamindv2/backend/prompts"
 )
 
-// Prompt 版本化模板（SPEC.md §17）。
+// Prompt 版本化模板（规格书 §37）。
 type Prompt struct {
 	Name    string
 	Version string

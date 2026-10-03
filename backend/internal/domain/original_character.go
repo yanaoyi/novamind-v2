@@ -34,7 +34,7 @@ const (
 // Valid 判断来源是否合法。
 func (s CharacterSource) Valid() bool { return s == SourceManual || s == SourceAI }
 
-// RelationType 是人物关系类型（SPEC.md §6.3）。
+// RelationType 是人物关系类型（规格书 §12）。
 type RelationType string
 
 const (
@@ -68,8 +68,8 @@ type DNADimension struct {
 	Weight int    `json:"weight"`
 }
 
-// CharacterDNA 是人物 DNA（SPEC.md §6.2）。
-// 维度与 SPEC.md §6.2 一一对应；零值表示该维度未填写。
+// CharacterDNA 是人物 DNA（规格书 §11）。
+// 维度与 规格书 §11 一一对应；零值表示该维度未填写。
 type CharacterDNA struct {
 	Personality         DNADimension `json:"personality"`
 	Values              DNADimension `json:"values"`
@@ -111,7 +111,7 @@ func (d CharacterDNA) Validate() error {
 	return nil
 }
 
-// OriginalCharacter 是原著人物（SPEC.md §6.1）。
+// OriginalCharacter 是原著人物（规格书 §10）。
 type OriginalCharacter struct {
 	ID               string
 	OriginalWorkID   string
@@ -184,7 +184,7 @@ func (c *OriginalCharacter) Normalize() {
 	c.Aliases = aliases
 }
 
-// CharacterRelationship 是人物关系（有向边，SPEC.md §6.3）。
+// CharacterRelationship 是人物关系（有向边，规格书 §12）。
 type CharacterRelationship struct {
 	ID                string
 	OriginalWorkID    string

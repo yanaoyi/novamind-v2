@@ -1,5 +1,5 @@
 -- 0006_create_model_providers
--- 模型接入配置（SPEC.md §16 Model Gateway）。
+-- 模型接入配置（规格书 §36 Model Gateway）。
 -- 密钥一律加密存储（AES-256-GCM，密钥由 NOVAMIND_SECRET 派生），且**永不通过 API 返回**。
 
 CREATE TABLE IF NOT EXISTS model_providers (

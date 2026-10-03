@@ -1,5 +1,5 @@
 -- 0011_create_writing
--- 写作系统（SPEC.md §12.1 大纲、§12.2 章节、§12.3 场景、§13 版本管理）+ 一致性检查（§14）。
+-- 写作系统（规格书 §27 大纲、§28 章节、§29 场景、§59 版本管理）+ 一致性检查（§39）。
 
 CREATE TABLE IF NOT EXISTS creative_volumes (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS creative_chapters (
     content          TEXT         NOT NULL DEFAULT '',
     status           VARCHAR(10)  NOT NULL DEFAULT 'DRAFT',
     word_count       INTEGER      NOT NULL DEFAULT 0,
-    -- 大纲信息（SPEC.md §12.1 OutlineNode）
+    -- 大纲信息（规格书 §27 OutlineNode）
     purpose          TEXT         NOT NULL DEFAULT '',
     conflict         TEXT         NOT NULL DEFAULT '',
     outcome          TEXT         NOT NULL DEFAULT '',
@@ -99,5 +99,5 @@ CREATE INDEX IF NOT EXISTS idx_consistency_issues_work
     ON consistency_issues (creative_work_id, status, created_at DESC) WHERE deleted_at IS NULL;
 
 COMMENT ON TABLE creative_chapters IS '二创章节；content 为正文，另存大纲信息（purpose/conflict/outcome）';
-COMMENT ON TABLE chapter_versions IS '章节版本（SPEC.md §13）：每次保存正文生成一版，可查看/恢复/比较';
-COMMENT ON TABLE consistency_issues IS '一致性检查问题（SPEC.md §14）';
+COMMENT ON TABLE chapter_versions IS '章节版本（规格书 §59）：每次保存正文生成一版，可查看/恢复/比较';
+COMMENT ON TABLE consistency_issues IS '一致性检查问题（规格书 §39）';

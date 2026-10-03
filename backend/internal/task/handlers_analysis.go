@@ -10,7 +10,7 @@ import (
 
 // RegisterAnalysisHandlers 注册各分析阶段任务。
 //
-// 注意：这些 handler **只产出提案**，不会写原著正式表 —— 作者在界面上通过后才落库（SPEC.md §22.2）。
+// 注意：这些 handler **只产出提案**，不会写原著正式表 —— 作者在界面上通过后才落库（规格书 §52）。
 func RegisterAnalysisHandlers(reg *Registry, analysis *service.AnalysisService, runner service.PromptRunner) {
 	stages := []domain.AnalysisStage{
 		domain.StageChapterSummary,

@@ -18,6 +18,8 @@ type WritingRepository interface {
 	CreateChapter(ctx context.Context, c *domain.CreativeChapter) error
 	GetChapter(ctx context.Context, id string) (*domain.CreativeChapter, error)
 	ListChapters(ctx context.Context, workID string, withContent bool) ([]domain.CreativeChapter, error)
+	// 前情提要只需要最近几章，别把整本目录都查出来（审查 P2）
+	ListChaptersBefore(ctx context.Context, workID string, chapterNo int, limit int) ([]domain.CreativeChapter, error)
 	UpdateChapter(ctx context.Context, c *domain.CreativeChapter) error
 	DeleteChapter(ctx context.Context, id string) error
 
@@ -352,18 +354,12 @@ func (s *WritingService) BuildContext(ctx context.Context, chapterID string) (*C
 	}
 
 	// 前情：本章之前最近 3 章的摘要
-	if chapters, err := s.repo.ListChapters(ctx, chapter.CreativeWorkID, false); err == nil {
+	if chapters, err := s.repo.ListChaptersBefore(ctx, chapter.CreativeWorkID, chapter.ChapterNo, 3); err == nil {
 		previous := []string{}
 		for _, c := range chapters {
-			if c.ChapterNo >= chapter.ChapterNo {
-				break
-			}
 			if c.Summary != "" {
 				previous = append(previous, fmt.Sprintf("第%d章 %s：%s", c.ChapterNo, c.Title, c.Summary))
 			}
-		}
-		if len(previous) > 3 {
-			previous = previous[len(previous)-3:]
 		}
 		out.PreviousContext = strings.Join(previous, "\n")
 	}

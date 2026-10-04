@@ -21,6 +21,9 @@ import { projectApi } from '../../api/projects'
 import type { Project } from '../../api/types'
 import { useOriginalStore } from '../../stores/originalStore'
 
+/** 与后端 UPLOAD_MAX_MB 默认值保持一致（50MB），超了在浏览器里就拦下 */
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '待导入',
   PARSED: '已导入',
@@ -234,7 +237,14 @@ export default function OriginalOverviewPage() {
             maxCount={1}
             fileList={fileList}
             beforeUpload={(f) => {
-              setFile(f as unknown as File)
+              // 客户端先拦一道体积：服务端上限 50MB，让浏览器直接把大文件挡掉，
+              // 不必等上传完再收到 413（审查 P2：提示了上限却没有校验）
+              if (f.size > MAX_UPLOAD_BYTES) {
+                message.error(`文件 ${(f.size / 1024 / 1024).toFixed(1)}MB 超过上限 50MB，请先拆分或压缩`)
+                return Upload.LIST_IGNORE
+              }
+              // antd 的 RcFile 本身就是 File 的子类，不需要双重断言
+              setFile(f)
               setFileList([{ uid: f.uid, name: f.name }])
               return false // 阻止 antd 自动上传，改为点「开始导入」
             }}

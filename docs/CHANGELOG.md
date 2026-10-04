@@ -867,3 +867,12 @@ PUT|DELETE     /plot-arcs/{id}
 * 全量冒烟 **315 项全过**：phase2 72、phase2-pdf 10、phase3 25、phase3-analysis 24、phase3-tasks 19、phase4 33、phase4b 32、phase5 30、phase6b-versions 23、phase8-outline 47。
 * 真实模型端到端 **37/37**（跑完确认默认模型已还原为验证账号）。
 * 后端 `go build` / `go vet` / `go test ./...` 全绿；前端未改动。
+
+### 2026-10-05 · P2 收尾第二批：前情查询下推、节点序号并发安全、菜单高亮、上传体积预检
+
+* **`BuildContext` 不再全表扫描**（审查 P2）：新增 `WritingRepo.ListChaptersBefore(workID, chapterNo, limit)`，写作上下文只取"本章之前最近 3 章、且摘要非空"的几行（数据库按章号倒序 `LIMIT 3`，返回时恢复时间顺序）。此前是拉全量章节目录再在内存里截取，长篇作品每次生成都要把整张目录读一遍。
+* **大纲节点序号并发安全**（审查 P2）：新增 `OutlineRepo.CreateNodeLocked`，在事务内用大纲级 `pg_advisory_xact_lock` 串行化"取号 + 插入"。此前 `MAX(sequence)+1` 与插入分属两条语句，两个请求并发会拿到同一序号、排序出现歧义；锁只作用于这一份大纲，不影响其它大纲并发写。
+* **菜单高亮按最长前缀匹配**（审查 P2）：`/original/chapters/3` 这类详情路由此前整条菜单都不高亮，现在会正确点亮「原著 · 章节」。
+* **上传体积前端预检**（审查 P2）：拖入超过 50MB（与后端 `UPLOAD_MAX_MB` 默认值一致）的文件直接拦下并提示，不再等上传完才收到服务端拒绝；同时去掉 `f as unknown as File` 的多余双重断言（antd 的 RcFile 本就是 File）。
+
+**验证**：后端 `go build`/`go vet`/`go test ./...` 全绿；前端 `tsc -b` + `vitest` **11 文件 46 例全绿**；`smoke-phase8-outline.sh` **47/47**、`smoke-phase5.sh` **30/30**（两条链路分别覆盖节点写入与写作上下文）。

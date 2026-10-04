@@ -280,6 +280,65 @@ func (r *OutlineRepo) NextNodeSequence(ctx context.Context, outlineID string, pa
 	return maxSeq + 1, nil
 }
 
+// CreateNodeLocked 在事务里取号并写入节点（同一份大纲串行化）。
+//
+// 审查 P2：原先是"先 MAX(sequence)+1 取号、再另开一条语句插入"，
+// 两个请求并发时会拿到同一个序号，节点顺序出现歧义。
+// 这里用大纲级 advisory lock 把同一份大纲的取号+插入串起来：
+// 锁只在事务内有效，且只锁这一份大纲，不影响其它大纲的并发写入。
+func (r *OutlineRepo) CreateNodeLocked(ctx context.Context, n *domain.OutlineNode) error {
+	now := time.Now().UTC()
+	characters, err := marshalCharacters(n.Characters)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("生成大纲节点 ID 失败: %w", err)
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", n.OutlineID).Error; err != nil {
+			return fmt.Errorf("锁定大纲失败: %w", err)
+		}
+		if n.Sequence <= 0 {
+			seq, err := nextNodeSequenceWith(ctx, tx, n.OutlineID, n.ParentID)
+			if err != nil {
+				return err
+			}
+			n.Sequence = seq
+		}
+		n.ID = id.String()
+		n.CreatedAt, n.UpdatedAt = now, now
+		if err := tx.Create(&outlineNodeModel{
+			ID: n.ID, OutlineID: n.OutlineID, ParentID: n.ParentID, Level: int16(n.Level),
+			Sequence: n.Sequence, Title: n.Title, Summary: n.Summary, Purpose: n.Purpose,
+			Characters: characters, Location: n.Location, Conflict: n.Conflict, Outcome: n.Outcome,
+			CreatedAt: now, UpdatedAt: now,
+		}).Error; err != nil {
+			if isForeignKeyViolation(err) {
+				return domain.ErrOutlineParentNotFound
+			}
+			return fmt.Errorf("创建大纲节点失败: %w", err)
+		}
+		return nil
+	})
+}
+
+// nextNodeSequenceWith 是 NextNodeSequence 的事务版实现（可传 tx）。
+func nextNodeSequenceWith(ctx context.Context, db *gorm.DB, outlineID string, parentID *string) (int, error) {
+	query := db.WithContext(ctx).Model(&outlineNodeModel{}).Where("outline_id = ?", outlineID)
+	if parentID == nil {
+		query = query.Where("parent_id IS NULL")
+	} else {
+		query = query.Where("parent_id = ?", *parentID)
+	}
+	var maxSeq int
+	if err := query.Select("COALESCE(MAX(sequence), 0)").Scan(&maxSeq).Error; err != nil {
+		return 0, fmt.Errorf("查询节点序号失败: %w", err)
+	}
+	return maxSeq + 1, nil
+}
+
 // ReplaceTree 用一整棵树替换大纲节点（事务内先软删旧节点，再按父子顺序插入新节点）。
 //
 // parents[i] 是新节点序列中第 i 个节点的父节点下标（-1 = 根）。

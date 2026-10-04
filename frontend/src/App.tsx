@@ -88,8 +88,30 @@ function buildMenu() {
   ]
 }
 
+/** 所有可高亮的菜单 key（用于按前缀匹配，见下方 selectedKeys） */
+const ALL_MENU_KEYS = [
+  '/dashboard',
+  '/projects',
+  ...ORIGINAL_PAGES.map((p) => `/original/${p.path}`),
+  ...CREATIVE_PAGES.map((p) => `/creative/${p.path}`),
+  ...SIMPLE_PAGES.map((p) => p.path),
+]
+
+/**
+ * 按"最长前缀"决定菜单高亮。
+ *
+ * 之前用 `selectedKeys={[location.pathname]}`：像 /original/chapters/3 这种详情路由
+ * 在菜单里没有精确匹配项，于是整条菜单都不高亮，使用者会以为自己"不在任何板块"（审查 P2）。
+ */
+function selectedMenuKeys(pathname: string): string[] {
+  const matched = ALL_MENU_KEYS.filter((key) => pathname === key || pathname.startsWith(`${key}/`))
+  if (matched.length === 0) return [pathname]
+  return [matched.reduce((longest, key) => (key.length > longest.length ? key : longest))]
+}
+
 export default function App() {
   const location = useLocation()
+  const selectedKeys = selectedMenuKeys(location.pathname)
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -107,7 +129,7 @@ export default function App() {
         <Sider width={200} theme="light">
           <Menu
             mode="inline"
-            selectedKeys={[location.pathname]}
+            selectedKeys={selectedKeys}
             defaultOpenKeys={['original', 'creative']}
             style={{ height: '100%', borderRight: 0 }}
             items={buildMenu()}

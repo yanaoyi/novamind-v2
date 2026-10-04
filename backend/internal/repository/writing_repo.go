@@ -204,6 +204,35 @@ func (r *WritingRepo) ListChapters(ctx context.Context, workID string, withConte
 	return out, nil
 }
 
+// ListChaptersBefore 取某章之前最近的 limit 章（只带摘要，不含正文）。
+//
+// 写作上下文只要"前情提要"，此前是 ListChapters 拉全量章节再在内存里截取，
+// 长篇作品每次生成都要把整张家目录全查一遍（审查 P2）。这里让数据库只回需要的几行。
+func (r *WritingRepo) ListChaptersBefore(
+	ctx context.Context,
+	workID string,
+	chapterNo int,
+	limit int,
+) ([]domain.CreativeChapter, error) {
+	if limit <= 0 {
+		limit = 3
+	}
+	var models []chapterModel
+	if err := r.db.WithContext(ctx).Model(&chapterModel{}).
+		Where("creative_work_id = ? AND chapter_no < ? AND deleted_at IS NULL AND summary <> ''", workID, chapterNo).
+		Select("id, creative_work_id, volume_id, outline_node_id, chapter_no, title, summary, status, word_count, purpose, conflict, outcome, created_at, updated_at, deleted_at, '' as content").
+		Order("chapter_no DESC").Limit(limit).
+		Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("查询前情章节失败: %w", err)
+	}
+	// 查询按章号倒序（为了取"最近 N 章"），返回时恢复成时间顺序，便于直接拼进提示词
+	out := make([]domain.CreativeChapter, 0, len(models))
+	for i := len(models) - 1; i >= 0; i-- {
+		out = append(out, toDomainCreativeChapter(models[i]))
+	}
+	return out, nil
+}
+
 // UpdateChapter 更新章节（含大纲信息；正文更新时由 service 负责生成版本）。
 func (r *WritingRepo) UpdateChapter(ctx context.Context, c *domain.CreativeChapter) error {
 	now := time.Now().UTC()

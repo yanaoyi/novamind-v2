@@ -22,6 +22,8 @@ type OutlineRepository interface {
 	ListNodes(ctx context.Context, outlineID string) ([]domain.OutlineNode, error)
 	GetNode(ctx context.Context, id string) (*domain.OutlineNode, error)
 	CreateNode(ctx context.Context, n *domain.OutlineNode) error
+	// CreateNodeLocked 取号 + 写入在同一事务内串行化（审查 P2：并发建节点序号会撞）
+	CreateNodeLocked(ctx context.Context, n *domain.OutlineNode) error
 	UpdateNode(ctx context.Context, n *domain.OutlineNode) error
 	DeleteNodeSubtree(ctx context.Context, id string) (int, error)
 	NextNodeSequence(ctx context.Context, outlineID string, parentID *string) (int, error)
@@ -223,12 +225,9 @@ func (s *OutlineService) CreateNode(ctx context.Context, outlineID string, in Cr
 		}
 		level = parent.Level + 1
 	}
-	sequence, err := s.repo.NextNodeSequence(ctx, outlineID, in.ParentID)
-	if err != nil {
-		return nil, err
-	}
 	node := &domain.OutlineNode{
-		OutlineID: outlineID, ParentID: in.ParentID, Level: level, Sequence: sequence,
+		// Sequence 交给仓储在事务里取（并发安全），这里不预取
+		OutlineID: outlineID, ParentID: in.ParentID, Level: level,
 		Title: in.Title, Summary: in.Summary, Purpose: in.Purpose, Characters: in.Characters,
 		Location: in.Location, Conflict: in.Conflict, Outcome: in.Outcome,
 	}
@@ -236,7 +235,7 @@ func (s *OutlineService) CreateNode(ctx context.Context, outlineID string, in Cr
 	if err := node.Validate(); err != nil {
 		return nil, err
 	}
-	if err := s.repo.CreateNode(ctx, node); err != nil {
+	if err := s.repo.CreateNodeLocked(ctx, node); err != nil {
 		return nil, err
 	}
 	return node, nil

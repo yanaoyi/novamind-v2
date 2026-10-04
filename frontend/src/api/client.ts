@@ -1,4 +1,5 @@
 import type { Envelope } from './types'
+import { getToken, notifyTokenRequired } from './token'
 
 /** 开发环境走 vite 代理（/api → 后端:8080），生产可用 VITE_API_BASE 覆盖 */
 export const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api/v1'
@@ -24,10 +25,12 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // 手动写死 application/json 会让后端解析不出文件。
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
 
+  const token = getToken()
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   })
@@ -40,8 +43,14 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
+    const code = body?.error?.code ?? 'HTTP_ERROR'
+    if (res.status === 401 || code === 'UNAUTHORIZED') {
+      // 让界面弹出"填访问令牌"的入口，而不是只留一句报错
+      notifyTokenRequired()
+      throw new ApiError('UNAUTHORIZED', body?.error?.message ?? '需要访问令牌', res.status)
+    }
     throw new ApiError(
-      body?.error?.code ?? 'HTTP_ERROR',
+      code,
       body?.error?.message ?? `请求失败（HTTP ${res.status}）`,
       res.status,
     )

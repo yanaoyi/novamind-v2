@@ -29,6 +29,10 @@ const (
 	CodeNotFound   = "NOT_FOUND"
 	CodeInternal   = "INTERNAL_ERROR"
 	CodeConflict   = "CONFLICT"
+	// CodeUnauthorized 表示缺少或错误的访问令牌（业务接口不裸奔）。
+	CodeUnauthorized = "UNAUTHORIZED"
+	// CodeTooManyRequests 表示触发了限流。
+	CodeTooManyRequests = "TOO_MANY_REQUESTS"
 )
 
 // OK 返回成功响应。

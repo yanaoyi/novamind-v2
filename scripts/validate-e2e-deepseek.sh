@@ -14,6 +14,9 @@
 # 清理：结束时删除本次创建的两个工程（原著 / 二创）；验证账号保留到交付前再 purge。
 set -uo pipefail
 
+# 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
+
 API="${NOVAMIND_API_BASE:-http://127.0.0.1:8080/api/v1}"
 WORK_DIR="$(mktemp -d)"
 PASS=0

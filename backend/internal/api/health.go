@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -49,6 +50,12 @@ func (s *Server) handleHealth(c *gin.Context) {
 			healthy = false
 		}
 	}
+	// 鉴权状态也放进健康检查：部署后一眼能看出"令牌到底生效没有"
+	authStatus := "disabled"
+	if s.cfg != nil && s.cfg.AdminToken != "" {
+		authStatus = "enabled"
+	}
+	checks["auth"] = DependencyStatus{Status: authStatus}
 
 	status := "ok"
 	if !healthy {
@@ -74,7 +81,10 @@ func runChecker(ctx context.Context, checker Checker) DependencyStatus {
 		return DependencyStatus{Status: "not_configured"}
 	}
 	if err := checker(ctx); err != nil {
-		return DependencyStatus{Status: "error", Detail: err.Error()}
+		// 健康检查是匿名可访问的端点，错误详情（可能含主机名/库名/schema）只写进程日志，
+		// 不返回给调用方，避免"健康检查变内网信息泄露面"。
+		slog.Warn("健康检查失败", slog.Any("error", err))
+		return DependencyStatus{Status: "error"}
 	}
 	return DependencyStatus{Status: "ok"}
 }

@@ -57,6 +57,18 @@ source scripts/dev-env.sh     # 把 ~/.local/go/bin 放到 PATH 最前
 
 ## 启动
 
+> **首次访问要填访问令牌**：所有业务接口都要求 `Authorization: Bearer <ADMIN_TOKEN>`（安全基线，
+> 不让接口在局域网里裸奔）。令牌在服务端 `backend/.env` 里配置：
+>
+> ```bash
+> # 在 backend/.env 中生成（值只留在服务器上，不进前端产物）
+> echo "ADMIN_TOKEN=$(openssl rand -hex 32)" >> backend/.env
+> grep '^ADMIN_TOKEN=' backend/.env        # 把值粘到浏览器弹出的「需要访问令牌」里
+> ```
+>
+> 生产环境（`APP_ENV=production`）未配置令牌会**拒绝启动**；开发环境未配置会放行并在日志里告警。
+> 本地冒烟要用 127.0.0.1 的假模型服务，所以 `backend/.env` 里同时打开 `ALLOW_PRIVATE_MODEL_BASE=true`（生产保持 false）。
+
 **推荐**（后台运行、关掉终端也不会被杀，含就绪检查）：
 
 ```bash

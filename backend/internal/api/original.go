@@ -414,6 +414,9 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrExportFormatInvalid),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true
+	case errors.Is(err, ai.ErrAPIBaseNotAllowed):
+		// SSRF 防护：地址不被允许属于"调用方输入有问题"，不是服务器故障
+		return http.StatusBadRequest, CodeBadRequest, true
 	default:
 		return 0, "", false
 	}

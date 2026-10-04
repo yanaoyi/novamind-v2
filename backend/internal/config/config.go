@@ -26,6 +26,14 @@ type Config struct {
 	// SecretKey 用于加密模型 API Key（环境变量 NOVAMIND_SECRET）。
 	// 丢失它意味着已保存的模型密钥都解不开，只能重新填写。
 	SecretKey string
+	// AdminToken 是访问令牌（环境变量 ADMIN_TOKEN）。
+	// 所有 /api/v1 业务接口都要求 `Authorization: Bearer <token>`；只放行健康检查与 API 文档。
+	// 生产环境未配置时**拒绝启动**——不给"忘了配就等于全站裸奔"留后门。
+	AdminToken string
+	// AllowPrivateModelBase 允许把模型 api_base 指向内网/环回地址（环境变量 ALLOW_PRIVATE_MODEL_BASE）。
+	// 默认关闭：这是 SSRF 收敛的关键（否则可把服务端当内网探针，甚至把入库的真实 Key 发到攻击者地址）。
+	// 本地冒烟测试要用 127.0.0.1 的假模型服务，所以在 .env 里显式打开。
+	AllowPrivateModelBase bool
 }
 
 // Load 读取 .env（若存在）并组装配置。
@@ -55,12 +63,17 @@ func Load(envFiles ...string) (*Config, error) {
 		LogLevel:      getEnv("LOG_LEVEL", "info"),
 		StorageDir:    getEnv("STORAGE_DIR", "./data/uploads"),
 		SecretKey:     getEnv("NOVAMIND_SECRET", ""),
+		AdminToken:    getEnv("ADMIN_TOKEN", ""),
 	}
+	cfg.AllowPrivateModelBase = getEnv("ALLOW_PRIVATE_MODEL_BASE", "") == "true"
 	uploadMaxMB, err := strconv.Atoi(getEnv("UPLOAD_MAX_MB", "50"))
 	if err != nil || uploadMaxMB <= 0 {
 		return nil, fmt.Errorf("UPLOAD_MAX_MB 必须是正整数")
 	}
 	cfg.UploadMaxMB = uploadMaxMB
+	if cfg.IsProduction() && cfg.AdminToken == "" {
+		return nil, fmt.Errorf("生产环境必须配置 ADMIN_TOKEN（所有 /api/v1 接口的访问令牌）")
+	}
 	return cfg, nil
 }
 

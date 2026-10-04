@@ -72,6 +72,28 @@ func (e *APIError) IsRateLimited() bool { return e.StatusCode == 429 }
 // IsRetryable 判断是否值得重试（限流 / 5xx）。
 func (e *APIError) IsRetryable() bool { return e.StatusCode == 429 || e.StatusCode >= 500 }
 
+// SanitizeError 把上游错误转成可对外展示的短消息：**不回显上游响应体**。
+//
+// 原因：调用方（含匿名调用方）能拿到响应体就等于拿到一个内网探测 oracle ——
+// 拿不同 api_base 去试，看回显内容就能判断"这个地址后面有没有服务、是什么服务"。
+// 细节写服务端日志，对外只给状态码与分类文案。
+func SanitizeError(err error) string {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return err.Error()
+	}
+	hint := "（上游拒绝了本次请求，详情见服务端日志）"
+	switch {
+	case apiErr.IsAuthError():
+		hint = "（密钥或权限有问题）"
+	case apiErr.IsRateLimited():
+		hint = "（被上游限流）"
+	case apiErr.StatusCode >= 500:
+		hint = "（上游服务端错误）"
+	}
+	return fmt.Sprintf("%s 接口返回 %d%s", apiErr.Provider, apiErr.StatusCode, hint)
+}
+
 // Gateway 是统一模型调用入口。
 type Gateway struct {
 	httpClient *http.Client

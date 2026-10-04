@@ -105,7 +105,12 @@ func run() error {
 		repository.NewModelProviderRepo(pg.DB),
 		gateway,
 		cfg.SecretKey,
+		cfg.AllowPrivateModelBase,
 	)
+	if cfg.AdminToken == "" {
+		logger.Warn("ADMIN_TOKEN 未配置：接口当前**不需要令牌**（仅开发环境可接受）——" +
+			"生产环境未配置会直接拒绝启动；生成方式：openssl rand -hex 32")
+	}
 	if cfg.SecretKey == "" {
 		logger.Warn("NOVAMIND_SECRET 未配置：暂时无法保存模型 API Key（见 .env.example）")
 	}

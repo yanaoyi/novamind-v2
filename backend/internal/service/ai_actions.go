@@ -209,13 +209,10 @@ func (s *WritingService) Generate(ctx context.Context, runner PromptRunner, in G
 		vars["ChapterPurpose"] = ""
 	}
 
-	reply, err := runner.RunPrompt(ctx, in.Kind.promptFor(), vars)
+	// 结构化生成走统一入口：截断时自动带收敛提示重试一次（§58）
+	obj, err := RunJSONPrompt(ctx, runner, in.Kind.promptFor(), vars, 2)
 	if err != nil {
 		return nil, err
-	}
-	obj, err := ExtractJSONObject(reply)
-	if err != nil {
-		return nil, fmt.Errorf("模型输出不是合法 JSON：%w", err)
 	}
 	// 生成结果一律标记为待作者确认；前端负责让作者改完再走写入接口
 	obj["_pending_author_review"] = true

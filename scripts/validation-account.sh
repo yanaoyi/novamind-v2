@@ -17,6 +17,9 @@
 # 说明：密钥只从环境变量读取，绝不写进文件、绝不进命令行参数（避免进 shell 历史与进程列表）。
 set -euo pipefail
 
+# 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
+
 API_BASE="${NOVAMIND_API_BASE:-http://127.0.0.1:8080/api/v1}"
 VALIDATION_NAME="${NOVAMIND_VALIDATION_NAME:-验证用-DeepSeek}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

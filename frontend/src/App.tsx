@@ -7,6 +7,7 @@ import ProjectsPage from './pages/ProjectsPage'
 import SettingsPage from './pages/SettingsPage'
 import TasksPage from './pages/TasksPage'
 import CreativePage from './pages/CreativePage'
+import TokenGate from './components/TokenGate'
 import ConsistencyPage from './pages/creative/ConsistencyPage'
 import CreativeOverviewPage from './pages/creative/CreativeOverviewPage'
 import OutlinePage from './pages/creative/OutlinePage'
@@ -92,6 +93,7 @@ export default function App() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
+      <TokenGate />
       <Header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
           NovaMind

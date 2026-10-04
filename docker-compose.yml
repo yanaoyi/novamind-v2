@@ -13,10 +13,12 @@ services:
     container_name: novamind-postgres
     environment:
       POSTGRES_USER: novamind
-      POSTGRES_PASSWORD: novamind
+      # 不再用弱口令默认值：部署时必须在 .env 里提供
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD（强随机口令）}
       POSTGRES_DB: novamind
     ports:
-      - "5432:5432"
+      # 只绑本机：数据库/缓存不需要对局域网暴露（安全审查 P0-1 指出的暴露面）
+      - "127.0.0.1:5432:5432"
     volumes:
       - novamind-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -30,7 +32,7 @@ services:
     container_name: novamind-redis
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - novamind-redisdata:/data
     healthcheck:
@@ -52,7 +54,7 @@ services:
     environment:
       APP_ENV: production
       HTTP_ADDR: 0.0.0.0:8080
-      DATABASE_URL: postgres://novamind:novamind@postgres:5432/novamind?sslmode=disable
+      DATABASE_URL: postgres://novamind:${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD}@postgres:5432/novamind?sslmode=disable
       REDIS_ADDR: redis:6379
       REDIS_DB: "0"
       STORAGE_DIR: /data/uploads
@@ -60,8 +62,13 @@ services:
       LOG_LEVEL: info
       # NOVAMIND_SECRET 必须由部署方注入（密钥加密主密钥，禁止写死在镜像里）
       NOVAMIND_SECRET: ${NOVAMIND_SECRET:?请在 .env 或环境中提供 NOVAMIND_SECRET}
+      # 接口访问令牌：生产环境缺了后端会拒绝启动（见 config.Load）
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?请在 .env 或环境中提供 ADMIN_TOKEN（openssl rand -hex 32）}
+      # 生产不放开内网模型地址（SSRF 收敛）
+      ALLOW_PRIVATE_MODEL_BASE: "false"
     ports:
-      - "8080:8080"
+      # 后端只给本机的 nginx 反代用；对外只暴露前端端口
+      - "127.0.0.1:8080:8080"
     volumes:
       - novamind-uploads:/data/uploads
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/yanaoyi/novamindv2/backend/internal/ai"
@@ -32,11 +33,18 @@ type ModelProviderService struct {
 	repo    ModelProviderRepository
 	gateway *ai.Gateway
 	secret  string
+	// allowPrivateAPIBase 允许 api_base 指向内网（仅本地开发/冒烟需要，见 config.AllowPrivateModelBase）
+	allowPrivateAPIBase bool
 }
 
 // NewModelProviderService 构建服务。
-func NewModelProviderService(repo ModelProviderRepository, gateway *ai.Gateway, secret string) *ModelProviderService {
-	return &ModelProviderService{repo: repo, gateway: gateway, secret: secret}
+func NewModelProviderService(
+	repo ModelProviderRepository,
+	gateway *ai.Gateway,
+	secret string,
+	allowPrivateAPIBase bool,
+) *ModelProviderService {
+	return &ModelProviderService{repo: repo, gateway: gateway, secret: secret, allowPrivateAPIBase: allowPrivateAPIBase}
 }
 
 // ProviderInput 是模型配置入参。
@@ -74,6 +82,10 @@ func (s *ModelProviderService) Create(ctx context.Context, in ProviderInput) (*d
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
+	// SSRF 收敛：api_base 会被服务端拿着已入库的真实 Key 去请求，必须先过地址校验
+	if err := ai.ValidateAPIBase(p.APIBase, s.allowPrivateAPIBase); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Create(ctx, p, cipher); err != nil {
 		return nil, err
 	}
@@ -104,6 +116,9 @@ func (s *ModelProviderService) Update(ctx context.Context, id string, in Provide
 	p.Notes = in.Notes
 	p.Normalize()
 	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+	if err := ai.ValidateAPIBase(p.APIBase, s.allowPrivateAPIBase); err != nil {
 		return nil, err
 	}
 
@@ -191,7 +206,9 @@ func (s *ModelProviderService) Test(ctx context.Context, id string) (*TestResult
 		TimeoutSec:  p.TimeoutSec,
 	})
 	if err != nil {
-		return &TestResult{OK: false, ErrorMessage: err.Error()}, nil
+		// 完整错误写服务端日志，对外只给脱敏短消息（不回显上游响应体，避免内网探测 oracle）
+		slog.Warn("模型连通性测试失败", slog.String("provider_id", id), slog.Any("error", err))
+		return &TestResult{OK: false, ErrorMessage: ai.SanitizeError(err)}, nil
 	}
 	return &TestResult{
 		OK: true, Model: resp.Model, Reply: strings.TrimSpace(resp.Content),

@@ -3,6 +3,7 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -78,6 +79,9 @@ func (s *Server) Router() *gin.Engine {
 	r.Use(RequestID(), Logger(s.logger), Recovery(s.logger))
 
 	v1 := r.Group("/api/v1")
+	// 访问令牌（P0 安全修复）：业务接口一律要求 `Authorization: Bearer <ADMIN_TOKEN>`；
+	// 只有健康检查与 API 文档放行。令牌未配置时（开发环境）放行由 Auth 内部处理。
+	v1.Use(Auth(s.cfg.AdminToken))
 	{
 		v1.GET("/health", s.handleHealth)
 		v1.GET("/openapi.yaml", s.handleOpenAPISpec)
@@ -197,13 +201,16 @@ func (s *Server) Router() *gin.Engine {
 			chapters.POST("/:id/scenes", s.createChapterScene)
 			chapters.GET("/:id/scenes", s.listChapterScenes)
 		}
-		v1.POST("/ai/rewrite", s.rewriteText)
-		// 规格书 §49 要求的其余 AI 端点（§38 的能力）
-		v1.POST("/ai/continue", s.aiContinue)
-		v1.POST("/ai/expand", s.aiExpand)
-		v1.POST("/ai/generate", s.aiGenerate)
-		v1.POST("/ai/chat", s.aiChat)
-		v1.POST("/ai/analyze", s.aiAnalyze)
+		// AI 端点（§38 / §49）：会真实调用上游、消耗额度，单独限流
+		aiGroup := v1.Group("/ai", RateLimit(60, time.Minute))
+		{
+			aiGroup.POST("/rewrite", s.rewriteText)
+			aiGroup.POST("/continue", s.aiContinue)
+			aiGroup.POST("/expand", s.aiExpand)
+			aiGroup.POST("/generate", s.aiGenerate)
+			aiGroup.POST("/chat", s.aiChat)
+			aiGroup.POST("/analyze", s.aiAnalyze)
+		}
 		// 版本比较（规格书 §59）：四类版本共用一个入口
 		v1.GET("/versions/compare", s.compareVersions)
 		consistencyIssues := v1.Group("/consistency-issues")
@@ -260,7 +267,8 @@ func (s *Server) Router() *gin.Engine {
 			modelProviders.PUT("/:id", s.updateModelProvider)
 			modelProviders.DELETE("/:id", s.deleteModelProvider)
 			modelProviders.POST("/:id/default", s.setDefaultModelProvider)
-			modelProviders.POST("/:id/test", s.testModelProvider)
+			// 连通性测试会带着已入库的真实 Key 出站，限流收得更紧
+			modelProviders.POST("/:id/test", RateLimit(10, time.Minute), s.testModelProvider)
 		}
 		v1.GET("/prompts", s.listPrompts)
 

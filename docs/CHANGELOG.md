@@ -770,3 +770,39 @@ PUT|DELETE     /plot-arcs/{id}
 
 * P1-15 确认属实并已修：`backend/.env.example` 被 Git 跟踪（公开仓库），`DATABASE_URL` 里是具体口令 → 改为 `CHANGE_ME` 占位符，并在文件里写明"示例进 Git、真实口令只写 .env"。**口令已在历史里出现过，建议 BOSS 决定是否轮换本机数据库口令。**
 * 审查报告其余项的逐条结论与修复排期见 `docs/审查响应-20261004-muse.md`（P0 鉴权/SSRF 列为下一轮首项）。
+
+### 2026-10-04 · P0 安全修复落地：接口鉴权 + SSRF 收敛 + 限流（回应 muse P0-1 / P0-2）
+
+**P0-1 全站无鉴权 → 已修**
+
+* 后端 `api.Auth(token)` 中间件包住整个 `/api/v1`：要求 `Authorization: Bearer <ADMIN_TOKEN>`，令牌比较用 `crypto/subtle` 常量时间；401 走统一响应包（`code=UNAUTHORIZED`）。
+* **只放行** `/health`、`openapi.yaml`、`/swagger`（都是不含业务数据的端点）。健康检查里新增 `checks.auth = enabled|disabled`，部署后一眼能确认令牌是否真的生效。
+* **生产环境不配置令牌直接拒绝启动**（`config.Load` 校验），开发环境不配置会放行但打醒目告警——不给"忘了配就等于全站裸奔"留后门。
+* 前端配套：`api/token.ts` + `client.ts` 自动带 `Authorization`；收到 401 时广播事件，`<TokenGate />` 弹窗让使用者粘贴令牌并复验，令牌只存在浏览器 localStorage，不进前端产物、不进命令行。
+* 脚本配套：新增 `scripts/lib/api-auth.sh`，用 `$CURL_HOME/.curlrc` 让**所有冒烟/验证脚本的 curl 自动带上令牌**（一处生效，不必改上百处调用），令牌从环境变量或 `backend/.env` 读取。
+
+**P0-2 SSRF + 密钥外泄原语 → 已修**
+
+* 新增 `ai.ValidateAPIBase`：只允许 http/https；解析主机名后拒绝环回 / 私网 / 链路本地 / 未指定 / 组播 / CGNAT（100.64/10）/ 192.0.0.0/24 / IPv6 唯一本地地址；解析失败即拒。创建与更新模型配置都会校验，非法地址返回 400。
+* 刻意**不拦** 198.18.0.0/15：本机实测 `api.openai.com` 就解析到 198.19.x（代理软件的 fake-IP 段），拦了会误伤正常公网域名，而它路由不到真正的内网服务。
+* 本地冒烟要连 127.0.0.1 的假模型服务，所以加了显式开关 `ALLOW_PRIVATE_MODEL_BASE`（默认 `false`，生产恒为 false）。
+* 连通性测试的错误**不再回显上游响应体**（`ai.SanitizeError` 只给状态码 + 分类文案，详情进服务端日志）——堵掉"拿不同 api_base 试、看回显当内网探测 oracle"的路子。
+* `/model-providers/{id}/test` 与 `/ai/*` 加限流（10 次/分、60 次/分，按 IP 固定窗口）——这两个端点会真花钱。
+* `docker-compose.yml`：数据库/缓存端口改为只绑 `127.0.0.1`，后端端口也只绑本机；`POSTGRES_PASSWORD`、`ADMIN_TOKEN`、`NOVAMIND_SECRET` 全部改为必填注入，去掉弱口令默认值与生产放开内网模型地址的可能。
+
+**顺带修掉的（muse P2 里的两条）**
+
+* 健康检查不再返回依赖错误详情（`runChecker` 改为只记日志、对外只给 `error`），避免匿名端点变成信息泄露面。
+* 连通性测试的错误信息脱敏（见上）。
+
+**真实模型验收时又抓到一个真缺陷：结构化输出被截断没有兜底**
+
+* 现象：验收偶发 `模型输出不是合法 JSON：unexpected end of JSON input`（让模型一次产出 3 卷 9 节 18 章大纲时，输出被 `max_tokens` 截断）。
+* 修复：新增 `service.RunJSONPrompt`——结构化生成统一走它，解析失败时**带着"更简洁、必须闭合（卷≤3、每卷节≤3、每节章≤5）"的收敛提示重试一次**（§58 的自动修复重试），仍失败才报错。
+* 测试：`internal/service/json_prompt_test.go` 2 例（截断→重试成功且提示保留原要求、两次都失败时报重试次数）。
+
+**验证**
+
+* 后端：`gofmt` 干净、`go build` / `go vet` 通过、`go test ./...` 全绿；新增用例：`api/auth_test.go`（无令牌 401 / 错令牌 401 / 缺 Bearer 前缀 401 / 正确令牌 200 / 健康检查放行 / 未配置令牌放行 / 限流 429）、`ai/validate_test.go`（12 个内网与非法目标被拒、3 个公网目标放行、开关语义）。
+* 前端：`tsc -b` + `vite build` 通过；`vitest` **11 个文件 45 例全绿**（新增 `api/client.test.ts` 3 例：带令牌、不带令牌、401 抛 UNAUTHORIZED 并广播事件）。
+* 端到端：开启鉴权后重跑 `scripts/smoke-phase8-outline.sh` **45/45**、`scripts/validate-e2e-deepseek.sh`（真实模型）**37/37**；手工验证匿名访问 `/api/v1/projects` 返回 401、`/api/v1/health` 放行且 `auth=enabled`。

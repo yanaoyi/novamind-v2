@@ -16,8 +16,11 @@ var (
 	ErrProviderTempRange   = errors.New("温度必须在 0-2 之间")
 	ErrProviderNotFound    = errors.New("模型配置不存在")
 	ErrProviderDuplicate   = errors.New("同名模型配置已存在")
-	ErrProviderPurposeBad  = errors.New("模型用途非法")
-	ErrNoProviderAvailable = errors.New("没有可用的模型配置")
+	// ErrProviderDefaultExists：同一用途只能有一个默认配置（唯一索引 uq_model_providers_default）。
+	// 单独成一个错误，是为了不让它被当成"同名冲突"报出去 —— 那条提示会把人带向错误方向。
+	ErrProviderDefaultExists = errors.New("该用途已经有默认模型配置了，请先取消原默认，或直接修改原配置")
+	ErrProviderPurposeBad    = errors.New("模型用途非法")
+	ErrNoProviderAvailable   = errors.New("没有可用的模型配置")
 )
 
 // ProviderType 是模型提供商类型。

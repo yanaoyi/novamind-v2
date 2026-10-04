@@ -298,6 +298,8 @@ func originalErrorStatus(err error) (int, string, bool) {
 		return http.StatusNotFound, "MODEL_PROVIDER_NOT_FOUND", true
 	case errors.Is(err, domain.ErrProviderDuplicate):
 		return http.StatusConflict, CodeConflict, true
+	case errors.Is(err, domain.ErrProviderDefaultExists):
+		return http.StatusConflict, CodeConflict, true
 	case errors.Is(err, domain.ErrTaskNotFound):
 		return http.StatusNotFound, "TASK_NOT_FOUND", true
 	case errors.Is(err, domain.ErrTaskNotCancellable), errors.Is(err, domain.ErrTaskNotRetryable):

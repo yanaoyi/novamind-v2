@@ -9,9 +9,9 @@ set -uo pipefail
 
 # 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
 
 API="${API_BASE:-http://127.0.0.1:8080/api/v1}"
-PSQL_URL="postgresql://novamind:novamind@127.0.0.1:5432/novamind"
 WORK_DIR="$(mktemp -d)"
 FONT="${PDF_CJK_FONT:-/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc}"
 

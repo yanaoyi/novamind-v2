@@ -8,10 +8,10 @@ set -uo pipefail
 
 # 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
 
 API="${API_BASE:-http://127.0.0.1:8080/api/v1}"
 FAKE_PORT=19557
-PSQL_URL="postgresql://novamind:novamind@127.0.0.1:5432/novamind"
 WORK_DIR="$(mktemp -d)"
 
 PASS=0
@@ -85,6 +85,9 @@ cleanup() {
     psqlq "delete from original_creative_mappings where creative_work_id='${CID}'" >/dev/null 2>&1
     psqlq "delete from creative_works where id='${CID}'" >/dev/null 2>&1
   fi
+  if [ -n "${PREV_DEFAULT}" ]; then
+    curl -sf -o /dev/null -X POST "${API}/model-providers/${PREV_DEFAULT}/default" >/dev/null 2>&1 || true
+  fi
   [ -n "${PROVIDER_ID}" ] && psqlq "delete from model_providers where id='${PROVIDER_ID}'" >/dev/null 2>&1
   if [ -n "${OID}" ]; then
     psqlq "delete from original_characters where original_work_id='${OID}'" >/dev/null 2>&1
@@ -103,11 +106,17 @@ cleanup() {
 trap cleanup EXIT
 sleep 1
 
+# 记住当前默认模型：本脚本要临时把自己设为默认（任务按默认模型解析），跑完必须还原
+PREV_DEFAULT=$(curl -sf "${API}/model-providers" | python3 -c '
+import sys, json
+items = json.load(sys.stdin)["data"]["items"]
+print(next((i["id"] for i in items if i.get("is_default") and i.get("purpose") == "chat"), ""))')
 echo "== 1. 准备（原著 + 二创作品 + 继承人物与世界 + 模型配置）"
 PROVIDER_ID=$(curl -sf -X POST "${API}/model-providers" -H 'Content-Type: application/json' -d "{
   \"name\":\"冒烟-写作模型\",\"provider\":\"OPENAI_COMPATIBLE\",\"api_base\":\"http://127.0.0.1:${FAKE_PORT}\",
   \"api_key\":\"sk-fake\",\"model_name\":\"fake-writing-model\",\"purpose\":\"chat\",
-  \"temperature\":0.7,\"max_tokens\":2048,\"timeout_sec\":15,\"enabled\":true,\"is_default\":true}" | getid)
+  \"temperature\":0.7,\"max_tokens\":2048,\"timeout_sec\":15,\"enabled\":true,\"is_default\":false}" | getid)
+curl -sf -o /dev/null -X POST "${API}/model-providers/${PROVIDER_ID}/default"
 PID=$(curl -sf -X POST "${API}/projects" -H 'Content-Type: application/json' -d '{"name":"写作冒烟-原著","type":"ORIGINAL"}' | getid)
 OID=$(curl -sf -X POST "${API}/projects/${PID}/original" -H 'Content-Type: application/json' -d '{"title":"暗涌"}' | getid)
 printf '第一章 初遇\n\n林默站在月台上。\n' > "${WORK_DIR}/s.txt"

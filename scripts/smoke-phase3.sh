@@ -9,6 +9,7 @@ set -uo pipefail
 
 # 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
 
 API="${API_BASE:-http://127.0.0.1:8080/api/v1}"
 FAKE_PORT=19555
@@ -97,11 +98,21 @@ check "含 character_extract" "True" "$(echo "$PROMPTS" | python3 -c 'import sys
 check "含版本号" "True" "$(echo "$PROMPTS" | python3 -c 'import sys,json;print(all(i["version"] for i in json.load(sys.stdin)["data"]["items"]))')"
 
 echo "== 2. 新增模型配置（密钥加密）"
+# 自清理：同名残留（上一次跑挂了没删干净）会让"创建"直接 409，
+# 表现为脚本莫名失败。这里先把本项目冒烟用的配置清掉，保证可重复运行。
+LEFTOVER=$(curl -sf "${API}/model-providers" | python3 -c '
+import sys, json
+items = json.load(sys.stdin)["data"]["items"]
+print("\n".join(i["id"] for i in items if i["name"].startswith("冒烟-")))')
+for id in ${LEFTOVER:-}; do
+  curl -sf -X DELETE "${API}/model-providers/${id}" >/dev/null 2>&1 || true
+done
+
 CREATED=$(curl -sf -X POST "${API}/model-providers" -H 'Content-Type: application/json' -d "{
   \"name\":\"冒烟-假上游\",\"provider\":\"OPENAI_COMPATIBLE\",
   \"api_base\":\"http://127.0.0.1:${FAKE_PORT}\",\"api_key\":\"sk-smoke-secret-1234\",
   \"model_name\":\"fake-model\",\"purpose\":\"chat\",\"temperature\":0.2,\"max_tokens\":64,
-  \"timeout_sec\":15,\"enabled\":true,\"is_default\":true,\"notes\":\"冒烟用\"}")
+  \"timeout_sec\":15,\"enabled\":true,\"is_default\":false,\"notes\":\"冒烟用\"}")
 PROVIDER_ID=$(echo "$CREATED" | getid)
 check "创建成功" "36" "${#PROVIDER_ID}"
 check "has_api_key=true" "True" "$(echo "$CREATED" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["has_api_key"])')"
@@ -109,7 +120,7 @@ check "响应不含密钥字段" "False" "$(echo "$CREATED" | python3 -c 'import
 check "响应不含密钥明文" "False" "$(echo "$CREATED" | python3 -c 'import sys,json;print("sk-smoke-secret-1234" in json.dumps(json.load(sys.stdin)))')"
 
 echo "== 3. 库里存的是密文（不是明文）"
-CIPHER=$(PGPASSWORD=novamind psql -h 127.0.0.1 -U novamind -d novamind -tAc \
+CIPHER=$(psql "$PSQL_URL" -tAc \
   "select api_key_cipher from model_providers where id='${PROVIDER_ID}'" 2>/dev/null)
 check "密文非空" "true" "$([ -n "${CIPHER}" ] && echo true || echo false)"
 check "密文不等于明文" "true" "$([ "${CIPHER}" != "sk-smoke-secret-1234" ] && echo true || echo false)"
@@ -133,14 +144,14 @@ UPDATED=$(curl -sf -X PUT "${API}/model-providers/${PROVIDER_ID}" -H 'Content-Ty
   \"name\":\"冒烟-假上游（改名）\",\"provider\":\"OPENAI_COMPATIBLE\",
   \"api_base\":\"http://127.0.0.1:${FAKE_PORT}\",\"api_key\":\"\",
   \"model_name\":\"fake-model\",\"purpose\":\"chat\",\"temperature\":0.5,\"max_tokens\":128,
-  \"timeout_sec\":15,\"enabled\":true,\"is_default\":true}")
+  \"timeout_sec\":15,\"enabled\":true,\"is_default\":false}")
 check "改名生效" "冒烟-假上游（改名）" "$(echo "$UPDATED" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["name"])')"
 check "密钥仍在" "True" "$(echo "$UPDATED" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["has_api_key"])')"
 check "改名后仍可调用" "True" "$(curl -sf -X POST "${API}/model-providers/${PROVIDER_ID}/test" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["ok"])')"
 
 echo "== 6. 列表与默认设置"
 check "列表包含该项" "True" "$(curl -sf "${API}/model-providers" | python3 -c "import sys,json;print(any(i['id']=='${PROVIDER_ID}' for i in json.load(sys.stdin)['data']['items']))")"
-check "设为默认" "True" "$(curl -sf -X POST "${API}/model-providers/${PROVIDER_ID}/default" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["is_default"])')"
+check "创建的是非默认配置（不抢占已有默认）" "False" "$(echo "$CREATED" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["is_default"])')"
 
 echo "== 7. 错误场景"
 check "重复名称（应 409）" "409" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API}/model-providers" -H 'Content-Type: application/json' -d "{\"name\":\"冒烟-假上游（改名）\",\"provider\":\"OPENAI_COMPATIBLE\",\"api_base\":\"http://127.0.0.1:${FAKE_PORT}\",\"model_name\":\"m\"}")"

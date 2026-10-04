@@ -9,10 +9,10 @@ set -uo pipefail
 
 # 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
 
 API="${API_BASE:-http://127.0.0.1:8080/api/v1}"
 FAKE_PORT=19556
-PSQL_URL="postgresql://novamind:novamind@127.0.0.1:5432/novamind"
 WORK_DIR="$(mktemp -d)"
 
 PASS=0
@@ -111,6 +111,9 @@ cleanup() {
   [ -n "${WORK_ID}" ] && psqlq "delete from original_works where id='${WORK_ID}'" >/dev/null 2>&1
   [ -n "${PROJECT_ID}" ] && psqlq "delete from files where project_id='${PROJECT_ID}'" >/dev/null 2>&1
   [ -n "${PROJECT_ID}" ] && psqlq "delete from projects where id='${PROJECT_ID}'" >/dev/null 2>&1
+  if [ -n "${PREV_DEFAULT}" ]; then
+    curl -sf -o /dev/null -X POST "${API}/model-providers/${PREV_DEFAULT}/default" >/dev/null 2>&1 || true
+  fi
   [ -n "${PROVIDER_ID}" ] && psqlq "delete from model_providers where id='${PROVIDER_ID}'" >/dev/null 2>&1
   kill "${FAKE_PID}" 2>/dev/null || true
   rm -rf "${WORK_DIR}"
@@ -119,12 +122,18 @@ trap cleanup EXIT
 
 sleep 1
 
+# 记住当前默认模型：本脚本要临时把自己设为默认（任务按默认模型解析），跑完必须还原
+PREV_DEFAULT=$(curl -sf "${API}/model-providers" | python3 -c '
+import sys, json
+items = json.load(sys.stdin)["data"]["items"]
+print(next((i["id"] for i in items if i.get("is_default") and i.get("purpose") == "chat"), ""))')
 echo "== 1. 配置模型（指向假上游）"
 PROVIDER_ID=$(curl -sf -X POST "${API}/model-providers" -H 'Content-Type: application/json' -d "{
   \"name\":\"冒烟-分析用假模型\",\"provider\":\"OPENAI_COMPATIBLE\",
   \"api_base\":\"http://127.0.0.1:${FAKE_PORT}\",\"api_key\":\"sk-fake\",
   \"model_name\":\"fake-analysis-model\",\"purpose\":\"chat\",\"temperature\":0.2,
-  \"max_tokens\":2048,\"timeout_sec\":15,\"enabled\":true,\"is_default\":true}" | getid)
+  \"max_tokens\":2048,\"timeout_sec\":15,\"enabled\":true,\"is_default\":false}" | getid)
+curl -sf -o /dev/null -X POST "${API}/model-providers/${PROVIDER_ID}/default"
 check "模型配置创建" "36" "${#PROVIDER_ID}"
 
 echo "== 2. 准备原著（2 章）"

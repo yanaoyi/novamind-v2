@@ -16,6 +16,7 @@ set -uo pipefail
 
 # 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
 
 API="${NOVAMIND_API_BASE:-http://127.0.0.1:8080/api/v1}"
 WORK_DIR="$(mktemp -d)"
@@ -27,7 +28,7 @@ BODY=""
 cleanup() {
   for pid in "${PROJECT_ID:-}" "${CREATIVE_PROJECT_ID:-}"; do
     [[ -n "$pid" ]] || continue
-    PGPASSWORD="${PGPASSWORD:-novamind}" psql -h 127.0.0.1 -U novamind -d novamind \
+    psql "$PSQL_URL" \
       -tAc "delete from projects where id='${pid}'" >/dev/null 2>&1 || true
   done
   rm -rf "${WORK_DIR}"

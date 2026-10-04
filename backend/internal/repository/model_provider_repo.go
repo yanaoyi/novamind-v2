@@ -63,6 +63,11 @@ func (r *ModelProviderRepo) Create(ctx context.Context, p *domain.ModelProvider,
 	}
 	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
 		if isUniqueViolation(err) {
+			// 区分"同名"与"同用途已有默认"：两个唯一索引语义完全不同。
+			// 一律报"同名已存在"会把使用者引向错误方向（2026-10-05 实测踩到）。
+			if isConstraint(err, "uq_model_providers_default") {
+				return domain.ErrProviderDefaultExists
+			}
 			return domain.ErrProviderDuplicate
 		}
 		return fmt.Errorf("创建模型配置失败: %w", err)

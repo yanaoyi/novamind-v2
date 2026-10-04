@@ -847,3 +847,23 @@ PUT|DELETE     /plot-arcs/{id}
 * 后端：`gofmt` 干净、`go build`/`go vet` 通过、`go test ./...` 全绿；新增用例：`task/worker_test.go` 回收僵死任务、`repository/task_repo_test.go` 退避期间不可领取、`parser/limits_test.go` 3 例（压缩比拦截、恰好读满不误报、切分偏移与内容一致）。
 * 前端：`tsc -b` + `vite build` 通过；`vitest` **11 个文件 46 例全绿**（新增 Markdown 转义往返回归）。
 * 端到端：`scripts/smoke-phase8-outline.sh` **47/47**（新增"落成防重"三项）；真实模型 `scripts/validate-e2e-deepseek.sh` **37/37**；迁移版本 **17**。
+
+### 2026-10-05 · 数据库口令轮换 + 脚本凭据收口 + 冒烟脚本可重复运行
+
+**口令轮换（安全审查 P1-15 的收尾动作）**
+
+* 公开仓库历史里出现过本机开发库口令，已轮换：`ALTER ROLE novamind WITH PASSWORD ...`（用 24 字节随机串），并同步 `backend/.env` 的 `DATABASE_URL`。**口令只存在于 `backend/.env`（不进 Git），值不写进文档、不进命令行参数。**
+* 新增 `scripts/lib/db-url.sh`：从 `backend/.env` 解析出 `PSQL_URL` / `PGPASSWORD` 供脚本复用。**十一个脚本里写死的 `postgresql://novamind:novamind@...` 全部删掉** —— 口令轮换后脚本不会再静默连不上，也不该把口令散落在十几处。
+* `scripts/setup-local-db.sh` 不再有弱口令默认值：按「位置参数 → `NOVAMIND_DB_PASSWORD` → `backend/.env` 里的现有口令」取，都拿不到就拒绝执行；并在文件头写明"本脚本会重置口令，跑完要同步 .env"。
+
+**冒烟脚本可重复运行（顺带挖出的一个真缺陷）**
+
+* 现象：`smoke-phase3.sh` 在 22 项后开始失败，`smoke-phase3-analysis.sh`、`smoke-phase5.sh` 也跟着挂；但单独手动重放请求又能成功。
+* 定位：那些脚本用 `is_default: true` 创建假模型配置，而开发机上验证账号已经是"chat 用途的默认配置"，撞上唯一索引 `uq_model_providers_default`；后端把这个冲突**误报成"同名模型配置已存在"**，提示把人带向错误方向。
+* 修法：① 后端按冲突索引区分语义，新增 `ErrProviderDefaultExists`（"该用途已经有默认模型配置了，请先取消原默认"）；② 三个脚本改成**先建非默认配置 → 显式调用 `/default` 抢占 → 结束时还原原默认再删除自己**（任务按默认模型解析，所以过程中必须自己当默认）；③ `smoke-phase3.sh` 开头自清理上次残留的 `冒烟-*` 配置，失败重跑不再因残留数据而连锁失败。
+
+**验证**
+
+* 全量冒烟 **315 项全过**：phase2 72、phase2-pdf 10、phase3 25、phase3-analysis 24、phase3-tasks 19、phase4 33、phase4b 32、phase5 30、phase6b-versions 23、phase8-outline 47。
+* 真实模型端到端 **37/37**（跑完确认默认模型已还原为验证账号）。
+* 后端 `go build` / `go vet` / `go test ./...` 全绿；前端未改动。

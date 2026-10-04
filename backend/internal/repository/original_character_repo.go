@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -474,4 +475,17 @@ func isForeignKeyViolation(err error) bool {
 func isDuplicateKey(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// isConstraint 判断唯一冲突是否由某个具体索引/约束引起（用来区分错误语义）。
+func isConstraint(err error, name string) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	if pgErr.ConstraintName == name {
+		return true
+	}
+	// 部分唯一索引报错时 ConstraintName 可能为空，退回看错误正文里的索引名
+	return strings.Contains(pgErr.Message, name) || strings.Contains(pgErr.Detail, name)
 }

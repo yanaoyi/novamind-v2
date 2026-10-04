@@ -860,10 +860,15 @@ export interface ConsistencyIssue {
   updated_at: string
 }
 
-/** 编辑器内的 AI 操作（规格书 §38） */
-export type RewriteAction = '改写' | '扩写' | '缩写' | '润色' | '增强冲突' | '增强情绪'
+/** 编辑器内的 AI 操作（规格书 §38 / §48：共 11 种） */
+export type RewriteAction =
+  | '改写' | '扩写' | '缩写' | '润色' | '增强冲突' | '增强情绪'
+  | '续写' | '增加动作' | '增加对白' | '调整节奏' | '改变叙事视角'
 
-export const REWRITE_ACTIONS: RewriteAction[] = ['改写', '扩写', '缩写', '润色', '增强冲突', '增强情绪']
+export const REWRITE_ACTIONS: RewriteAction[] = [
+  '改写', '扩写', '缩写', '润色', '增强冲突', '增强情绪',
+  '续写', '增加动作', '增加对白', '调整节奏', '改变叙事视角',
+]
 
 // ---------- 版本历史（规格书 §59） ----------
 

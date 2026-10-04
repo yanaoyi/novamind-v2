@@ -28,11 +28,11 @@
 | **§34–§35** | **7 个 Agent + Agent Runtime（Agent → Tool → Service → DB）** | ❌ **未实现** | `internal/agent` 为空目录；任务是 handler 直接调 service |
 | §36 | Model Gateway | ✅ | OpenAI 兼容 + Anthropic，密钥 AES-GCM |
 | §37 | Prompt Engine（版本化模板） | ✅ | `prompts/<域>/<name>.<version>.md`，编译进二进制 |
-| §38 | AI 写作（续写/扩写/改写/大纲/人物/剧情/场景生成） | 🟡 **部分** | 有「写本章」+ 6 种改写（改写/扩写/缩写/润色/增强冲突/增强情绪）；缺 续写、增加动作、增加对白、调整节奏、改变叙事视角；缺 AI 生成人物/剧情/场景 |
+| §38 | AI 写作（续写/扩写/改写/大纲/人物/剧情/场景生成） | ✅ **已闭环** | 2026-10-04：编辑器操作补齐到 **11 种**（+续写/增加动作/增加对白/调整节奏/改变叙事视角）；新增 AI 生成大纲/人物/剧情/场景（`/ai/generate`，只返回候选、作者确认后走既有写入接口）；新增 AI 问答（`/ai/chat`）与就地分析（`/ai/analyze`，不进问题库） |
 | §39 | 一致性检查（Character/World/Timeline/Plot + 原著继承） | ✅ **已闭环** | 2026-10-04：五类上下文全部真实注入（二创时间线按 sequence 排序、章节大纲链做剧情骨架、原著↔二创映射做继承检查）；prompt 升级 `consistency_check.v2.md`；JSON 非法自动重试一次，仍失败则计入 `failed_chapters` 并在任务输出里如实报告 |
 | §40–§45 | 分析流程与继承界面 | ✅ | 提案 → 作者审核 → 写入 |
 | §46–§48 | 页面结构 / 主界面 / 编辑器 | 🟡 **部分** | 三栏与 Tiptap 已有；6 个菜单仍是占位页（见 §3） |
-| §49 | API 设计 | 🟡 **部分** | **版本 `compare` 已补**（`GET /versions/compare`）；仍缺 `POST /ai/chat`、`/ai/generate`、`/ai/continue`、`/ai/expand`、`/ai/analyze` |
+| §49 | API 设计 | ✅ **已闭环** | 2026-10-04：AI 六个端点全部就位（`/ai/rewrite` + `/ai/continue`、`/ai/expand`、`/ai/generate`、`/ai/chat`、`/ai/analyze`）；版本比较 `GET /versions/compare`；OpenAPI 与路由由防漂移测试守住 |
 | §50 | 文件结构 | ✅ **已补齐** | 2026-10-04：`docker-compose.yml` + `docker/{backend,frontend}.Dockerfile` + `docker/nginx.conf`（本机无 Docker，仅作部署/CI 产物） |
 | §51 | 数据库设计原则 | ✅ | UUID / 时间戳 / 软删除 / 外键 / JSONB |
 | §52 | 数据权限边界（AI 不改原著） | ✅ | 提案表 + 审核事务 |
@@ -66,7 +66,7 @@
 | ~~1~~ ✅ | `docker-compose.yml` 缺失 | §50 | 2026-10-04 完成 |
 | ~~2~~ ✅ | 一致性检查：时间线/剧情/原著继承上下文 + JSON 失败重试 | §39 §57 §58 | 2026-10-04 完成（prompt 升 v2，失败计入 `failed_chapters`） |
 | ~~3~~ ✅ | 版本比较（Chapter/Character/World/Outline） | §59 | 2026-10-04 完成（后端 diff + 前端比较视图） |
-| 4 | AI 端点与编辑器动作补全 | §38 §49 | `/ai/continue`、`/ai/expand`、`/ai/generate`、`/ai/chat`、`/ai/analyze` + 续写/增加动作/增加对白/调整节奏/改变叙事视角 |
+| ~~4~~ ✅ | AI 端点与编辑器动作补全 | §38 §49 | 2026-10-04 完成（6 端点 + 11 种编辑器操作 + 6 个版本化模板） |
 | 5 | 大纲独立模型 + AI 生成大纲 | §27 §68 | `outlines`/`outline_nodes` + `outline/generate` + 前端大纲页 |
 | 6 | 检索系统（Chunk/Embedding/混合检索） | §55 §56 | `internal/retrieval` + 索引表 + 写作上下文接入 |
 | 7 | ContextSnapshot | §32 | 快照表 + 每次生成前落库 |

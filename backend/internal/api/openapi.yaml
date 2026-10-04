@@ -2923,7 +2923,9 @@ paths:
               properties:
                 chapter_id: { type: string, format: uuid }
                 text: { type: string }
-                action: { type: string, enum: [改写, 扩写, 缩写, 润色, 增强冲突, 增强情绪] }
+                action:
+                  type: string
+                  enum: [改写, 扩写, 缩写, 润色, 增强冲突, 增强情绪, 续写, 增加动作, 增加对白, 调整节奏, 改变叙事视角]
                 instruction: { type: string }
       responses:
         "200":
@@ -2939,6 +2941,174 @@ paths:
                         type: object
                         properties:
                           text: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /ai/continue:
+    post:
+      tags: [ai]
+      summary: AI 续写
+      description: 从给定文本（省略则取本章正文末尾）接着往下写；只返回新增内容，不写库。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chapter_id]
+              properties:
+                chapter_id: { type: string, format: uuid }
+                text: { type: string }
+                instruction: { type: string }
+      responses:
+        "200":
+          description: 续写结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          text: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /ai/expand:
+    post:
+      tags: [ai]
+      summary: AI 扩写
+      description: 等价于 rewrite 的「扩写」，单独提供以对齐规格书 §49 的端点清单。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chapter_id, text]
+              properties:
+                chapter_id: { type: string, format: uuid }
+                text: { type: string }
+                instruction: { type: string }
+      responses:
+        "200":
+          description: 扩写结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          text: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /ai/generate:
+    post:
+      tags: [ai]
+      summary: AI 生成候选（大纲 / 人物 / 剧情 / 场景）
+      description: |
+        按 kind 生成候选内容：`outline`（大纲）、`character`（人物）、`plot`（剧情）、`scene`（场景）。
+        只返回候选并标记 `pending_author_review`，**不写库**；作者确认后走各自的写入接口。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [outline, character, plot, scene] }
+                work_id: { type: string, format: uuid }
+                chapter_id: { type: string, format: uuid }
+                instruction: { type: string }
+      responses:
+        "200":
+          description: 候选内容（结构按 kind 不同）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          result: { type: object }
+                          pending_author_review: { type: boolean }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /ai/chat:
+    post:
+      tags: [ai]
+      summary: AI 助手问答
+      description: 带人物 / 世界 / 时间线 / 大纲上下文回答问题；只回答，不改稿也不改设定。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                work_id: { type: string, format: uuid }
+                chapter_id: { type: string, format: uuid }
+                message: { type: string }
+      responses:
+        "200":
+          description: 回答
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          reply: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /ai/analyze:
+    post:
+      tags: [ai]
+      summary: AI 就地分析
+      description: 对选中文本或本章正文做即时分析；结果**不进问题库**（与一致性检查不同）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chapter_id: { type: string, format: uuid }
+                text: { type: string }
+                focus: { type: string }
+      responses:
+        "200":
+          description: 分析结果（summary + findings）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          result: { type: object }
         "400":
           $ref: "#/components/responses/BadRequest"
 

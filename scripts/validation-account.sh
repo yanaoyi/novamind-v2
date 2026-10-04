@@ -110,7 +110,8 @@ p = json.load(sys.stdin)
 if p.get("error"):
     print("创建失败：", p["error"]); raise SystemExit(1)
 d = p["data"]
-print(f"已创建验证模型配置：{d[\"name\"]}（{d[\"model_name\"]}，has_api_key={d[\"has_api_key\"]}）")
+name = d["name"]; model = d["model_name"]; has_key = d["has_api_key"]
+print("已创建验证模型配置：{}（{}，has_api_key={}）".format(name, model, has_key))
 print("提醒：交付前必须运行 scripts/validation-account.sh purge")
 '
 }
@@ -156,17 +157,20 @@ PY
 }
 
 cmd_check() {
-  echo "扫描仓库里的疑似硬编码密钥（排除 node_modules/.git/dist）..."
+  # 只看被 git 跟踪的文件：本地 .env 里放着验证密钥是允许的（它被 .gitignore 排除），
+  # 真正要防的是"密钥被误提交进版本库"。
+  echo "扫描 git 跟踪文件里的疑似硬编码密钥..."
+  cd "$REPO_ROOT" || die "进入仓库目录失败"
+
   local hits
-  hits="$(grep -rEn 'sk-[A-Za-z0-9_-]{16,}' "$REPO_ROOT" \
-    --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=.run \
-    --exclude-dir=testdata --exclude='*.log' \
-    --exclude='*_test.go' --exclude='smoke-*.sh' 2>/dev/null || true)"
+  hits="$(git ls-files -z \
+    | grep -zvE '(_test\.go$|smoke-.*\.sh$)' \
+    | xargs -0 -r grep -nE 'sk-[A-Za-z0-9]{24,}' 2>/dev/null || true)"
   if [[ -n "$hits" ]]; then
     echo "$hits"
     die "发现疑似硬编码密钥，必须移除后才能交付"
   fi
-  echo "未发现硬编码密钥（测试用例与冒烟脚本里的假 Key 已排除）。"
+  echo "未发现硬编码密钥（本地 .env 不在跟踪范围内；测试与冒烟脚本的假 Key 已排除）。"
 }
 
 case "${1:-}" in

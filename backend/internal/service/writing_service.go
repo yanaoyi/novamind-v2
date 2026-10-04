@@ -417,16 +417,34 @@ const (
 	RewriteActionPolish   RewriteAction = "润色"
 	RewriteActionConflict RewriteAction = "增强冲突"
 	RewriteActionEmotion  RewriteAction = "增强情绪"
+	// 规格书 §38 / §48 要求、此前缺失的五种操作
+	RewriteActionContinue RewriteAction = "续写"
+	RewriteActionAddAct   RewriteAction = "增加动作"
+	RewriteActionAddTalk  RewriteAction = "增加对白"
+	RewriteActionPacing   RewriteAction = "调整节奏"
+	RewriteActionPOV      RewriteAction = "改变叙事视角"
 )
 
 // Valid 判断操作类型是否合法。
 func (a RewriteAction) Valid() bool {
 	switch a {
 	case RewriteActionRewrite, RewriteActionExpand, RewriteActionShorten,
-		RewriteActionPolish, RewriteActionConflict, RewriteActionEmotion:
+		RewriteActionPolish, RewriteActionConflict, RewriteActionEmotion,
+		RewriteActionContinue, RewriteActionAddAct, RewriteActionAddTalk,
+		RewriteActionPacing, RewriteActionPOV:
 		return true
 	default:
 		return false
+	}
+}
+
+// RewriteActions 返回全部支持的编辑器 AI 操作（前端与文档都以此为准）。
+func RewriteActions() []string {
+	return []string{
+		string(RewriteActionRewrite), string(RewriteActionExpand), string(RewriteActionShorten),
+		string(RewriteActionPolish), string(RewriteActionConflict), string(RewriteActionEmotion),
+		string(RewriteActionContinue), string(RewriteActionAddAct), string(RewriteActionAddTalk),
+		string(RewriteActionPacing), string(RewriteActionPOV),
 	}
 }
 

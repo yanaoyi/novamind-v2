@@ -19,12 +19,15 @@ const (
 	VersionCreativeCharacter EntityVersionType = "creative_character"
 	VersionCreativeWorld     EntityVersionType = "creative_world"
 	VersionCreativeOutline   EntityVersionType = "creative_outline"
+	// VersionCreativeOutlineTree 是大纲树（§27 的 Outline + OutlineNode）自己的版本类型，
+	// 与旧的 creative_outline（卷 + 章节大纲）区分：后者的 entity_id 是作品 id，前者是大纲 id。
+	VersionCreativeOutlineTree EntityVersionType = "creative_outline_tree"
 )
 
 // Valid 判断类型是否合法。
 func (t EntityVersionType) Valid() bool {
 	switch t {
-	case VersionCreativeCharacter, VersionCreativeWorld, VersionCreativeOutline:
+	case VersionCreativeCharacter, VersionCreativeWorld, VersionCreativeOutline, VersionCreativeOutlineTree:
 		return true
 	default:
 		return false

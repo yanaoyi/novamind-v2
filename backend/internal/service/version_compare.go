@@ -105,6 +105,12 @@ func (s *VersionService) entityPayload(ctx context.Context, kind domain.EntityVe
 	case domain.VersionCreativeOutline:
 		payload, err := s.buildOutlinePayload(ctx, entityID)
 		return payload, "当前状态", err
+	case domain.VersionCreativeOutlineTree:
+		if s.outlineTree == nil {
+			return nil, "", fmt.Errorf("%w: %s", domain.ErrVersionTypeBad, kind)
+		}
+		payload, err := s.outlineTree.TreePayload(ctx, entityID)
+		return payload, "当前状态", err
 	default:
 		return nil, "", fmt.Errorf("%w: %s", domain.ErrVersionTypeBad, kind)
 	}

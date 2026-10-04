@@ -1,0 +1,612 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/yanaoyi/novamindv2/backend/internal/domain"
+	"github.com/yanaoyi/novamindv2/backend/internal/repository"
+)
+
+// OutlineRepository 是大纲服务需要的仓储能力（规格书 §27）。
+type OutlineRepository interface {
+	CreateOutline(ctx context.Context, o *domain.Outline) error
+	ListOutlines(ctx context.Context, workID string) ([]domain.Outline, error)
+	GetOutline(ctx context.Context, id string) (*domain.Outline, error)
+	UpdateOutline(ctx context.Context, o *domain.Outline) error
+	DeleteOutline(ctx context.Context, id string) error
+
+	ListNodes(ctx context.Context, outlineID string) ([]domain.OutlineNode, error)
+	GetNode(ctx context.Context, id string) (*domain.OutlineNode, error)
+	CreateNode(ctx context.Context, n *domain.OutlineNode) error
+	UpdateNode(ctx context.Context, n *domain.OutlineNode) error
+	DeleteNodeSubtree(ctx context.Context, id string) (int, error)
+	NextNodeSequence(ctx context.Context, outlineID string, parentID *string) (int, error)
+	ReplaceTree(ctx context.Context, outlineID string, nodes []domain.OutlineNode, parents []int) ([]domain.OutlineNode, error)
+}
+
+// OutlineMaterializer 是「大纲落成卷与章节」需要的最小写作能力（由 WritingRepo 提供）。
+type OutlineMaterializer interface {
+	ListVolumes(ctx context.Context, workID string) ([]domain.CreativeVolume, error)
+	CreateVolume(ctx context.Context, v *domain.CreativeVolume) error
+	ListChapters(ctx context.Context, workID string, withContent bool) ([]domain.CreativeChapter, error)
+	CreateChapter(ctx context.Context, c *domain.CreativeChapter) error
+}
+
+// OutlineService 是大纲服务（规格书 §27；§68 的「生成二创大纲 → 生成章节」）。
+type OutlineService struct {
+	repo     OutlineRepository
+	creative CreativeWorkReader
+	writing  OutlineMaterializer
+	versions *repository.EntityVersionRepo
+}
+
+// NewOutlineService 构建服务。
+func NewOutlineService(
+	repo OutlineRepository,
+	creative CreativeWorkReader,
+	writing OutlineMaterializer,
+	versions *repository.EntityVersionRepo,
+) *OutlineService {
+	return &OutlineService{repo: repo, creative: creative, writing: writing, versions: versions}
+}
+
+// OutlineDetail 是一份大纲及其完整节点树。
+type OutlineDetail struct {
+	Outline domain.Outline
+	Nodes   []*domain.OutlineNodeTree
+}
+
+// CreateOutlineInput 是新建大纲的入参。
+//
+// Nodes 为空时创建一份空大纲（作者从零搭结构）；非空时一次性写入整棵树，
+// 这也是「采纳 AI 候选」的落库路径——AI 产出的候选由作者确认后走这里进来（§52 红线）。
+type CreateOutlineInput struct {
+	Title   string
+	Summary string
+	Version int
+	Source  domain.OutlineSource
+	Nodes   []domain.OutlineNodeInput
+}
+
+// CreateOutline 新建大纲（可同时写入整棵树）。
+func (s *OutlineService) CreateOutline(ctx context.Context, workID string, in CreateOutlineInput) (*OutlineDetail, error) {
+	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+		return nil, err
+	}
+	outline := &domain.Outline{
+		CreativeWorkID: workID, Title: in.Title, Summary: in.Summary,
+		Version: in.Version, Source: in.Source,
+	}
+	outline.Normalize()
+	if err := outline.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateOutline(ctx, outline); err != nil {
+		return nil, err
+	}
+	if len(in.Nodes) > 0 {
+		if err := s.replaceTree(ctx, outline, in.Nodes); err != nil {
+			return nil, err
+		}
+	}
+	return s.GetOutline(ctx, outline.ID)
+}
+
+// ListOutlines 列出某作品的全部大纲。
+func (s *OutlineService) ListOutlines(ctx context.Context, workID string) ([]domain.Outline, error) {
+	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListOutlines(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []domain.Outline{}
+	}
+	return items, nil
+}
+
+// GetOutline 取大纲详情（含树）。
+func (s *OutlineService) GetOutline(ctx context.Context, outlineID string) (*OutlineDetail, error) {
+	outline, err := s.repo.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := s.repo.ListNodes(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	outline.NodeCount = len(nodes)
+	return &OutlineDetail{Outline: *outline, Nodes: domain.BuildOutlineTree(nodes)}, nil
+}
+
+// UpdateOutlineInput 是大纲元信息修改入参（只允许改标题 / 概要 / 版本号）。
+type UpdateOutlineInput struct {
+	Title   *string
+	Summary *string
+	Version *int
+}
+
+// UpdateOutline 修改大纲元信息。
+func (s *OutlineService) UpdateOutline(ctx context.Context, outlineID string, in UpdateOutlineInput) (*OutlineDetail, error) {
+	outline, err := s.repo.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	if in.Title != nil {
+		outline.Title = *in.Title
+	}
+	if in.Summary != nil {
+		outline.Summary = *in.Summary
+	}
+	if in.Version != nil {
+		outline.Version = *in.Version
+	}
+	outline.Normalize()
+	if err := outline.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateOutline(ctx, outline); err != nil {
+		return nil, err
+	}
+	return s.GetOutline(ctx, outlineID)
+}
+
+// DeleteOutline 删除大纲（连同节点）。
+func (s *OutlineService) DeleteOutline(ctx context.Context, outlineID string) error {
+	return s.repo.DeleteOutline(ctx, outlineID)
+}
+
+// ReplaceTree 用作者提交的整棵树替换大纲内容（AI 候选改完再提交也走这里）。
+func (s *OutlineService) ReplaceTree(ctx context.Context, outlineID string, inputs []domain.OutlineNodeInput) (*OutlineDetail, error) {
+	outline, err := s.repo.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.replaceTree(ctx, outline, inputs); err != nil {
+		return nil, err
+	}
+	return s.GetOutline(ctx, outlineID)
+}
+
+func (s *OutlineService) replaceTree(ctx context.Context, outline *domain.Outline, inputs []domain.OutlineNodeInput) error {
+	nodes, parents, err := domain.FlattenOutlineInput(inputs)
+	if err != nil {
+		return err
+	}
+	if _, err := s.repo.ReplaceTree(ctx, outline.ID, nodes, parents); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateNodeInput 是新增单个大纲节点的入参。
+type CreateNodeInput struct {
+	ParentID   *string
+	Title      string
+	Summary    string
+	Purpose    string
+	Characters []string
+	Location   string
+	Conflict   string
+	Outcome    string
+}
+
+// GetNode 取单个大纲节点。
+func (s *OutlineService) GetNode(ctx context.Context, nodeID string) (*domain.OutlineNode, error) {
+	return s.repo.GetNode(ctx, nodeID)
+}
+
+// CreateNode 在指定父节点下新增一个节点；层级由父节点推导（卷 → 节 → 章）。
+func (s *OutlineService) CreateNode(ctx context.Context, outlineID string, in CreateNodeInput) (*domain.OutlineNode, error) {
+	if _, err := s.repo.GetOutline(ctx, outlineID); err != nil {
+		return nil, err
+	}
+	level := domain.OutlineLevelVolume
+	if in.ParentID != nil {
+		parent, err := s.repo.GetNode(ctx, *in.ParentID)
+		if err != nil {
+			return nil, err
+		}
+		if parent.OutlineID != outlineID {
+			return nil, domain.ErrOutlineParentNotInTree
+		}
+		if parent.Level >= domain.OutlineLevelChapter {
+			return nil, fmt.Errorf("%w：章节点下面不能再加子节点", domain.ErrOutlineLevelJumpInvalid)
+		}
+		level = parent.Level + 1
+	}
+	sequence, err := s.repo.NextNodeSequence(ctx, outlineID, in.ParentID)
+	if err != nil {
+		return nil, err
+	}
+	node := &domain.OutlineNode{
+		OutlineID: outlineID, ParentID: in.ParentID, Level: level, Sequence: sequence,
+		Title: in.Title, Summary: in.Summary, Purpose: in.Purpose, Characters: in.Characters,
+		Location: in.Location, Conflict: in.Conflict, Outcome: in.Outcome,
+	}
+	node.Normalize()
+	if err := node.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateNode(ctx, node); err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+// UpdateNodeInput 是节点修改入参（nil 字段表示不改）。
+type UpdateNodeInput struct {
+	Title      *string
+	Summary    *string
+	Purpose    *string
+	Characters *[]string
+	Location   *string
+	Conflict   *string
+	Outcome    *string
+	Sequence   *int
+}
+
+// UpdateNode 修改节点。
+func (s *OutlineService) UpdateNode(ctx context.Context, nodeID string, in UpdateNodeInput) (*domain.OutlineNode, error) {
+	node, err := s.repo.GetNode(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if in.Title != nil {
+		node.Title = *in.Title
+	}
+	if in.Summary != nil {
+		node.Summary = *in.Summary
+	}
+	if in.Purpose != nil {
+		node.Purpose = *in.Purpose
+	}
+	if in.Characters != nil {
+		node.Characters = *in.Characters
+	}
+	if in.Location != nil {
+		node.Location = *in.Location
+	}
+	if in.Conflict != nil {
+		node.Conflict = *in.Conflict
+	}
+	if in.Outcome != nil {
+		node.Outcome = *in.Outcome
+	}
+	if in.Sequence != nil && *in.Sequence > 0 {
+		node.Sequence = *in.Sequence
+	}
+	node.Normalize()
+	if err := node.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateNode(ctx, node); err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+// DeleteNode 删除节点及其子树，返回删除数量。
+func (s *OutlineService) DeleteNode(ctx context.Context, nodeID string) (int, error) {
+	return s.repo.DeleteNodeSubtree(ctx, nodeID)
+}
+
+// MaterializeResult 是「大纲落成章节」的结果。
+type MaterializeResult struct {
+	VolumesCreated  int      `json:"volumes_created"`
+	VolumesReused   int      `json:"volumes_reused"`
+	ChaptersCreated int      `json:"chapters_created"`
+	ChapterIDs      []string `json:"chapter_ids"`
+}
+
+// Materialize 把大纲里的「章」节点落成写作系统的卷与章节（规格书 §68 的下一步）。
+//
+// 语义（刻意保守）：
+//   - 卷按标题复用：已有同名卷就挂上去，不重复建；
+//   - 章节一律**追加**，章号从现有最大章号继续排，不覆盖、不删除作者已经写好的内容；
+//   - 「节」在写作系统里没有对应表（§28 只有卷→章），因此章节点若挂在节下面，
+//     会把节标题作为摘要前缀保留下来，避免结构信息凭空消失。
+func (s *OutlineService) Materialize(ctx context.Context, outlineID string) (*MaterializeResult, error) {
+	detail, err := s.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	workID := detail.Outline.CreativeWorkID
+
+	volumes, err := s.writing.ListVolumes(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	chapters, err := s.writing.ListChapters(ctx, workID, false)
+	if err != nil {
+		return nil, err
+	}
+	volumeByTitle := make(map[string]string, len(volumes))
+	for _, v := range volumes {
+		volumeByTitle[v.Title] = v.ID
+	}
+	nextChapterNo := 1
+	for _, c := range chapters {
+		if c.ChapterNo >= nextChapterNo {
+			nextChapterNo = c.ChapterNo + 1
+		}
+	}
+
+	result := &MaterializeResult{ChapterIDs: []string{}}
+	volumeOrder := len(volumes) + 1
+
+	var walk func(nodes []*domain.OutlineNodeTree, volumeID string, sectionTitle string) error
+	walk = func(nodes []*domain.OutlineNodeTree, volumeID string, sectionTitle string) error {
+		for _, n := range nodes {
+			switch n.Level {
+			case domain.OutlineLevelVolume:
+				id, ok := volumeByTitle[n.Title]
+				if ok {
+					result.VolumesReused++
+				} else {
+					v := &domain.CreativeVolume{
+						CreativeWorkID: workID, Title: n.Title, Summary: n.Summary, Sequence: volumeOrder,
+					}
+					v.Normalize()
+					if err := v.Validate(); err != nil {
+						return err
+					}
+					if err := s.writing.CreateVolume(ctx, v); err != nil {
+						return err
+					}
+					volumeByTitle[n.Title] = v.ID
+					id = v.ID
+					volumeOrder++
+					result.VolumesCreated++
+				}
+				if err := walk(n.Children, id, ""); err != nil {
+					return err
+				}
+			case domain.OutlineLevelSection:
+				if err := walk(n.Children, volumeID, n.Title); err != nil {
+					return err
+				}
+			case domain.OutlineLevelChapter:
+				summary := n.Summary
+				if sectionTitle != "" {
+					prefix := fmt.Sprintf("【%s】", sectionTitle)
+					if summary == "" {
+						summary = prefix
+					} else {
+						summary = prefix + summary
+					}
+				}
+				var volumeRef *string
+				if volumeID != "" {
+					v := volumeID
+					volumeRef = &v
+				}
+				chapter := &domain.CreativeChapter{
+					CreativeWorkID: workID, VolumeID: volumeRef, ChapterNo: nextChapterNo,
+					Title: n.Title, Summary: summary, Purpose: n.Purpose,
+					Conflict: n.Conflict, Outcome: n.Outcome, Status: domain.ChapterDraft,
+				}
+				chapter.Normalize()
+				if err := chapter.Validate(); err != nil {
+					return err
+				}
+				if err := s.writing.CreateChapter(ctx, chapter); err != nil {
+					return err
+				}
+				result.ChaptersCreated++
+				result.ChapterIDs = append(result.ChapterIDs, chapter.ID)
+				nextChapterNo++
+			}
+		}
+		return nil
+	}
+	if err := walk(detail.Nodes, "", ""); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ---------- 版本历史（规格书 §59 的 Outline） ----------
+
+type outlineTreeSnapshotNode struct {
+	ID         string   `json:"id"`
+	ParentID   *string  `json:"parent_id"`
+	Level      int      `json:"level"`
+	Sequence   int      `json:"sequence"`
+	Title      string   `json:"title"`
+	Summary    string   `json:"summary"`
+	Purpose    string   `json:"purpose"`
+	Characters []string `json:"characters"`
+	Location   string   `json:"location"`
+	Conflict   string   `json:"conflict"`
+	Outcome    string   `json:"outcome"`
+}
+
+type outlineTreeSnapshot struct {
+	Title   string                    `json:"title"`
+	Summary string                    `json:"summary"`
+	Version int                       `json:"version"`
+	Source  string                    `json:"source"`
+	Nodes   []outlineTreeSnapshotNode `json:"nodes"`
+}
+
+// TreePayload 组装大纲树的当前状态快照（供版本比较与快照共用）。
+func (s *OutlineService) TreePayload(ctx context.Context, outlineID string) (map[string]any, error) {
+	detail, err := s.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	flat, err := s.repo.ListNodes(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	snap := outlineTreeSnapshot{
+		Title: detail.Outline.Title, Summary: detail.Outline.Summary,
+		Version: detail.Outline.Version, Source: string(detail.Outline.Source),
+		Nodes: make([]outlineTreeSnapshotNode, 0, len(flat)),
+	}
+	for _, n := range flat {
+		snap.Nodes = append(snap.Nodes, outlineTreeSnapshotNode{
+			ID: n.ID, ParentID: n.ParentID, Level: int(n.Level), Sequence: n.Sequence,
+			Title: n.Title, Summary: n.Summary, Purpose: n.Purpose, Characters: n.Characters,
+			Location: n.Location, Conflict: n.Conflict, Outcome: n.Outcome,
+		})
+	}
+	return toPayload(snap)
+}
+
+// SnapshotTree 存一版大纲快照（内容与上一版相同则跳过）。
+func (s *OutlineService) SnapshotTree(ctx context.Context, outlineID, note string) (*domain.EntityVersion, error) {
+	if s.versions == nil {
+		return nil, errors.New("版本仓储未配置")
+	}
+	payload, err := s.TreePayload(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	outline, err := s.repo.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	latest, err := s.versions.Latest(ctx, domain.VersionCreativeOutlineTree, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	if latest != nil && shallowEqualJSON(latest.Payload, payload) {
+		return nil, nil
+	}
+	no, err := s.versions.NextVersionNo(ctx, domain.VersionCreativeOutlineTree, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	version := &domain.EntityVersion{
+		EntityType: domain.VersionCreativeOutlineTree, EntityID: outlineID,
+		CreativeWorkID: outline.CreativeWorkID, VersionNo: no, Payload: payload,
+		Note: strings.TrimSpace(note),
+	}
+	if err := s.versions.Create(ctx, version); err != nil {
+		return nil, err
+	}
+	return version, nil
+}
+
+// ListVersions 列出大纲树的历史版本（新到旧）。
+func (s *OutlineService) ListVersions(ctx context.Context, outlineID string) ([]domain.EntityVersion, error) {
+	if s.versions == nil {
+		return nil, errors.New("版本仓储未配置")
+	}
+	if _, err := s.repo.GetOutline(ctx, outlineID); err != nil {
+		return nil, err
+	}
+	items, err := s.versions.List(ctx, domain.VersionCreativeOutlineTree, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []domain.EntityVersion{}
+	}
+	return items, nil
+}
+
+// GetVersion 取某一版。
+func (s *OutlineService) GetVersion(ctx context.Context, outlineID string, no int) (*domain.EntityVersion, error) {
+	if s.versions == nil {
+		return nil, errors.New("版本仓储未配置")
+	}
+	if no <= 0 {
+		return nil, domain.ErrVersionNoInvalid
+	}
+	return s.versions.GetByNo(ctx, domain.VersionCreativeOutlineTree, outlineID, no)
+}
+
+// RestoreVersion 恢复大纲树到某一版。
+//
+// 语义与章节版本一致：恢复前先把现状留一版；恢复是**整棵树的替换**（大纲树本身就是快照内容）。
+// 已经从这份大纲落成的章节不会被回滚——章节是下游产物，作者可能已经写了正文。
+func (s *OutlineService) RestoreVersion(ctx context.Context, outlineID string, no int) (*OutlineDetail, error) {
+	if s.versions == nil {
+		return nil, errors.New("版本仓储未配置")
+	}
+	version, err := s.versions.GetByNo(ctx, domain.VersionCreativeOutlineTree, outlineID, no)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.SnapshotTree(ctx, outlineID, fmt.Sprintf("恢复 v%d 前的自动备份", no)); err != nil {
+		return nil, err
+	}
+
+	var snap outlineTreeSnapshot
+	if err := fromPayload(version.Payload, &snap); err != nil {
+		return nil, err
+	}
+	if len(snap.Nodes) == 0 {
+		return nil, fmt.Errorf("%w：这一版是空大纲", domain.ErrOutlineTreeEmpty)
+	}
+	index := make(map[string]int, len(snap.Nodes))
+	for i, n := range snap.Nodes {
+		index[n.ID] = i
+	}
+	nodes := make([]domain.OutlineNode, 0, len(snap.Nodes))
+	parents := make([]int, 0, len(snap.Nodes))
+	for _, n := range snap.Nodes {
+		if !domain.OutlineLevel(n.Level).Valid() {
+			return nil, fmt.Errorf("%w: %d", domain.ErrOutlineLevelInvalid, n.Level)
+		}
+		parent := -1
+		if n.ParentID != nil {
+			idx, ok := index[*n.ParentID]
+			if !ok {
+				return nil, fmt.Errorf("快照里的父节点 %s 缺失，无法恢复", *n.ParentID)
+			}
+			parent = idx
+		}
+		nodes = append(nodes, domain.OutlineNode{
+			Level: domain.OutlineLevel(n.Level), Sequence: n.Sequence, Title: n.Title,
+			Summary: n.Summary, Purpose: n.Purpose, Characters: n.Characters,
+			Location: n.Location, Conflict: n.Conflict, Outcome: n.Outcome,
+		})
+		parents = append(parents, parent)
+	}
+	if _, err := s.repo.ReplaceTree(ctx, outlineID, nodes, parents); err != nil {
+		return nil, err
+	}
+
+	outline, err := s.repo.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	outline.Title, outline.Summary, outline.Version = snap.Title, snap.Summary, snap.Version
+	if outline.Source == "" {
+		outline.Source = domain.OutlineSource(snap.Source)
+	}
+	outline.Normalize()
+	if err := outline.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateOutline(ctx, outline); err != nil {
+		return nil, err
+	}
+
+	out, err := s.GetOutline(ctx, outlineID)
+	if err != nil {
+		return nil, err
+	}
+	_, _ = s.SnapshotTree(ctx, outlineID, fmt.Sprintf("恢复自 v%d", no))
+	return out, nil
+}
+
+// shallowEqualJSON 比较两份快照是否等价（用于跳过重复版本）。
+func shallowEqualJSON(a, b map[string]any) bool {
+	ra, err1 := json.Marshal(a)
+	rb, err2 := json.Marshal(b)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return string(ra) == string(rb)
+}

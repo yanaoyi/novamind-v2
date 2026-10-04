@@ -22,12 +22,24 @@ type VersionService struct {
 	repo     *repository.EntityVersionRepo
 	creative *CreativeService
 	writing  *WritingService
+	// outlineTree 把大纲树（§27）的快照/恢复委托给大纲服务——写入路径只有一条，不给版本服务开后门。
+	outlineTree OutlineTreeVersioner
 }
 
 // NewVersionService 构建服务。
 func NewVersionService(repo *repository.EntityVersionRepo, creative *CreativeService, writing *WritingService) *VersionService {
 	return &VersionService{repo: repo, creative: creative, writing: writing}
 }
+
+// OutlineTreeVersioner 是大纲树版本能力（由 OutlineService 实现）。
+type OutlineTreeVersioner interface {
+	TreePayload(ctx context.Context, outlineID string) (map[string]any, error)
+	SnapshotTree(ctx context.Context, outlineID, note string) (*domain.EntityVersion, error)
+	RestoreVersion(ctx context.Context, outlineID string, no int) (*OutlineDetail, error)
+}
+
+// SetOutlineTreeVersioner 注入大纲树版本能力（可选：未注入时大纲树版本接口返回明确错误）。
+func (s *VersionService) SetOutlineTreeVersioner(v OutlineTreeVersioner) { s.outlineTree = v }
 
 // ---------- 快照载荷 ----------
 
@@ -260,6 +272,14 @@ func (s *VersionService) Restore(ctx context.Context, t, entityID string, no int
 	}
 	version, err := s.repo.GetByNo(ctx, kind, entityID, no)
 	if err != nil {
+		return err
+	}
+	// 大纲树的恢复由大纲服务负责（整树替换 + 恢复前后的自动备份），这里只做转发。
+	if kind == domain.VersionCreativeOutlineTree {
+		if s.outlineTree == nil {
+			return fmt.Errorf("%w: %s", domain.ErrVersionTypeBad, kind)
+		}
+		_, err := s.outlineTree.RestoreVersion(ctx, entityID, no)
 		return err
 	}
 	// 恢复前先把"现状"留一版，误点恢复也能退回去

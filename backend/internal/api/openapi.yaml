@@ -2681,6 +2681,289 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
 
+  /creative/{id}/outlines:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [outline]
+      summary: 大纲列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    post:
+      tags: [outline]
+      summary: 新建大纲（可同时写入整棵树）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOutlineRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outlines/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [outline]
+      summary: 大纲详情（含节点树）
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "404":
+          description: 大纲不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    put:
+      tags: [outline]
+      summary: 修改大纲元信息
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                summary: { type: string }
+                version: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: 修改成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    delete:
+      tags: [outline]
+      summary: 删除大纲（连同节点）
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outlines/{id}/tree:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [outline]
+      summary: 用整棵树替换大纲内容
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nodes]
+              properties:
+                nodes:
+                  type: array
+                  items: { $ref: "#/components/schemas/OutlineNodeInput" }
+      responses:
+        "200":
+          description: 替换成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outlines/{id}/nodes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [outline]
+      summary: 新增大纲节点（层级由父节点推导）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                parent_id: { type: string, format: uuid, nullable: true }
+                title: { type: string }
+                summary: { type: string }
+                purpose: { type: string }
+                characters: { type: array, items: { type: string } }
+                location: { type: string }
+                conflict: { type: string }
+                outcome: { type: string }
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outlines/{id}/materialize:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [outline]
+      summary: 把大纲的「章」节点落成写作系统的卷与章节（追加，不覆盖）
+      responses:
+        "200":
+          description: 落成完成
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outlines/{id}/versions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [outline]
+      summary: 大纲版本列表
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    post:
+      tags: [outline]
+      summary: 手动存一版大纲快照
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        "201":
+          description: 创建成功（内容未变化时返回 created=false）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outlines/{id}/versions/{no}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [outline]
+      summary: 大纲版本详情
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outlines/{id}/versions/{no}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: no
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    post:
+      tags: [outline]
+      summary: 恢复大纲到某一版（整树替换；已落成的章节不受影响）
+      responses:
+        "200":
+          description: 恢复成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
+  /outline-nodes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [outline]
+      summary: 修改大纲节点
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                summary: { type: string }
+                purpose: { type: string }
+                characters: { type: array, items: { type: string } }
+                location: { type: string }
+                conflict: { type: string }
+                outcome: { type: string }
+                sequence: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: 修改成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+    delete:
+      tags: [outline]
+      summary: 删除大纲节点及其子树
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
   /creative/{id}/chapters:
     parameters:
       - name: id
@@ -4119,3 +4402,63 @@ components:
         conflict: { type: string }
         emotional_goal: { type: string }
         content: { type: string }
+    Outline:
+      type: object
+      description: 大纲（规格书 §27）：一份作品可以有多份大纲，version 由作者自己维护
+      properties:
+        id: { type: string, format: uuid }
+        creative_work_id: { type: string, format: uuid }
+        title: { type: string }
+        summary: { type: string }
+        version: { type: integer, minimum: 1 }
+        source: { type: string, enum: [MANUAL, AI], description: MANUAL=作者手写，AI=采纳 AI 候选 }
+        node_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    OutlineNode:
+      type: object
+      description: 大纲节点：level 1=卷 2=节 3=章，children 为子节点
+      properties:
+        id: { type: string, format: uuid }
+        outline_id: { type: string, format: uuid }
+        parent_id: { type: string, format: uuid, nullable: true }
+        level: { type: integer, enum: [1, 2, 3] }
+        level_name: { type: string, enum: [卷, 节, 章] }
+        sequence: { type: integer }
+        title: { type: string }
+        summary: { type: string }
+        purpose: { type: string }
+        characters: { type: array, items: { type: string } }
+        location: { type: string }
+        conflict: { type: string }
+        outcome: { type: string }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/OutlineNode" }
+    OutlineNodeInput:
+      type: object
+      description: 大纲节点入参（嵌套提交，深度即层级：第 1 层 = 卷）
+      required: [title]
+      properties:
+        title: { type: string }
+        summary: { type: string }
+        purpose: { type: string }
+        characters: { type: array, items: { type: string } }
+        location: { type: string }
+        conflict: { type: string }
+        outcome: { type: string }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/OutlineNodeInput" }
+    CreateOutlineRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, example: 二创大纲 v1 }
+        summary: { type: string }
+        version: { type: integer, minimum: 1 }
+        source: { type: string, enum: [MANUAL, AI] }
+        nodes:
+          type: array
+          description: 为空则创建空大纲；非空则一次性写入整棵树
+          items: { $ref: "#/components/schemas/OutlineNodeInput" }

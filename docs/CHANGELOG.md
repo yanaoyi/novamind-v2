@@ -715,3 +715,33 @@ PUT|DELETE     /plot-arcs/{id}
 * 访问 `/creative` 原本重定向到占位页 `/creative/overview` → 现在指向真实的总览页。
 
 **验证**：`tsc -b` + `vite build` 通过；新增 `pages/creativeOverview.test.tsx` 3 例（无原著时的引导、上传后**调用顺序**断言：建工程 → 建原著 → multipart 导入 → 建同人作品 → 逐个人物继承（权重全 100%）→ 世界观 FULL 继承、已有原著时直接新建）；前端全量 **9 个文件 33 例全绿**。
+
+### 2026-10-04 · Phase 8-5：大纲独立模型（§27）+ 一键落成章节（§68）— 后端
+
+**起因**：§68 的 MVP 闭环卡在「生成二创大纲」这一步。此前项目里根本没有大纲模型 —— 只有「卷 + 章节上的 purpose/conflict/outcome 字段」近似，缺了规格书 §27 明写的**节**这一层，也没法在写正文之前先把整本书的结构摆出来。AI 生成大纲的模板（`outline_generate.v1.md`）早就写好了，却一直**没有地方可以落库**。
+
+**数据模型**（迁移 `0014_create_outlines`）
+
+* `outlines`：`creative_work_id` / `title` / `summary` / `version` / `source`（MANUAL｜AI，来源可追）/ 软删除
+* `outline_nodes`：`outline_id` / `parent_id`（自引用成树）/ `level`（1 卷、2 节、3 章）/ `sequence` / `title` / `summary` / `purpose` / `characters`(JSONB) / `location` / `conflict` / `outcome`
+* 数据库层就堵住两类脏数据：`level IN (1,2,3)`、**卷节点不能有父节点**（`CHECK (level <> 1 OR parent_id IS NULL)`）
+* 顺带把 `entity_versions.entity_type` 的约束扩到 `creative_outline_tree`：大纲树有自己的版本历史，`entity_id` 是大纲 id，与旧的 `creative_outline`（entity_id = 作品 id，存卷 + 章节大纲）区分开
+
+**层级校验放在服务层**：父节点必须属于同一份大纲、子节点层级必须正好比父节点深一层、章下面不能再加子节点、整树最多三层；父子关系违反时返回 400/404 而不是 500。摊平嵌套入参时**"章没有子节点"不算超过三层**（这个坑第一版就踩了：递归无条件下探一层，叶子节点被误判 `ErrOutlineTreeTooDeep`，领域单测当场抓住）。
+
+**API 14 个**（OpenAPI 同步，防漂移测试守住）
+
+* 大纲：`POST/GET /creative/{id}/outlines`、`GET/PUT/DELETE /outlines/{id}`、`PUT /outlines/{id}/tree`（整树替换）
+* 节点：`POST /outlines/{id}/nodes`（层级由父节点推导）、`PUT/DELETE /outline-nodes/{id}`（删除是**连同子树**，用递归 CTE 一次软删，不出现"父删了子还挂着"）
+* 版本（§59）：`GET/POST /outlines/{id}/versions`、`GET /outlines/{id}/versions/{no}`、`POST .../restore`；`/versions/compare` 也支持 `creative_outline_tree`
+* 落成：`POST /outlines/{id}/materialize`
+
+**落成章节的语义（刻意保守）**：卷按标题复用，**章节一律追加**（章号从现有最大章号往后排），绝不覆盖作者已写的正文；「节」在 §28 的写作模型里没有对应表，所以挂在节下面的章会把节标题作为摘要前缀保留（`【第一节 · 归乡】……`），结构信息不平白丢掉。
+
+**版本语义与既有版本系统一致**：每次改动后存一版（内容与上一版相同则跳过，不产生噪声版本）；恢复前先给现状留一版；恢复是**整树替换**，但**已经落成的章节不回滚** —— 章节是下游产物，作者可能已经写了正文。
+
+**验证**
+
+* 后端：`gofmt` 干净、`go build ./...`、`go vet ./...` 通过；`go test ./...` 全绿（新增 `domain/outline_test.go` 5 例：层级与父下标推导、四类非法树、乱序输入组树与同级排序、父节点缺失时提升为根而不是整棵树读不出来、默认值与非法来源）
+* 迁移：`up` 到版本 **14**（dirty=false）
+* 端到端冒烟 `scripts/smoke-phase8-outline.sh`：**45 项全过** —— 建「卷→节→章」三层树 → 校验层级/三要素/人物/来源 → 空标题与四层嵌套 400、不存在 404 → 单节点增改删（含章下加子节点 400、**跨大纲挂父节点 400**、两份大纲互不干扰）→ 整树替换 → 版本快照（v1 含 6 节点）→ 恢复 v1 后结构与章名真的回来、恢复动作也留版本、重复快照不建版本 → 版本比较有差异 → 落成章节（建 2 卷 2 章、purpose 与卷关联带入、节标题进了摘要、再次落成复用卷并只追加章节）→ 删除大纲后章节仍在

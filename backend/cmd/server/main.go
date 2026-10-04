@@ -152,8 +152,16 @@ func run() error {
 		creative,
 	)
 	task.RegisterWritingHandlers(registry, writing, invoker)
+	// 大纲（规格书 §27）：卷 → 节 → 章的独立模型 + 落成章节
+	outlines := service.NewOutlineService(
+		repository.NewOutlineRepo(pg.DB),
+		repository.NewCreativeRepo(pg.DB),
+		repository.NewWritingRepo(pg.DB),
+		repository.NewEntityVersionRepo(pg.DB),
+	)
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)
+	versions.SetOutlineTreeVersioner(outlines)
 
 	// Redis
 	if cfg.RedisAddr == "" {
@@ -176,6 +184,7 @@ func run() error {
 		analysis,
 		creative,
 		writing,
+		outlines,
 		versions,
 		invoker,
 	)

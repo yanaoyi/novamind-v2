@@ -29,6 +29,7 @@ type Server struct {
 	analysis   *service.AnalysisService
 	creative   *service.CreativeService
 	writing    *service.WritingService
+	outlines   *service.OutlineService
 	versions   *service.VersionService
 	invoker    *service.ModelInvoker
 }
@@ -50,6 +51,7 @@ func NewServer(
 	analysis *service.AnalysisService,
 	creative *service.CreativeService,
 	writing *service.WritingService,
+	outlines *service.OutlineService,
 	versions *service.VersionService,
 	invoker *service.ModelInvoker,
 ) *Server {
@@ -58,7 +60,7 @@ func NewServer(
 		projects: projects, originals: originals, characters: characters, worlds: worlds,
 		events: events, providers: providers, prompts: promptEngine,
 		tasks: tasks, taskTypes: taskTypes, analysis: analysis, creative: creative,
-		writing: writing, invoker: invoker,
+		writing: writing, outlines: outlines, invoker: invoker,
 		versions: versions,
 	}
 }
@@ -152,6 +154,9 @@ func (s *Server) Router() *gin.Engine {
 			creative.POST("/:id/consistency/check", s.checkConsistency)
 			creative.GET("/:id/consistency/issues", s.listConsistencyIssues)
 			creative.GET("/:id/export", s.exportCreative)
+			// 大纲（规格书 §27）：独立模型，卷 → 节 → 章
+			creative.POST("/:id/outlines", s.createOutline)
+			creative.GET("/:id/outlines", s.listOutlines)
 			// 版本历史（规格书 §59）：世界观 / 大纲
 			creative.GET("/:id/world/versions", s.listWorldVersions)
 			creative.POST("/:id/world/versions", s.snapshotWorldHandler)
@@ -161,6 +166,24 @@ func (s *Server) Router() *gin.Engine {
 			creative.POST("/:id/outline/versions", s.snapshotOutlineHandler)
 			creative.GET("/:id/outline/versions/:no", s.getOutlineVersion)
 			creative.POST("/:id/outline/versions/:no/restore", s.restoreOutlineVersion)
+		}
+		outlines := v1.Group("/outlines")
+		{
+			outlines.GET("/:id", s.getOutline)
+			outlines.PUT("/:id", s.updateOutline)
+			outlines.DELETE("/:id", s.deleteOutline)
+			outlines.PUT("/:id/tree", s.replaceOutlineTree)
+			outlines.POST("/:id/nodes", s.createOutlineNode)
+			outlines.POST("/:id/materialize", s.materializeOutline)
+			outlines.GET("/:id/versions", s.listOutlineTreeVersions)
+			outlines.POST("/:id/versions", s.snapshotOutlineTreeHandler)
+			outlines.GET("/:id/versions/:no", s.getOutlineTreeVersion)
+			outlines.POST("/:id/versions/:no/restore", s.restoreOutlineTreeVersion)
+		}
+		outlineNodes := v1.Group("/outline-nodes")
+		{
+			outlineNodes.PUT("/:id", s.updateOutlineNode)
+			outlineNodes.DELETE("/:id", s.deleteOutlineNode)
 		}
 		chapters := v1.Group("/chapters")
 		{
@@ -296,7 +319,7 @@ func (s *Server) Router() *gin.Engine {
 func (s *Server) requireServices(c *gin.Context) bool {
 	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
 		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil ||
-		s.creative == nil || s.writing == nil || s.versions == nil {
+		s.creative == nil || s.writing == nil || s.outlines == nil || s.versions == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

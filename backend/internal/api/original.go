@@ -319,7 +319,9 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrChapterVersionNotFound),
 		errors.Is(err, domain.ErrVersionNotFound),
 		errors.Is(err, domain.ErrSceneNotFound),
-		errors.Is(err, domain.ErrIssueNotFound):
+		errors.Is(err, domain.ErrIssueNotFound),
+		errors.Is(err, domain.ErrOutlineNotFound),
+		errors.Is(err, domain.ErrOutlineNodeNotFound):
 		return http.StatusNotFound, "CREATIVE_WORLD_NOT_FOUND", true
 	case errors.Is(err, domain.ErrVersionTypeBad), errors.Is(err, domain.ErrVersionNoInvalid):
 		return http.StatusBadRequest, CodeBadRequest, true
@@ -398,6 +400,17 @@ func originalErrorStatus(err error) (int, string, bool) {
 		errors.Is(err, domain.ErrIssueSeverityInvalid),
 		errors.Is(err, domain.ErrIssueTypeInvalid),
 		errors.Is(err, domain.ErrIssueStatusInvalid),
+		errors.Is(err, domain.ErrOutlineTitleEmpty),
+		errors.Is(err, domain.ErrOutlineVersionInvalid),
+		errors.Is(err, domain.ErrOutlineSourceInvalid),
+		errors.Is(err, domain.ErrOutlineNodeTitleEmpty),
+		errors.Is(err, domain.ErrOutlineLevelInvalid),
+		errors.Is(err, domain.ErrOutlineParentNotFound),
+		errors.Is(err, domain.ErrOutlineParentNotInTree),
+		errors.Is(err, domain.ErrOutlineLevelJumpInvalid),
+		errors.Is(err, domain.ErrOutlineNodeHasChildren),
+		errors.Is(err, domain.ErrOutlineTreeTooDeep),
+		errors.Is(err, domain.ErrOutlineTreeEmpty),
 		errors.Is(err, domain.ErrExportFormatInvalid),
 		errors.Is(err, service.ErrUploadTooLarge):
 		return http.StatusBadRequest, CodeBadRequest, true

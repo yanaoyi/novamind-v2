@@ -24,6 +24,22 @@ func NewModelInvoker(providers *ModelProviderService, prompts *ai.Engine, gatewa
 // RunPrompt 用指定模板跑一次模型调用，返回模型输出的原始文本。
 // promptName 用 <name>（自动取最新版本）；JSONMode 默认开启（规格书 §57：输出必须结构化）。
 func (m *ModelInvoker) RunPrompt(ctx context.Context, promptName string, data any) (string, error) {
+	return m.run(ctx, promptName, data, true)
+}
+
+// RunTextPrompt 跑一次「产出正文/对话」的调用：不加 JSON 约束、不传 response_format。
+//
+// 为什么必须分开（2026-10-04 修的真缺陷）：
+// 写本章 / 续写改写 / AI 问答这些模板要的是**小说正文**，此前它们和结构化分析走同一条路——
+// 系统提示写死「只输出要求的 JSON」、请求里强制 `response_format=json_object`。
+// 上游（DeepSeek）在 json_object 模式下遇到"要正文"的提示会直接返回**空内容**，
+// 表现为「AI 写本章」随机失败（模型没返回正文），排障时极难定位。
+// 结构化输出是 §57 对"分析类"输出的要求，不是对所有输出的要求，两者必须分开。
+func (m *ModelInvoker) RunTextPrompt(ctx context.Context, promptName string, data any) (string, error) {
+	return m.run(ctx, promptName, data, false)
+}
+
+func (m *ModelInvoker) run(ctx context.Context, promptName string, data any, jsonMode bool) (string, error) {
 	if m.prompts == nil {
 		return "", errors.New("Prompt 引擎未初始化")
 	}
@@ -42,12 +58,12 @@ func (m *ModelInvoker) RunPrompt(ctx context.Context, promptName string, data an
 	}
 	resp, err := m.gateway.Chat(ctx, cfg, ai.ChatRequest{
 		Messages: []ai.Message{
-			{Role: "system", Content: "你是严谨的中文小说分析助手。只输出要求的 JSON，不要输出任何解释文字。"},
+			{Role: "system", Content: systemPrompt(jsonMode)},
 			{Role: "user", Content: rendered},
 		},
 		Temperature: provider.Temperature,
 		MaxTokens:   provider.MaxTokens,
-		JSONMode:    true,
+		JSONMode:    jsonMode,
 		TimeoutSec:  provider.TimeoutSec,
 	})
 	if err != nil {
@@ -57,6 +73,14 @@ func (m *ModelInvoker) RunPrompt(ctx context.Context, promptName string, data an
 		return "", fmt.Errorf("模型返回了空内容（prompt=%s）", prompt.Name)
 	}
 	return resp.Content, nil
+}
+
+// systemPrompt 按输出形态选择系统提示：结构化 vs 正文。
+func systemPrompt(jsonMode bool) string {
+	if jsonMode {
+		return "你是严谨的中文小说分析助手。只输出要求的 JSON，不要输出任何解释文字。"
+	}
+	return "你是专业的中文小说写作者与编辑。直接输出要求的内容本身（正文或回复），不要输出解释、不要加 Markdown 标记。"
 }
 
 // PromptNames 返回可用模板名（便于界面展示与自检）。

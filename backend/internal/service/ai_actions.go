@@ -62,7 +62,8 @@ func (s *WritingService) Chat(ctx context.Context, runner PromptRunner, in ChatI
 	}
 
 	cctx := s.BuildConsistencyContext(ctx, workID)
-	return runner.RunPrompt(ctx, "ai_chat", map[string]any{
+	// 问答返回的是自然语言回复，不是结构化数据
+	return runner.RunTextPrompt(ctx, "ai_chat", map[string]any{
 		"Message":          in.Message,
 		"ChapterGoal":      chapterGoal,
 		"CharacterContext": cctx.Characters,

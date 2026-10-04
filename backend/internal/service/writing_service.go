@@ -389,7 +389,8 @@ func (s *WritingService) GenerateChapterDraft(
 	if report != nil {
 		report("组装上下文", 20)
 	}
-	reply, err := runner.RunPrompt(ctx, "chapter_generate", map[string]any{
+	// 写本章要的是小说正文，走文本模式（JSON 模式会让上游返回空内容，见 ModelInvoker.RunTextPrompt）
+	reply, err := runner.RunTextPrompt(ctx, "chapter_generate", map[string]any{
 		"TargetWords":      targetWords,
 		"ChapterGoal":      chapterCtx.ChapterGoal,
 		"Scene":            chapterCtx.Scene,
@@ -474,7 +475,8 @@ func (s *WritingService) RewriteText(ctx context.Context, runner PromptRunner, i
 	if err != nil {
 		return "", err
 	}
-	return runner.RunPrompt(ctx, "rewrite", map[string]any{
+	// 改写/扩写/缩写等返回的也是正文
+	return runner.RunTextPrompt(ctx, "rewrite", map[string]any{
 		"Action":           string(in.Action),
 		"Text":             in.Text,
 		"Instruction":      in.Instruction,

@@ -29,6 +29,8 @@ type AnalysisProposalRepository interface {
 // PromptRunner 是"跑一次提示词拿回文本"的能力（由 ModelInvoker 实现，测试可替身）。
 type PromptRunner interface {
 	RunPrompt(ctx context.Context, promptName string, data any) (string, error)
+	// RunTextPrompt 用于「产出正文/对话」的模板（不加 JSON 约束），见 ModelInvoker.RunTextPrompt。
+	RunTextPrompt(ctx context.Context, promptName string, data any) (string, error)
 }
 
 // AnalysisService 负责分阶段分析、提案落库与审核应用。

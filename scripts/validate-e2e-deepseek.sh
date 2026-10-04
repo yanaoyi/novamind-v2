@@ -6,7 +6,8 @@
 #   2) 已挂验证账号（把 DEEPSEEK_API_KEY 写进 backend/.env 后执行 scripts/validation-account.sh seed）
 #
 # 覆盖链路：导入原著 → AI 分析（提案）→ 作者审核写入 → 建二创工程与作品 → 人物/世界继承
-#          → AI 生成大纲 → 建卷建章 → AI 写本章 → AI 续写 → AI 就地分析 → AI 问答
+#          → AI 生成大纲 → **采纳落库（大纲独立模型 §27）→ 一键落成章节** → 建卷建章
+#          → AI 写本章 → AI 续写 → AI 就地分析 → AI 问答
 #          → 一致性检查 → 导出
 #
 # 诊断友好：任何一步失败都会打印后端返回的 HTTP 状态与错误正文（不再哑失败）。
@@ -201,11 +202,104 @@ fi
 call POST "/creative/${CID}/world/inherit" '{"mode":"FULL"}'
 must "世界观继承"
 
-echo "== 5. AI 生成大纲（§38 / §49 新增能力）"
-call POST /ai/generate "{\"kind\":\"outline\",\"work_id\":\"${CID}\",\"instruction\":\"三卷结构，围绕沈家账册与督军的博弈\"}"
-if must "AI 生成大纲"; then
-  KEYS="$(jget "len(d['result'].keys())" 2>/dev/null || echo 0)"
-  soft "大纲候选有内容" "True" "$([[ "${KEYS:-0}" -ge 1 ]] && echo True || echo False)"
+echo "== 5. AI 生成大纲 → 采纳落库 → 一键落成章节（§27 / §68）"
+call POST /ai/generate "{\"kind\":\"outline\",\"work_id\":\"${CID}\",\"instruction\":\"三卷结构，围绕沈家账册与督军的博弈，每卷结尾留一个反转\"}"
+if ! must "AI 生成大纲候选"; then
+  exit 1
+fi
+KEYS="$(jget "len(d['result'].keys())" 2>/dev/null || echo 0)"
+soft "大纲候选有内容" "True" "$([[ "${KEYS:-0}" -ge 1 ]] && echo True || echo False)"
+
+# 候选 → 写入用的节点树：模型输出是「卷 → 节 → 章」三段式，写入接口的契约是「嵌套即层级」；
+# 模型省略「节」时补一层「正文」兜底，避免章节被当成节写进去（与前端 outlineAi.ts 同一规则）。
+python3 - "$BODY" "${WORK_DIR}/outline_nodes.json" <<'PY'
+import json, sys
+raw, out = sys.argv[1], sys.argv[2]
+payload = ((json.loads(raw).get("data") or {}).get("result")) or {}
+
+def text(v):
+    return v.strip() if isinstance(v, str) else ""
+
+def textarray(v):
+    if isinstance(v, list):
+        return [t for t in (text(x) for x in v) if t]
+    t = text(v)
+    return [t] if t else []
+
+def records(v):
+    return [x for x in v if isinstance(x, dict)] if isinstance(v, list) else []
+
+def chapter(c, i):
+    return {
+        "title": text(c.get("title")) or text(c.get("name")) or "第 {} 章".format(i + 1),
+        "summary": text(c.get("summary")) or text(c.get("description")),
+        "purpose": text(c.get("purpose")),
+        "characters": textarray(c.get("characters")),
+        "location": text(c.get("location")),
+        "conflict": text(c.get("conflict")),
+        "outcome": text(c.get("outcome")),
+        "children": [],
+    }
+
+volumes = payload.get("volumes") or payload.get("outline") or payload.get("nodes") or []
+nodes = []
+for vi, v in enumerate(records(volumes)):
+    sections = records(v.get("sections"))
+    children = []
+    if sections:
+        for si, s in enumerate(sections):
+            children.append({
+                "title": text(s.get("title")) or text(s.get("name")) or "第 {} 节".format(si + 1),
+                "summary": text(s.get("summary")) or text(s.get("description")),
+                "purpose": text(s.get("purpose")),
+                "characters": textarray(s.get("characters")),
+                "location": text(s.get("location")),
+                "conflict": text(s.get("conflict")),
+                "outcome": text(s.get("outcome")),
+                "children": [chapter(c, ci) for ci, c in enumerate(records(s.get("chapters")))],
+            })
+    else:
+        chapters = records(v.get("chapters"))
+        if chapters:
+            children.append({
+                "title": "正文", "summary": "", "purpose": "", "characters": [],
+                "location": "", "conflict": "", "outcome": "",
+                "children": [chapter(c, ci) for ci, c in enumerate(chapters)],
+            })
+    nodes.append({
+        "title": text(v.get("title")) or text(v.get("name")) or "第 {} 卷".format(vi + 1),
+        "summary": text(v.get("summary")) or text(v.get("description")),
+        "purpose": text(v.get("purpose")),
+        "characters": textarray(v.get("characters")),
+        "location": text(v.get("location")),
+        "conflict": text(v.get("conflict")),
+        "outcome": text(v.get("outcome")),
+        "children": children,
+    })
+
+json.dump({"title": "AI 大纲（端到端验证）", "summary": "由 validate-e2e-deepseek.sh 采纳", "source": "AI", "nodes": nodes},
+          open(out, "w", encoding="utf-8"), ensure_ascii=False)
+print("     转换后：{} 卷 / {} 节 / {} 章".format(
+    len(nodes),
+    sum(len(v["children"]) for v in nodes),
+    sum(len(s["children"]) for v in nodes for s in v["children"])))
+PY
+
+call POST "/creative/${CID}/outlines" "$(cat "${WORK_DIR}/outline_nodes.json")"
+if must "采纳 AI 候选为大纲（§27 落库）"; then
+  OUTLINE="$(jget "d['outline']['id']")"
+  soft "落库后大纲来源标记为 AI" "AI" "$(jget "d['outline']['source']" 2>/dev/null || echo '')"
+  NODE_COUNT="$(jget "d['outline']['node_count']" 2>/dev/null || echo 0)"
+  soft "大纲节点已写入（≥3）" "True" "$([[ "${NODE_COUNT:-0}" -ge 3 ]] && echo True || echo False)"
+
+  call POST "/outlines/${OUTLINE}/materialize"
+  if must "一键落成卷与章节"; then
+    MAT_CH="$(jget "d['chapters_created']" 2>/dev/null || echo 0)"
+    echo "     落成：新建 $(jget "d['volumes_created']" 2>/dev/null || echo 0) 卷 / 复用 $(jget "d['volumes_reused']" 2>/dev/null || echo 0) 卷 / 追加 ${MAT_CH} 章"
+    call GET "/creative/${CID}/chapters"
+    soft "写作系统里的章节数与落成数一致" "True" \
+      "$([[ "$(jget "d['total']" 2>/dev/null || echo 0)" == "${MAT_CH:-0}" ]] && echo True || echo False)"
+  fi
 fi
 
 echo "== 6. 建卷建章 + AI 写本章"
@@ -213,8 +307,12 @@ call POST "/creative/${CID}/volumes" '{"title":"第一卷 · 梅雨账","summary
 must "创建卷" || exit 1
 VOL="$(jget "d['id']")"
 
+# 上面「落成章节」可能已经占用了 1..N 号，这里按现有章数往后取号，避免撞唯一约束
+call GET "/creative/${CID}/chapters"
+NEXT_NO=$(( $(jget "d['total']" 2>/dev/null || echo 0) + 1 ))
+
 call POST "/creative/${CID}/chapters" \
-  "{\"volume_id\":\"${VOL}\",\"chapter_no\":1,\"title\":\"雨夜\",\"summary\":\"沈砚归家，发现账册疑点\",\"conflict\":\"查账会触动督军\",\"purpose\":\"立起主角与冲突\"}"
+  "{\"volume_id\":\"${VOL}\",\"chapter_no\":${NEXT_NO},\"title\":\"雨夜\",\"summary\":\"沈砚归家，发现账册疑点\",\"conflict\":\"查账会触动督军\",\"purpose\":\"立起主角与冲突\"}"
 must "创建章节" || exit 1
 CH="$(jget "d['id']")"
 

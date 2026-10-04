@@ -199,6 +199,13 @@ func (r *ModelProviderRepo) Delete(ctx context.Context, id string) error {
 	if _, err := uuid.Parse(id); err != nil {
 		return domain.ErrProviderNotFound
 	}
+	// 软删除只标记行，密钥密文会继续留在库里。模型账号属于"删了就必须删干净"的数据，
+	// 所以这里先把密文清空（凭证不可恢复），再打软删除标记保留审计痕迹。
+	if err := r.db.WithContext(ctx).Model(&modelProviderModel{}).
+		Where("id = ?", id).
+		Update("api_key_cipher", "").Error; err != nil {
+		return fmt.Errorf("清除模型密钥失败: %w", err)
+	}
 	res := r.db.WithContext(ctx).Where("id = ?", id).Delete(&modelProviderModel{})
 	if res.Error != nil {
 		return fmt.Errorf("删除模型配置失败: %w", res.Error)

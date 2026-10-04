@@ -244,6 +244,8 @@ func (s *Server) failFromError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, domain.ErrProjectNotFound):
 		Fail(c, http.StatusNotFound, "PROJECT_NOT_FOUND", err.Error(), nil)
+	case errors.Is(err, service.ErrBadRequest):
+		Fail(c, http.StatusBadRequest, CodeBadRequest, err.Error(), nil)
 	case errors.Is(err, domain.ErrProjectNameRequired),
 		errors.Is(err, domain.ErrProjectNameTooLong),
 		errors.Is(err, domain.ErrProjectTypeInvalid),

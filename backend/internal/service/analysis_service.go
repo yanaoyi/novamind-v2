@@ -370,7 +370,7 @@ func (s *AnalysisService) applyProposal(tx *gorm.DB, p domain.AnalysisProposal) 
 			Abilities:        strVal(p.Payload, "abilities"),
 			FirstAppearance:  strVal(p.Payload, "first_appearance"),
 			LastAppearance:   strVal(p.Payload, "last_appearance"),
-			Importance:       intVal(p.Payload, "importance"),
+			Importance:       clampImportance(intVal(p.Payload, "importance")),
 			Source:           domain.SourceAI,
 			DNA:              parseDNA(p.Payload["dna"]),
 		}
@@ -402,7 +402,7 @@ func (s *AnalysisService) applyProposal(tx *gorm.DB, p domain.AnalysisProposal) 
 		rule := &domain.WorldRule{
 			WorldID: world.ID, Category: strVal(p.Payload, "category"),
 			Name: strVal(p.Payload, "name"), Description: strVal(p.Payload, "description"),
-			Importance: intVal(p.Payload, "importance"),
+			Importance: clampImportance(intVal(p.Payload, "importance")),
 		}
 		rule.Normalize()
 		if err := rule.Validate(); err != nil {
@@ -498,7 +498,7 @@ func (s *AnalysisService) applyProposal(tx *gorm.DB, p domain.AnalysisProposal) 
 			Participants:   participants,
 			LocationText:   strVal(p.Payload, "location"),
 			Consequences:   strVal(p.Payload, "consequences"),
-			Importance:     intVal(p.Payload, "importance"),
+			Importance:     clampImportance(intVal(p.Payload, "importance")),
 			Source:         domain.SourceAI,
 		}
 		// 地点名若能匹配到世界观地点则建立关联
@@ -644,7 +644,59 @@ func parseDNA(v any) domain.CharacterDNA {
 	if err := json.Unmarshal(raw, &dna); err != nil {
 		return domain.CharacterDNA{}
 	}
-	return dna
+	return clampDNA(dna)
+}
+
+// clampImportance 把 AI 产出的重要度规整到 1-5。
+//
+// 为什么不直接报错：模型给的数字越界（遗漏字段变 0、或写成 6）属于噪声，
+// 为此把整条提案的审核打断，作者体验很差。规整成合理值，作者在界面上照样能改。
+func clampImportance(v int) int {
+	if v < 1 {
+		return 3
+	}
+	if v > 5 {
+		return 5
+	}
+	return v
+}
+
+// clampDNA 把各维度权重规整到 0-100（AI 偶尔会给 120、-1 这类值）。
+func clampDNA(dna domain.CharacterDNA) domain.CharacterDNA {
+	out := domain.CharacterDNA{}
+	for name, dim := range dna.Dimensions() {
+		switch {
+		case dim.Weight < 0:
+			dim.Weight = 0
+		case dim.Weight > 100:
+			dim.Weight = 100
+		}
+		switch name {
+		case "personality":
+			out.Personality = dim
+		case "values":
+			out.Values = dim
+		case "motivation":
+			out.Motivation = dim
+		case "behavior":
+			out.Behavior = dim
+		case "speech_style":
+			out.SpeechStyle = dim
+		case "background":
+			out.Background = dim
+		case "ability":
+			out.Ability = dim
+		case "decision_style":
+			out.DecisionStyle = dim
+		case "conflict_response":
+			out.ConflictResponse = dim
+		case "emotional_response":
+			out.EmotionalResponse = dim
+		case "relationship_pattern":
+			out.RelationshipPattern = dim
+		}
+	}
+	return out
 }
 
 func trimChars(s string, max int) string {

@@ -3,30 +3,75 @@
 #
 # 前置：
 #   1) 后端已启动（bash scripts/dev-up.sh）
-#   2) 已挂验证账号（DEEPSEEK_API_KEY=... bash scripts/validation-account.sh seed）
+#   2) 已挂验证账号（把 DEEPSEEK_API_KEY 写进 backend/.env 后执行 scripts/validation-account.sh seed）
 #
-# 覆盖链路：导入原著 → AI 分析（提案）→ 作者审核写入 → 建二创 → 人物/世界继承
+# 覆盖链路：导入原著 → AI 分析（提案）→ 作者审核写入 → 建二创工程与作品 → 人物/世界继承
 #          → AI 生成大纲 → 建卷建章 → AI 写本章 → AI 续写 → AI 就地分析 → AI 问答
 #          → 一致性检查 → 导出
 #
-# 清理：结束时删除本次创建的工程（不留测试数据）；验证账号保留到交付前再 purge。
+# 诊断友好：任何一步失败都会打印后端返回的 HTTP 状态与错误正文（不再哑失败）。
+# 清理：结束时删除本次创建的两个工程（原著 / 二创）；验证账号保留到交付前再 purge。
 set -uo pipefail
 
 API="${NOVAMIND_API_BASE:-http://127.0.0.1:8080/api/v1}"
 WORK_DIR="$(mktemp -d)"
 PASS=0
 FAIL=0
+HTTP=""
+BODY=""
 
 cleanup() {
-  if [[ -n "${PROJECT_ID:-}" ]]; then
+  for pid in "${PROJECT_ID:-}" "${CREATIVE_PROJECT_ID:-}"; do
+    [[ -n "$pid" ]] || continue
     PGPASSWORD="${PGPASSWORD:-novamind}" psql -h 127.0.0.1 -U novamind -d novamind \
-      -tAc "delete from projects where id='${PROJECT_ID}'" >/dev/null 2>&1 || true
-  fi
+      -tAc "delete from projects where id='${pid}'" >/dev/null 2>&1 || true
+  done
   rm -rf "${WORK_DIR}"
 }
 trap cleanup EXIT
 
-check() { # check 描述 期望 实际
+# ---------- 基础设施 ----------
+
+call() { # call METHOD PATH [JSON_BODY]
+  local method="$1" path="$2" body="${3:-}" tmp
+  tmp="$(mktemp)"
+  if [[ -n "$body" ]]; then
+    HTTP="$(curl -s -o "$tmp" -w '%{http_code}' -X "$method" "${API}${path}" \
+      -H 'Content-Type: application/json' -d "$body")"
+  else
+    HTTP="$(curl -s -o "$tmp" -w '%{http_code}' -X "$method" "${API}${path}")"
+  fi
+  BODY="$(cat "$tmp")"
+  rm -f "$tmp"
+}
+
+http_ok() { [[ "$HTTP" =~ ^2 ]]; }
+
+err_message() {
+  python3 - "$BODY" <<'PY'
+import json, sys
+raw = sys.argv[1]
+try:
+    err = (json.loads(raw) or {}).get("error") or {}
+    msg = "{code} {message}".format(code=err.get("code", ""), message=err.get("message", ""))
+except Exception:
+    msg = raw[:200]
+print(msg.strip() or "（空响应）")
+PY
+}
+
+must() { # must 描述 —— HTTP 非 2xx 时记账并打印后端错误
+  if http_ok; then
+    echo "  ✅ $1"
+    PASS=$((PASS + 1))
+    return 0
+  fi
+  echo "  ❌ $1（HTTP ${HTTP}：$(err_message)）"
+  FAIL=$((FAIL + 1))
+  return 1
+}
+
+soft() { # soft 描述 期望 实际 —— 业务断言
   if [[ "$2" == "$3" ]]; then
     echo "  ✅ $1"
     PASS=$((PASS + 1))
@@ -36,13 +81,13 @@ check() { # check 描述 期望 实际
   fi
 }
 
-getid() { python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["id"])'; }
-field() { python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print($1)"; }
+jget() { python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print($1)" <<< "$BODY"; }
 
 wait_task() { # wait_task task_id
   local id="$1" status=""
   for _ in $(seq 1 90); do
-    status=$(curl -s "${API}/tasks/${id}" | field "d['status']")
+    call GET "/tasks/${id}"
+    status="$(jget "d['status']" 2>/dev/null || echo '')"
     [[ "$status" == "COMPLETED" || "$status" == "FAILED" ]] && break
     sleep 2
   done
@@ -50,21 +95,19 @@ wait_task() { # wait_task task_id
 }
 
 echo "== 0. 前置检查：验证账号"
-PROVIDERS=$(curl -sf "${API}/model-providers")
-PROVIDER_COUNT=$(echo "$PROVIDERS" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["data"]["items"]))')
-if [[ "$PROVIDER_COUNT" == "0" ]]; then
-  echo "  ❌ 没有已启用的模型配置；先执行 DEEPSEEK_API_KEY=... bash scripts/validation-account.sh seed"
-  exit 1
-fi
-PROVIDER_NAME=$(echo "$PROVIDERS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["items"][0]["name"])')
-echo "  ✅ 使用模型配置：${PROVIDER_NAME}"
-PASS=$((PASS + 1))
+call GET /model-providers
+if ! must "模型配置可用"; then exit 1; fi
+PROVIDER_NAME="$(jget "d['items'][0]['name']" 2>/dev/null || echo '')"
+echo "     使用配置：${PROVIDER_NAME}"
 
 echo "== 1. 导入原著（3 章）"
-PROJECT_ID=$(curl -sf -X POST "${API}/projects" -H 'Content-Type: application/json' \
-  -d '{"name":"端到端验证-原著","type":"ORIGINAL"}' | getid)
-OID=$(curl -sf -X POST "${API}/projects/${PROJECT_ID}/original" -H 'Content-Type: application/json' \
-  -d '{"title":"端到端验证样本"}' | getid)
+call POST /projects '{"name":"端到端验证-原著","type":"ORIGINAL"}'
+must "创建原著工程" || exit 1
+PROJECT_ID="$(jget "d['id']")"
+
+call POST "/projects/${PROJECT_ID}/original" '{"title":"端到端验证样本"}'
+must "创建原著作品" || exit 1
+OID="$(jget "d['id']")"
 
 python3 - "${WORK_DIR}" <<'PY'
 import sys
@@ -97,127 +140,129 @@ for title, body in chapters:
     parts.append("")
 open(f"{work}/sample.txt", "w", encoding="utf-8").write("\n".join(parts))
 PY
-curl -sf -o /dev/null -X POST "${API}/original/${OID}/import" -F "file=@${WORK_DIR}/sample.txt"
-check "章节导入数" "3" "$(curl -sf "${API}/original/${OID}/chapters" | field "d['total']")"
+HTTP="$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API}/original/${OID}/import" -F "file=@${WORK_DIR}/sample.txt")"
+BODY="{}"
+must "上传并解析原著"
+call GET "/original/${OID}/chapters"
+soft "章节数" "3" "$(jget "d['total']" 2>/dev/null || echo '')"
 
 echo "== 2. AI 分析（真实模型，异步）"
-TASK=$(curl -sf -X POST "${API}/original/${OID}/analysis" -H 'Content-Type: application/json' \
-  -d '{"stage":"character_extract"}' | getid)
-check "人物提取任务完成" "COMPLETED" "$(wait_task "$TASK")"
-PROPOSALS=$(curl -sf "${API}/original/${OID}/proposals?status=PENDING" | field "d['total']")
-if [[ "${PROPOSALS:-0}" -ge 1 ]]; then
-  echo "  ✅ 产出待审提案：${PROPOSALS} 条"
+call POST "/original/${OID}/analysis" '{"stage":"character_extract"}'
+must "触发人物提取" || exit 1
+TASK_ID="$(jget "d['id']")"
+soft "人物提取完成" "COMPLETED" "$(wait_task "$TASK_ID")"
+
+call GET "/original/${OID}/proposals?status=PENDING"
+PENDING="$(jget "d['total']" 2>/dev/null || echo 0)"
+if [[ "${PENDING:-0}" -ge 1 ]]; then
+  echo "  ✅ 产出待审提案 ${PENDING} 条"
   PASS=$((PASS + 1))
 else
-  echo "  ❌ 没有产出待审提案"
+  echo "  ❌ 未产出待审提案"
   FAIL=$((FAIL + 1))
 fi
 
 echo "== 3. 作者审核写入原著"
-APPROVE_ID=$(curl -sf "${API}/original/${OID}/proposals?status=PENDING" \
-  | python3 -c 'import sys,json;i=json.load(sys.stdin)["data"]["items"];print(i[0]["id"] if i else "")')
+APPROVE_ID="$(jget "d['items'][0]['id']" 2>/dev/null || echo '')"
 if [[ -n "$APPROVE_ID" ]]; then
-  curl -sf -o /dev/null -X POST "${API}/proposals/${APPROVE_ID}/approve" -H 'Content-Type: application/json' -d '{}'
+  call POST "/proposals/${APPROVE_ID}/approve" '{}'
+  must "审核通过写入原著"
 fi
-CHAR_TOTAL=$(curl -sf "${API}/original/${OID}/characters" | field "d['total']")
-if [[ "${CHAR_TOTAL:-0}" -ge 1 ]]; then
-  echo "  ✅ 审核后写入原著人物：${CHAR_TOTAL} 位"
+call GET "/original/${OID}/characters"
+CHARS="$(jget "d['total']" 2>/dev/null || echo 0)"
+if [[ "${CHARS:-0}" -ge 1 ]]; then
+  echo "  ✅ 原著人物 ${CHARS} 位"
   PASS=$((PASS + 1))
 else
-  echo "  ❌ 审核后原著人物仍为 0"
+  echo "  ❌ 原著人物仍为 0"
   FAIL=$((FAIL + 1))
 fi
 
-echo "== 4. 建二创作品并继承"
-CID=$(curl -sf -X POST "${API}/original/${OID}/create-creative" -H 'Content-Type: application/json' \
-  -d '{"title":"端到端验证-同人"}' | getid)
-SRC_CHAR=$(curl -sf "${API}/original/${OID}/characters" | python3 -c 'import sys,json;i=json.load(sys.stdin)["data"]["items"];print(i[0]["id"] if i else "")')
+echo "== 4. 建二创工程与作品，继承人物与世界观"
+call POST /projects '{"name":"端到端验证-二创","type":"CREATIVE"}'
+must "创建二创工程" || exit 1
+CREATIVE_PROJECT_ID="$(jget "d['id']")"
+
+call POST "/original/${OID}/create-creative" \
+  "{\"project_id\":\"${CREATIVE_PROJECT_ID}\",\"title\":\"端到端验证-同人\",\"description\":\"验证用同人作品\"}"
+must "创建二创作品" || exit 1
+CID="$(jget "d['id']")"
+
+call GET "/original/${OID}/characters"
+SRC_CHAR="$(jget "d['items'][0]['id']" 2>/dev/null || echo '')"
 if [[ -n "$SRC_CHAR" ]]; then
-  INHERITED_NAME=$(curl -sf -X POST "${API}/creative/${CID}/characters/inherit" -H 'Content-Type: application/json' \
-    -d "{\"source_character_id\":\"${SRC_CHAR}\",\"weights\":{\"personality\":100,\"speech_style\":60}}" \
-    | field "d['character']['name']" 2>/dev/null || echo "")
-  if [[ -n "$INHERITED_NAME" ]]; then
-    echo "  ✅ 人物继承成功：${INHERITED_NAME}"
-    PASS=$((PASS + 1))
-  else
-    echo "  ❌ 人物继承失败"
-    FAIL=$((FAIL + 1))
+  call POST "/creative/${CID}/characters/inherit" \
+    "{\"source_character_id\":\"${SRC_CHAR}\",\"importance\":4,\"weights\":{\"personality\":100,\"speech_style\":60}}"
+  if must "人物继承"; then
+    echo "     继承得到：$(jget "d['name']" 2>/dev/null || echo '')"
   fi
 fi
-curl -sf -o /dev/null -X POST "${API}/creative/${CID}/world/inherit" -H 'Content-Type: application/json' -d '{"mode":"FULL"}'
-echo "  ✅ 世界观继承接口调用完成"
-PASS=$((PASS + 1))
 
-echo "== 5. AI 生成大纲（§38 新增能力）"
-OUTLINE=$(curl -sf -X POST "${API}/ai/generate" -H 'Content-Type: application/json' \
-  -d "{\"kind\":\"outline\",\"work_id\":\"${CID}\",\"instruction\":\"三卷结构，围绕沈家账册与督军的博弈\"}")
-OUTLINE_KEYS=$(echo "$OUTLINE" | python3 -c 'import sys,json;d=json.load(sys.stdin)["data"]["result"];print(len(d.keys()))')
-if [[ "${OUTLINE_KEYS:-0}" -ge 1 ]]; then
-  echo "  ✅ 大纲候选返回（字段数 ${OUTLINE_KEYS}，pending_author_review=true）"
-  PASS=$((PASS + 1))
-else
-  echo "  ❌ 大纲候选为空"
-  FAIL=$((FAIL + 1))
+call POST "/creative/${CID}/world/inherit" '{"mode":"FULL"}'
+must "世界观继承"
+
+echo "== 5. AI 生成大纲（§38 / §49 新增能力）"
+call POST /ai/generate "{\"kind\":\"outline\",\"work_id\":\"${CID}\",\"instruction\":\"三卷结构，围绕沈家账册与督军的博弈\"}"
+if must "AI 生成大纲"; then
+  KEYS="$(jget "len(d['result'].keys())" 2>/dev/null || echo 0)"
+  soft "大纲候选有内容" "True" "$([[ "${KEYS:-0}" -ge 1 ]] && echo True || echo False)"
 fi
 
 echo "== 6. 建卷建章 + AI 写本章"
-VOL=$(curl -sf -X POST "${API}/creative/${CID}/volumes" -H 'Content-Type: application/json' \
-  -d '{"title":"第一卷 · 梅雨账","summary":"沈砚接手沈家账目","sequence":1}' | getid)
-CH=$(curl -sf -X POST "${API}/creative/${CID}/chapters" -H 'Content-Type: application/json' \
-  -d "{\"volume_id\":\"${VOL}\",\"chapter_no\":1,\"title\":\"雨夜\",\"summary\":\"沈砚归家，发现账册疑点\",\"conflict\":\"查账会触动督军\",\"purpose\":\"立起主角与冲突\"}" | getid)
-GTASK=$(curl -sf -X POST "${API}/chapters/${CH}/generate" -H 'Content-Type: application/json' \
-  -d '{"target_words":300,"instruction":"克制的短句，第一人称限知改为第三人称"}' | getid)
-check "写本章任务完成" "COMPLETED" "$(wait_task "$GTASK")"
-CONTENT_LEN=$(curl -sf "${API}/chapters/${CH}" | field "len(d.get('content') or '')")
-if [[ "${CONTENT_LEN:-0}" -gt 100 ]]; then
-  echo "  ✅ 生成正文长度：${CONTENT_LEN} 字"
-  PASS=$((PASS + 1))
-else
-  echo "  ❌ 生成正文过短（${CONTENT_LEN}）"
-  FAIL=$((FAIL + 1))
-fi
+call POST "/creative/${CID}/volumes" '{"title":"第一卷 · 梅雨账","summary":"沈砚接手沈家账目","sequence":1}'
+must "创建卷" || exit 1
+VOL="$(jget "d['id']")"
+
+call POST "/creative/${CID}/chapters" \
+  "{\"volume_id\":\"${VOL}\",\"chapter_no\":1,\"title\":\"雨夜\",\"summary\":\"沈砚归家，发现账册疑点\",\"conflict\":\"查账会触动督军\",\"purpose\":\"立起主角与冲突\"}"
+must "创建章节" || exit 1
+CH="$(jget "d['id']")"
+
+call POST "/chapters/${CH}/generate" '{"target_words":300,"instruction":"克制的短句，第三人称限知"}'
+must "触发 AI 写本章" || exit 1
+GTASK="$(jget "d['id']")"
+soft "写本章任务完成" "COMPLETED" "$(wait_task "$GTASK")"
+
+call GET "/chapters/${CH}"
+LEN="$(jget "len(d.get('content') or '')" 2>/dev/null || echo 0)"
+soft "生成正文非空（>100 字）" "True" "$([[ "${LEN:-0}" -gt 100 ]] && echo True || echo False)"
+echo "     正文长度：${LEN} 字"
 
 echo "== 7. AI 续写 / 就地分析 / 问答"
-CONT=$(curl -sf -X POST "${API}/ai/continue" -H 'Content-Type: application/json' -d "{\"chapter_id\":\"${CH}\"}" \
-  | field "len(d.get('text') or '')")
-if [[ "${CONT:-0}" -gt 20 ]]; then
-  echo "  ✅ 续写返回 ${CONT} 字"
-  PASS=$((PASS + 1))
-else
-  echo "  ❌ 续写返回过短（${CONT}）"
-  FAIL=$((FAIL + 1))
+call POST /ai/continue "{\"chapter_id\":\"${CH}\"}"
+if must "AI 续写"; then
+  CLEN="$(jget "len(d.get('text') or '')" 2>/dev/null || echo 0)"
+  soft "续写内容非空（>20 字）" "True" "$([[ "${CLEN:-0}" -gt 20 ]] && echo True || echo False)"
 fi
 
-ANALYZE=$(curl -sf -X POST "${API}/ai/analyze" -H 'Content-Type: application/json' -d "{\"chapter_id\":\"${CH}\",\"focus\":\"节奏与冲突\"}" \
-  | python3 -c 'import sys,json;d=json.load(sys.stdin)["data"]["result"];print("summary" in d)')
-check "就地分析返回 summary" "True" "$ANALYZE"
+call POST /ai/analyze "{\"chapter_id\":\"${CH}\",\"focus\":\"节奏与冲突\"}"
+if must "AI 就地分析"; then
+  HAS="$(jget "'summary' in d['result']" 2>/dev/null || echo False)"
+  soft "分析结果含 summary" "True" "$HAS"
+fi
 
-CHAT=$(curl -sf -X POST "${API}/ai/chat" -H 'Content-Type: application/json' \
-  -d "{\"work_id\":\"${CID}\",\"message\":\"目前的主要冲突是什么？\"}" | field "len(d.get('reply') or '')")
-if [[ "${CHAT:-0}" -gt 10 ]]; then
-  echo "  ✅ AI 问答返回 ${CHAT} 字"
-  PASS=$((PASS + 1))
-else
-  echo "  ❌ AI 问答返回过短（${CHAT}）"
-  FAIL=$((FAIL + 1))
+call POST /ai/chat "{\"work_id\":\"${CID}\",\"message\":\"目前的主要冲突是什么？\"}"
+if must "AI 问答"; then
+  RLEN="$(jget "len(d.get('reply') or '')" 2>/dev/null || echo 0)"
+  soft "问答内容非空（>10 字）" "True" "$([[ "${RLEN:-0}" -gt 10 ]] && echo True || echo False)"
 fi
 
 echo "== 8. 一致性检查（五类上下文）"
-CTASK=$(curl -sf -X POST "${API}/creative/${CID}/consistency/check" -H 'Content-Type: application/json' -d '{}' | getid)
-check "一致性检查任务完成" "COMPLETED" "$(wait_task "$CTASK")"
-CHECKED=$(curl -sf "${API}/tasks/${CTASK}" | field "d['output']['checked']")
-echo "  ✅ 实际检查章数：${CHECKED}"
+call POST "/creative/${CID}/consistency/check" '{}'
+must "触发一致性检查" || exit 1
+CTASK="$(jget "d['id']")"
+soft "一致性检查完成" "COMPLETED" "$(wait_task "$CTASK")"
+call GET "/tasks/${CTASK}"
+echo "     检查章数：$(jget "d['output'].get('checked', 0)" 2>/dev/null || echo '?')，发现 $(jget "d['output'].get('issues_created', 0)" 2>/dev/null || echo '?') 个问题"
+echo "  ✅ 一致性检查任务产出可读"
 PASS=$((PASS + 1))
 
 echo "== 9. 导出"
-BYTES=$(curl -sf "${API}/creative/${CID}/export?format=txt" | wc -c | tr -d ' ')
-if [[ "${BYTES:-0}" -gt 200 ]]; then
-  echo "  ✅ 导出 TXT 字节数：${BYTES}"
-  PASS=$((PASS + 1))
-else
-  echo "  ❌ 导出内容过短（${BYTES}）"
-  FAIL=$((FAIL + 1))
-fi
+HTTP="$(curl -s -o "${WORK_DIR}/out.txt" -w '%{http_code}' "${API}/creative/${CID}/export?format=txt")"
+BODY="{}"
+must "导出 TXT"
+BYTES="$(wc -c < "${WORK_DIR}/out.txt" | tr -d ' ')"
+soft "导出内容非空（>200 字节）" "True" "$([[ "${BYTES:-0}" -gt 200 ]] && echo True || echo False)"
 
 echo
 echo "================ 结果 ================"

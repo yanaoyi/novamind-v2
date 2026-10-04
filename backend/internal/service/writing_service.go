@@ -404,7 +404,13 @@ func (s *WritingService) GenerateChapterDraft(
 	if report != nil {
 		report("写入草稿", 80)
 	}
-	return strings.TrimSpace(reply), nil
+	draft := strings.TrimSpace(reply)
+	if draft == "" {
+		// 模型返回空内容时绝不能当成「生成成功」写进章节：那会静默产出 0 字正文，
+		// 后续一致性检查只会报「没有可检查的正文」，使用者完全看不出发生了什么。
+		return "", fmt.Errorf("模型没有返回正文（可能是上下文过长、被截断或触发内容过滤），请重试或精简设定")
+	}
+	return draft, nil
 }
 
 // RewriteAction 是编辑器内 AI 操作的类型。
@@ -459,10 +465,10 @@ type RewriteInput struct {
 // RewriteText 对选中文本做 AI 处理（同步返回，规格书 §38）。
 func (s *WritingService) RewriteText(ctx context.Context, runner PromptRunner, in RewriteInput) (string, error) {
 	if !in.Action.Valid() {
-		return "", fmt.Errorf("不支持的 AI 操作：%s", in.Action)
+		return "", fmt.Errorf("%w：不支持的 AI 操作 %s", ErrBadRequest, in.Action)
 	}
 	if strings.TrimSpace(in.Text) == "" {
-		return "", errors.New("请先选中要处理的文本")
+		return "", fmt.Errorf("%w：请先选中要处理的文本", ErrBadRequest)
 	}
 	chapterCtx, err := s.BuildContext(ctx, in.ChapterID)
 	if err != nil {

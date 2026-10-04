@@ -75,6 +75,31 @@ func TestPromptEngineMissingTemplate(t *testing.T) {
 	}
 }
 
+// TestOutlineGenerateRendersWithServiceVars 守住一条真实踩过的坑：
+// 服务层给 outline_generate 传的变量名必须和模板里用的名字一致，
+// 否则渲染直接失败（missingkey=error），接口报 500。
+func TestOutlineGenerateRendersWithServiceVars(t *testing.T) {
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatalf("加载模板失败: %v", err)
+	}
+	prompt, err := engine.Get("outline_generate", "")
+	if err != nil {
+		t.Fatalf("取模板失败: %v", err)
+	}
+
+	_, err = prompt.Render(map[string]any{
+		"WorkTitle":        "测试作品",
+		"Requirement":      "三卷结构",
+		"CharacterContext": "主角：沈砚",
+		"WorldContext":     "北境军镇",
+		"PlotContext":      "查账线",
+	})
+	if err != nil {
+		t.Fatalf("outline_generate 渲染失败（服务层变量名与模板不一致）: %v", err)
+	}
+}
+
 func TestPromptRenderFailsOnMissingKey(t *testing.T) {
 	// 模板里用到的变量没传 → 必须报错（fail fast），而不是渲染出空值
 	engine, err := NewEngine()

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -21,7 +20,7 @@ func (s *WritingService) ContinueText(ctx context.Context, runner PromptRunner, 
 		}
 		content := strings.TrimSpace(chapter.Content)
 		if content == "" {
-			return "", errors.New("本章还没有正文：先用「让 AI 写本章」生成草稿，或手写一段再续写")
+			return "", fmt.Errorf("%w：本章还没有正文，先用「让 AI 写本章」生成草稿，或手写一段再续写", ErrBadRequest)
 		}
 		in.Text = tailRunes(content, 1200) // 只取末尾一段作起点，不把整章塞进 Prompt
 	}
@@ -39,7 +38,7 @@ type ChatInput struct {
 // Chat 带设定的问答（规格书 §34 的最简形态：能读设定、不动数据）。
 func (s *WritingService) Chat(ctx context.Context, runner PromptRunner, in ChatInput) (string, error) {
 	if strings.TrimSpace(in.Message) == "" {
-		return "", errors.New("问题不能为空")
+		return "", fmt.Errorf("%w：问题不能为空", ErrBadRequest)
 	}
 	workID := in.WorkID
 	chapterGoal := ""
@@ -56,7 +55,7 @@ func (s *WritingService) Chat(ctx context.Context, runner PromptRunner, in ChatI
 		chapterGoal = chapterCtx.ChapterGoal
 	}
 	if workID == "" {
-		return "", errors.New("需要 work_id 或 chapter_id")
+		return "", fmt.Errorf("%w：需要 work_id 或 chapter_id", ErrBadRequest)
 	}
 	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
 		return "", err
@@ -96,7 +95,7 @@ func (s *WritingService) AnalyzeText(ctx context.Context, runner PromptRunner, i
 		cctx = s.BuildConsistencyContext(ctx, chapter.CreativeWorkID)
 	}
 	if strings.TrimSpace(text) == "" {
-		return nil, errors.New("没有可分析的文本")
+		return nil, fmt.Errorf("%w：没有可分析的文本", ErrBadRequest)
 	}
 
 	reply, err := runner.RunPrompt(ctx, "text_analyze", map[string]any{
@@ -162,7 +161,7 @@ type GenerateInput struct {
 // Generate 生成大纲/人物/剧情/场景候选，**只返回给作者确认，不落库**（§52 红线）。
 func (s *WritingService) Generate(ctx context.Context, runner PromptRunner, in GenerateInput) (map[string]any, error) {
 	if !in.Kind.Valid() {
-		return nil, fmt.Errorf("不支持的生成目标：%s", in.Kind)
+		return nil, fmt.Errorf("%w：不支持的生成目标 %s", ErrBadRequest, in.Kind)
 	}
 	workID := in.WorkID
 	if workID == "" && in.ChapterID != "" {
@@ -173,7 +172,7 @@ func (s *WritingService) Generate(ctx context.Context, runner PromptRunner, in G
 		workID = chapter.CreativeWorkID
 	}
 	if workID == "" {
-		return nil, errors.New("需要 work_id 或 chapter_id")
+		return nil, fmt.Errorf("%w：需要 work_id 或 chapter_id", ErrBadRequest)
 	}
 	work, err := s.creative.GetWorkByID(ctx, workID)
 	if err != nil {
@@ -182,9 +181,11 @@ func (s *WritingService) Generate(ctx context.Context, runner PromptRunner, in G
 
 	cctx := s.BuildConsistencyContext(ctx, workID)
 	vars := map[string]any{
-		"WorkTitle":        work.Title,
-		"Premise":          work.Description,
-		"Instruction":      in.Instruction,
+		"WorkTitle":   work.Title,
+		"Premise":     work.Description,
+		"Instruction": in.Instruction,
+		// outline_generate.v1.md 用的是 Requirement（历史模板命名），两处都给，避免渲染失败
+		"Requirement":      in.Instruction,
 		"CharacterContext": cctx.Characters,
 		"WorldContext":     cctx.World,
 		"TimelineContext":  cctx.Timeline,

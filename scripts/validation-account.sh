@@ -9,7 +9,9 @@
 # 用法：
 #   scripts/validation-account.sh status              # 看当前挂了哪些模型配置
 #   DEEPSEEK_API_KEY=sk-xxx scripts/validation-account.sh seed
-#   scripts/validation-account.sh purge               # 删除全部模型配置（交付前必做）
+#   （也可以把 DEEPSEEK_API_KEY=sk-xxx 写进 backend/.env —— 该文件已在 .gitignore 里，
+#     这样密钥不会出现在命令行、shell 历史或聊天记录里；purge 会把它一并清掉）
+#   scripts/validation-account.sh purge               # 交付前必做：清库 + 清 backend/.env 里的验证密钥
 #   scripts/validation-account.sh check               # 扫仓库，确认没有硬编码密钥
 #
 # 说明：密钥只从环境变量读取，绝不写进文件、绝不进命令行参数（避免进 shell 历史与进程列表）。
@@ -74,10 +76,14 @@ else:
 
 cmd_seed() {
   local key="${DEEPSEEK_API_KEY:-${NOVAMIND_VALIDATION_KEY:-}}"
-  [[ -n "$key" ]] || die "请通过环境变量提供密钥：DEEPSEEK_API_KEY=sk-xxx $0 seed"
+  if [[ -z "$key" && -f "${REPO_ROOT}/backend/.env" ]]; then
+    key="$(grep -E '^DEEPSEEK_API_KEY=' "${REPO_ROOT}/backend/.env" | head -1 | cut -d= -f2-)"
+  fi
+  [[ -n "$key" ]] || die "没有拿到密钥。两种方式任选：① 环境变量 DEEPSEEK_API_KEY=sk-xxx；② 写进 backend/.env（该文件不入库）"
 
   local model="${DEEPSEEK_MODEL:-deepseek-chat}"
   local base="${DEEPSEEK_API_BASE:-https://api.deepseek.com/v1}"
+  echo "使用的模型：${model} @ ${base}"
   local body
   body="$(python3 - "$VALIDATION_NAME" "$base" "$model" "$key" <<'PY'
 import json,sys
@@ -134,6 +140,19 @@ cmd_purge() {
   [[ "$residue" == "0" ]] || die "清理后仍残留 ${residue} 条密钥密文"
   echo "校验通过：模型配置 0 行、密钥密文 0 条 —— 系统不再持有任何第三方账号。"
   echo "使用者请在「模型设置」页配置自己的 API Key。"
+
+  # 本地 .env 里的验证密钥也要清掉，否则"删了库里的、留着文件里的"等于没删
+  local env_file="${REPO_ROOT}/backend/.env"
+  if [[ -f "$env_file" ]] && grep -qE '^DEEPSEEK_API_KEY=' "$env_file"; then
+    python3 - "$env_file" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+new = re.sub(r'^DEEPSEEK_API_KEY=.*\n?', '', text, flags=re.M)
+open(path, "w", encoding="utf-8").write(new)
+print("已从 backend/.env 移除 DEEPSEEK_API_KEY（该文件不入库）")
+PY
+  fi
 }
 
 cmd_check() {

@@ -1,3 +1,4 @@
+import { errorMessage } from '../api/client'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Button,
@@ -109,7 +110,7 @@ export default function ProjectsPage() {
       }
       setOpen(false)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -118,7 +119,7 @@ export default function ProjectsPage() {
       await remove(record.id)
       message.success('已删除')
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 

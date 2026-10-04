@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Button,
@@ -44,7 +45,7 @@ export default function OriginalPlotPage() {
       setArcs(arcList.items)
       setEvents(eventList.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -88,7 +89,7 @@ export default function OriginalPlotPage() {
       setOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -97,7 +98,7 @@ export default function OriginalPlotPage() {
       await eventApi.removePlotArc(record.id)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 

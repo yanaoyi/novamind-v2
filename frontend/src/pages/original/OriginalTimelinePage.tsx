@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import {
   Button,
@@ -71,7 +72,7 @@ export default function OriginalTimelinePage() {
         })),
       )
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -119,7 +120,7 @@ export default function OriginalTimelinePage() {
       setOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -129,7 +130,7 @@ export default function OriginalTimelinePage() {
       message.success('事件已删除')
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -170,7 +171,7 @@ export default function OriginalTimelinePage() {
       message.success(`时间线已保存（${items.length} 个事件）`)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setSaving(false)
     }

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { InboxOutlined } from '@ant-design/icons'
 import {
   Alert,
@@ -86,7 +87,7 @@ export default function OriginalOverviewPage() {
         message.success(`已切换到《${found.title}》`)
       }
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -106,7 +107,7 @@ export default function OriginalOverviewPage() {
       setNeedsCreate(false)
       message.success(`原著《${created.title}》已创建，请上传原文`)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -124,7 +125,7 @@ export default function OriginalOverviewPage() {
       setFile(null)
       setFileList([])
     } catch (err) {
-      message.error(`导入失败：${(err as Error).message}`)
+      message.error(`导入失败：${errorMessage(err)}`)
     } finally {
       setImporting(false)
     }

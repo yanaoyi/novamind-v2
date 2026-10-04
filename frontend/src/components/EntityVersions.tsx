@@ -1,3 +1,4 @@
+import { errorMessage } from '../api/client'
 import { HistoryOutlined } from '@ant-design/icons'
 import { Alert, Button, Drawer, Input, Modal, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -44,7 +45,7 @@ export default function EntityVersions({
       const res = await versionApi.list(entityType, entityId)
       setItems(res.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -59,7 +60,7 @@ export default function EntityVersions({
     try {
       setPreview(await versionApi.get(entityType, entityId, no))
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -71,7 +72,7 @@ export default function EntityVersions({
       await load()
       onRestored?.()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -89,7 +90,7 @@ export default function EntityVersions({
       setNote('')
       await load()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setBusy(false)
     }

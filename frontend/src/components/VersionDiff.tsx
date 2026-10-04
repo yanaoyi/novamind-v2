@@ -1,3 +1,4 @@
+import { errorMessage } from '../api/client'
 import { Button, Modal, Select, Space, Switch, Table, Tag, Typography, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useCallback, useEffect, useState } from 'react'
@@ -74,7 +75,7 @@ export default function VersionDiff({
     try {
       setResult(await versionApi.compare({ entityType, entityId, from, to }))
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -101,7 +102,7 @@ export default function OutlinePage() {
           return res.items.some((o) => o.id === wanted) ? wanted : (res.items[0]?.id ?? null)
         })
       } catch (err) {
-        message.error((err as Error).message)
+        message.error(errorMessage(err))
       } finally {
         setListLoading(false)
       }
@@ -113,7 +114,7 @@ export default function OutlinePage() {
     try {
       setDetail(await outlineApi.get(id))
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }, [])
 
@@ -158,7 +159,7 @@ export default function OutlinePage() {
         message.success(`已删除 ${res.deleted_nodes} 个节点`)
         await refresh()
       } catch (err) {
-        message.error((err as Error).message)
+        message.error(errorMessage(err))
       } finally {
         setBusy(false)
       }
@@ -237,7 +238,7 @@ export default function OutlinePage() {
       setActiveId(created.outline.id)
       await loadOutlines(created.outline.id)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -251,7 +252,7 @@ export default function OutlinePage() {
       setActiveId(null)
       await loadOutlines()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -270,7 +271,7 @@ export default function OutlinePage() {
         )
       }
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -303,7 +304,7 @@ export default function OutlinePage() {
       nodeForm.resetFields()
       await refresh()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -325,7 +326,7 @@ export default function OutlinePage() {
         message.success(`模型给出 ${volumes} 卷 / ${sections} 节 / ${chapters} 章，确认后再采纳`)
       }
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setAiLoading(false)
     }
@@ -349,7 +350,7 @@ export default function OutlinePage() {
       setActiveId(created.outline.id)
       await loadOutlines(created.outline.id)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setBusy(false)
     }

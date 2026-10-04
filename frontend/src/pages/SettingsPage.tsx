@@ -1,3 +1,4 @@
+import { errorMessage } from '../api/client'
 import { PlusOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import {
   Alert,
@@ -43,7 +44,7 @@ export default function SettingsPage() {
       setProviders(providerList.items)
       setPrompts(promptList.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -98,7 +99,7 @@ export default function SettingsPage() {
       setOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -115,7 +116,7 @@ export default function SettingsPage() {
         })
       }
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setTesting(null)
     }
@@ -174,7 +175,7 @@ export default function SettingsPage() {
                   message.success('已设为默认模型')
                   await reload()
                 } catch (err) {
-                  message.error((err as Error).message)
+                  message.error(errorMessage(err))
                 }
               }}
             >
@@ -193,7 +194,7 @@ export default function SettingsPage() {
                 await providerApi.remove(record.id)
                 await reload()
               } catch (err) {
-                message.error((err as Error).message)
+                message.error(errorMessage(err))
               }
             }}
           >

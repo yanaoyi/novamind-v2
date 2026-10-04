@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
@@ -55,7 +56,7 @@ export default function ConsistencyPage() {
       setIssues(res.items)
       setTotal(res.total)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -75,7 +76,7 @@ export default function ConsistencyPage() {
       message.success('一致性检查完成')
       await load()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setChecking(false)
     }
@@ -87,7 +88,7 @@ export default function ConsistencyPage() {
       message.success(`已标记为「${ISSUE_STATUS_LABEL[next]}」`)
       await load()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 

@@ -17,6 +17,41 @@ export class ApiError extends Error {
 }
 
 /**
+ * 统一的错误消息提取（审查 P2）：散落的 `(err as Error).message` 在抛出字符串时
+ * 会显示空白，各页面统一用它取提示文案。
+ */
+export function errorMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.message
+  if (err instanceof Error) return err.message
+  if (typeof err === 'string' && err) return err
+  return '未知错误'
+}
+
+/**
+ * 路径参数编码（审查 P2：以前所有 api 文件都直接拼 `${id}`，没有编码）。
+ *
+ * 放在请求层统一处理，而不是改上百处拼接：
+ *   - 只对**路径段**编码，查询串原样保留；
+ *   - 先 decode 再 encode，已经是编码形态的段不会被二次编码成 %2520；
+ *   - UUID / 数字这类本来就安全的段结果不变。
+ */
+function encodePath(path: string): string {
+  const [rawPath, query] = path.split(/\?(.*)/s)
+  const encoded = rawPath
+    .split('/')
+    .map((segment) => {
+      if (!segment) return segment
+      try {
+        return encodeURIComponent(decodeURIComponent(segment))
+      } catch {
+        return encodeURIComponent(segment)
+      }
+    })
+    .join('/')
+  return query === undefined ? encoded : `${encoded}?${query}`
+}
+
+/**
  * 统一请求入口：解析后端统一响应包 {data, error, trace_id}。
  * 出错时抛出 ApiError（带后端错误码），调用方按 code 处理。
  */
@@ -26,7 +61,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
 
   const token = getToken()
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${encodePath(path)}`, {
     ...init,
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),

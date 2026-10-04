@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { useCallback, useEffect, useState } from 'react'
 
 import { creativeApi } from '../../api/creative'
@@ -33,7 +34,7 @@ export function useCreativeWorks() {
           return list.items.some((w) => w.id === wanted) ? wanted : (list.items[0]?.id ?? null)
         })
       } catch (err) {
-        setError((err as Error).message)
+        setError(errorMessage(err))
       } finally {
         setLoading(false)
       }

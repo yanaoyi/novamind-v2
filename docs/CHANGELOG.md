@@ -876,3 +876,11 @@ PUT|DELETE     /plot-arcs/{id}
 * **上传体积前端预检**（审查 P2）：拖入超过 50MB（与后端 `UPLOAD_MAX_MB` 默认值一致）的文件直接拦下并提示，不再等上传完才收到服务端拒绝；同时去掉 `f as unknown as File` 的多余双重断言（antd 的 RcFile 本就是 File）。
 
 **验证**：后端 `go build`/`go vet`/`go test ./...` 全绿；前端 `tsc -b` + `vitest` **11 文件 46 例全绿**；`smoke-phase8-outline.sh` **47/47**、`smoke-phase5.sh` **30/30**（两条链路分别覆盖节点写入与写作上下文）。
+
+### 2026-10-05 · P2 收尾第三批：路径参数编码 + 统一错误消息提取
+
+* **路径参数编码**（审查 P2）：放在请求层统一处理（`client.ts` 的 `encodePath`）——只编码**路径段**、查询串原样保留，且"先 decode 再 encode"，已经是编码形态的段不会被二次编码成 `%25...`；UUID 这类本来就安全的段结果不变。这样不必改上百处 `${id}` 拼接。
+* **统一错误消息提取**（审查 P2）：新增 `errorMessage(err)`（ApiError / Error / 字符串 / 未知值都能给出可读文案），把 18 个文件里 85 处 `(err as Error).message` 全部换掉——此前抛出字符串或非 Error 时，界面会弹出空白提示。
+* 过程小插曲：第一次用脚本插 import 时把多行 import 语句劈开了，`tsc` 当场报错；已 `git checkout` 回滚重做，改为把 import 放在文件顶部（TS 里顺序无关），这次类型检查直接通过。
+
+**验证**：`tsc -b` 通过、`vite build` 通过、`vitest` **11 文件 49 例全绿**（新增 3 例：中文/空格路径段编码、已编码段不二次编码、errorMessage 四种输入）。

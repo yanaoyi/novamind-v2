@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import {
   Button,
@@ -67,7 +68,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
       setFactions(f.items)
       worldForm.setFieldsValue({ name: w?.name ?? '', description: w?.description ?? '' })
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -125,7 +126,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
       message.success('世界设定已保存')
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -139,7 +140,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
       setRuleOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -154,7 +155,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
       setLocationOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -168,7 +169,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
       setFactionOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -217,7 +218,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
                 await worldApi.removeRule(record.id)
                 await reload()
               } catch (err) {
-                message.error((err as Error).message)
+                message.error(errorMessage(err))
               }
             }}
           >
@@ -271,7 +272,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
                 await worldApi.removeLocation(record.id)
                 await reload()
               } catch (err) {
-                message.error((err as Error).message)
+                message.error(errorMessage(err))
               }
             }}
           >
@@ -315,7 +316,7 @@ export default function OriginalWorldPage({ defaultTab = 'rules' }: Props) {
                 await worldApi.removeFaction(record.id)
                 await reload()
               } catch (err) {
-                message.error((err as Error).message)
+                message.error(errorMessage(err))
               }
             }}
           >

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import {
   HistoryOutlined,
   RobotOutlined,
@@ -154,7 +155,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
         await writingApi.updateChapter(chapterId, bodyOf(draftToSave))
         message.info('已先保存上一章的修改')
       } catch (err) {
-        message.error(`上一章的修改没能保存：${(err as Error).message}`)
+        message.error(`上一章的修改没能保存：${errorMessage(err)}`)
       }
     },
     [],
@@ -182,7 +183,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
         if (!silent) message.success(res.version_created ? '已保存（正文已存为新版本）' : '已保存')
         return res.chapter
       } catch (err) {
-        message.error((err as Error).message)
+        message.error(errorMessage(err))
         throw err
       } finally {
         savingRef.current = false
@@ -246,7 +247,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
       patch({ content: res.text })
       message.success(`已按「${rewriteAction}」处理，保存后即为新版本`)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setRewriting(false)
     }
@@ -294,7 +295,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
       onChanged(fresh)
       message.success('AI 已写完本章并存入新版本')
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setGenerating(false)
     }
@@ -307,7 +308,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
       const list = await writingApi.listVersions(chapter.id)
       setVersions(list.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setVersionsLoading(false)
     }
@@ -317,7 +318,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
     try {
       setPreview(await writingApi.getVersion(chapter.id, versionNo))
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -331,7 +332,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
       const list = await writingApi.listVersions(chapter.id)
       setVersions(list.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -341,7 +342,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
       const list = await writingApi.listScenes(chapter.id)
       setScenes(list.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -354,7 +355,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
       setScenes(list.items)
       message.success('场景已新增')
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -478,7 +479,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
                   message.success('章节已删除')
                   onDeleted()
                 } catch (err) {
-                  message.error((err as Error).message)
+                  message.error(errorMessage(err))
                 }
               }}
             >

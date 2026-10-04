@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Button,
@@ -119,7 +120,7 @@ export default function OriginalCharactersPage() {
       setCharacters(list.items)
       setRelations(rels.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -166,7 +167,7 @@ export default function OriginalCharactersPage() {
       setCharOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -176,7 +177,7 @@ export default function OriginalCharactersPage() {
       message.success(`已删除「${record.name}」`)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -195,7 +196,7 @@ export default function OriginalCharactersPage() {
       setRelOpen(false)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -204,7 +205,7 @@ export default function OriginalCharactersPage() {
       await characterApi.removeRelationship(record.id)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 

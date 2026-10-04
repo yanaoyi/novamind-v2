@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { BookOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import {
   Alert,
@@ -127,7 +128,7 @@ export default function CreativeOverviewPage() {
           `并继承 ${inherited} 个人物。可以开始写同人了。`,
       )
     } catch (err) {
-      message.error(`导入失败：${(err as Error).message}`)
+      message.error(`导入失败：${errorMessage(err)}`)
     } finally {
       setRunning(false)
       setStepIndex(-1)
@@ -155,7 +156,7 @@ export default function CreativeOverviewPage() {
       message.success('同人作品已创建，接着去「人物」把原著人物继承进来')
       navigate(`/creative/characters?work=${creative.id}`)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 

@@ -1,3 +1,4 @@
+import { errorMessage } from '../api/client'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
@@ -131,7 +132,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
       setSourceCharacters(srcChars.items)
       setEvents(evts.items)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -172,7 +173,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
       setCreateOpen(false)
       await loadAll(created)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -184,7 +185,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
       if (originalWork) createForm.setFieldsValue({ title: `${originalWork.title}·二创` })
       setCreateOpen(true)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -202,7 +203,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
       setInheritOpen(false)
       await loadAll(work)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -222,7 +223,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
       setFuseOpen(false)
       await loadAll(work)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -291,7 +292,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                 await creativeApi.updateCharacter(r.id, { is_locked: !r.is_locked })
                 await loadAll(work ?? undefined)
               } catch (err) {
-                message.error((err as Error).message)
+                message.error(errorMessage(err))
               }
             }}
           >
@@ -311,7 +312,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                 await creativeApi.deleteCharacter(r.id)
                 await loadAll(work ?? undefined)
               } catch (err) {
-                message.error((err as Error).message)
+                message.error(errorMessage(err))
               }
             }}
           >
@@ -376,7 +377,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                     await loadAll(work ?? undefined)
                     message.success('已修改（状态变为「已修改」）')
                   } catch (err) {
-                    message.error((err as Error).message)
+                    message.error(errorMessage(err))
                   }
                 },
               })
@@ -394,7 +395,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                 await creativeApi.deleteWorldRule(r.id)
                 await loadAll(work ?? undefined)
               } catch (err) {
-                message.error((err as Error).message)
+                message.error(errorMessage(err))
               }
             }}
           >
@@ -547,7 +548,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                               message.success(`已按 ${WORLD_MODE_LABEL[mode]} 建立二创世界`)
                               await loadAll(work)
                             } catch (err) {
-                              message.error((err as Error).message)
+                              message.error(errorMessage(err))
                             }
                           }}
                         >
@@ -600,7 +601,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                             setDivergence(point)
                             message.success('分叉点已设置')
                           } catch (err) {
-                            message.error((err as Error).message)
+                            message.error(errorMessage(err))
                           }
                         }}
                         options={events.map((e) => ({ value: e.id, label: e.title }))}
@@ -614,7 +615,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
                             message.success(`已构建时间线：${built.items.length} 条`)
                             await loadAll(work)
                           } catch (err) {
-                            message.error((err as Error).message)
+                            message.error(errorMessage(err))
                           }
                         }}
                       >

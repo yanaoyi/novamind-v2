@@ -1,3 +1,4 @@
+import { errorMessage } from '../api/client'
 import { ReloadOutlined } from '@ant-design/icons'
 import {
   Button,
@@ -39,7 +40,7 @@ export default function TasksPage() {
       setTasks(data.items)
       setTotal(data.total)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }, [statusFilter])
 
@@ -169,7 +170,7 @@ export default function TasksPage() {
                   message.success('已取消')
                   await load()
                 } catch (err) {
-                  message.error((err as Error).message)
+                  message.error(errorMessage(err))
                 }
               }}
             >
@@ -188,7 +189,7 @@ export default function TasksPage() {
                   message.success('已重新排队')
                   await load()
                 } catch (err) {
-                  message.error((err as Error).message)
+                  message.error(errorMessage(err))
                 }
               }}
             >

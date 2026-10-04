@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import { PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
@@ -69,7 +70,7 @@ export default function OriginalAnalysisPage() {
       setTotal(list.total)
       setSummary(stat)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -91,7 +92,7 @@ export default function OriginalAnalysisPage() {
       const task = await analysisApi.enqueue(workId, stage)
       message.success(`已开始「${STAGE_LABELS[stage]}」，可在任务中心查看进度（任务 ${task.id.slice(0, 8)}）`)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setRunning(null)
     }
@@ -119,7 +120,7 @@ export default function OriginalAnalysisPage() {
       setReviewing(null)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setSubmitting(false)
     }
@@ -134,7 +135,7 @@ export default function OriginalAnalysisPage() {
       setReviewing(null)
       await reload()
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setSubmitting(false)
     }

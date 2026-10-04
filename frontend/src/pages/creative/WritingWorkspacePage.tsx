@@ -1,3 +1,4 @@
+import { errorMessage } from '../../api/client'
 import {
   CheckCircleOutlined,
   DownloadOutlined,
@@ -81,7 +82,7 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
         setChapters(chs.items)
         setActiveId((current) => (keepActive && current ? current : (chs.items[0]?.id ?? null)))
       } catch (err) {
-        message.error((err as Error).message)
+        message.error(errorMessage(err))
       } finally {
         setListLoading(false)
       }
@@ -112,7 +113,7 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
         const chapter = await writingApi.getChapter(activeId)
         if (!cancelled) setDetail(chapter)
       } catch (err) {
-        if (!cancelled) message.error((err as Error).message)
+        if (!cancelled) message.error(errorMessage(err))
       }
     })()
     return () => {
@@ -149,7 +150,7 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
       await loadWorkData(workId)
       message.success('卷已创建')
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -168,7 +169,7 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
       setTab('chapters')
       message.success('章节已创建')
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 
@@ -182,7 +183,7 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
       await refreshIssues()
       message.success('一致性检查完成，结果见「一致性问题」')
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     } finally {
       setChecking(false)
     }
@@ -194,7 +195,7 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
       await downloadExport(workId, format)
       message.success(`已导出 ${format.toUpperCase()}`)
     } catch (err) {
-      message.error((err as Error).message)
+      message.error(errorMessage(err))
     }
   }
 

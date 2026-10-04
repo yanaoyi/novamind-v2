@@ -115,6 +115,16 @@ func TestTaskRepoFailRetriesThenFails(t *testing.T) {
 		t.Fatalf("重试排队状态不正确: %+v", afterFirst)
 	}
 
+	// 失败重试要有退避：刚失败时不能被立刻重新领走（否则确定性失败会瞬间烧完次数）
+	if claimed, err := repo.ClaimNext(ctx); err != nil {
+		t.Fatalf("退避期间领取出错: %v", err)
+	} else if claimed != nil {
+		t.Fatalf("退避期间不应领取到任务，实际拿到 %s", claimed.ID)
+	}
+	if res := repo.db.Exec(`UPDATE tasks SET next_run_at = now() - interval '1 second' WHERE id = $1`, task.ID); res.Error != nil {
+		t.Fatalf("调整退避时间失败: %v", res.Error)
+	}
+
 	// 第 2 次：领取 → 再失败 → FAILED（已达上限）
 	if _, err := repo.ClaimNext(ctx); err != nil {
 		t.Fatalf("第二次领取失败: %v", err)

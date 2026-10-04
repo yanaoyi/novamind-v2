@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -31,8 +33,19 @@ func NewPostgres(ctx context.Context, dsn string, debug bool) (*Postgres, error)
 		logLevel = gormlogger.Info
 	}
 
+	// ParameterizedQueries：SQL 日志只打占位符，不打参数值。
+	// 审查 P2 指出：debug 级别下 GORM 默认会把 "INSERT INTO model_providers ... ($1,$2,...)"
+	// 的参数全量打出来，里面就有 API Key 的密文。日志里不该出现这种东西。
+	gormLogger := gormlogger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), gormlogger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  logLevel,
+		IgnoreRecordNotFoundError: true,
+		ParameterizedQueries:      true,
+		Colorful:                  false,
+	})
+
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(logLevel),
+		Logger: gormLogger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("打开 PostgreSQL 连接失败: %w", err)

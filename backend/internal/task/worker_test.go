@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/yanaoyi/novamindv2/backend/internal/domain"
 )
@@ -59,6 +60,22 @@ func (f *fakeRepo) ClaimNext(_ context.Context) (*domain.Task, error) {
 	return &t, nil
 }
 
+// RequeueStale 模拟"回收僵死任务"：把停在 RUNNING 的任务重新排队。
+func (f *fakeRepo) RequeueStale(_ context.Context, _ time.Duration) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	requeued := 0
+	for id, status := range f.statuses {
+		if status != domain.TaskRunning {
+			continue
+		}
+		f.statuses[id] = domain.TaskPending
+		f.pending = append(f.pending, domain.Task{ID: id, Type: "requeued", MaxAttempts: f.maxAtt[id]})
+		requeued++
+	}
+	return requeued, nil
+}
+
 func (f *fakeRepo) UpdateProgress(_ context.Context, id string, progress int, message string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -102,6 +119,35 @@ func (f *fakeRepo) status(id string) domain.TaskStatus {
 
 func newTestWorker(repo Repository, reg *Registry) *Worker {
 	return NewWorker(repo, reg, nil)
+}
+
+// 审查 P1-1：worker 崩溃/重启后，停在 RUNNING 的任务必须能被回收重跑，
+// 否则它会永远卡在 RUNNING —— 既不会执行、也不会进重试。
+func TestWorkerReapsStaleRunningTask(t *testing.T) {
+	repo := newFakeRepo()
+	reg := NewRegistry()
+	reg.Register("demo", func(_ context.Context, _ domain.Task, _ Reporter) (map[string]any, error) {
+		return map[string]any{}, nil
+	})
+	repo.enqueue(domain.Task{ID: "stuck", Type: "demo"})
+
+	// 模拟"领取后进程被杀"：任务停在 RUNNING，既没完成也没失败
+	if claimed, err := repo.ClaimNext(context.Background()); err != nil || claimed == nil {
+		t.Fatalf("领取失败: %v", err)
+	}
+	if repo.statuses["stuck"] != domain.TaskRunning {
+		t.Fatalf("应处于 RUNNING，实际 %s", repo.statuses["stuck"])
+	}
+
+	w := newTestWorker(repo, reg)
+	w.reapOnce(context.Background())
+
+	if repo.statuses["stuck"] != domain.TaskPending {
+		t.Fatalf("回收后应回到 PENDING，实际 %s", repo.statuses["stuck"])
+	}
+	if claimed, err := repo.ClaimNext(context.Background()); err != nil || claimed == nil {
+		t.Fatalf("回收后应能重新领取: %v", err)
+	}
 }
 
 func TestWorkerRunsHandlerAndCompletes(t *testing.T) {

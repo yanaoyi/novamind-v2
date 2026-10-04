@@ -39,6 +39,12 @@ function messageOf(err: unknown): string {
   return '未知错误'
 }
 
+// 请求序号：章节/章节列表的响应可能乱序返回（快速翻页时慢响应后到），
+// 只采纳"最后一次请求"的结果，避免 URL 与内容对不上（审查 P1-12 / P2）。
+let chapterRequestId = 0
+let chaptersRequestId = 0
+let workRequestId = 0
+
 export const useOriginalStore = create<OriginalState>()(
   persist(
     (set, get) => ({
@@ -57,12 +63,15 @@ export const useOriginalStore = create<OriginalState>()(
       async loadWork(workId) {
         const id = workId ?? get().workId
         if (!id) return null
+        const requestId = ++workRequestId
         set({ loading: true, error: null })
         try {
           const work = await originalApi.get(id)
+          if (requestId !== workRequestId) return work // 过期响应：不写入
           set({ work, workId: id, loading: false })
           return work
         } catch (err) {
+          if (requestId !== workRequestId) throw err
           set({ loading: false, error: messageOf(err), work: null })
           throw err
         }
@@ -97,11 +106,14 @@ export const useOriginalStore = create<OriginalState>()(
       async loadChapters(page = 1, pageSize = 50) {
         const id = get().workId
         if (!id) return
+        const requestId = ++chaptersRequestId
         set({ loading: true, error: null })
         try {
           const data = await originalApi.listChapters(id, page, pageSize)
+          if (requestId !== chaptersRequestId) return
           set({ chapters: data.items, chaptersTotal: data.total, loading: false })
         } catch (err) {
+          if (requestId !== chaptersRequestId) return
           set({ loading: false, error: messageOf(err) })
           throw err
         }
@@ -110,11 +122,14 @@ export const useOriginalStore = create<OriginalState>()(
       async loadChapter(no) {
         const id = get().workId
         if (!id) return
+        const requestId = ++chapterRequestId
         set({ loading: true, error: null })
         try {
           const chapter = await originalApi.getChapter(id, no)
+          if (requestId !== chapterRequestId) return // 已被更新的请求取代
           set({ chapter, loading: false })
         } catch (err) {
+          if (requestId !== chapterRequestId) return
           set({ loading: false, error: messageOf(err), chapter: null })
           throw err
         }

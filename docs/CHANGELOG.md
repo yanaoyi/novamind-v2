@@ -806,3 +806,44 @@ PUT|DELETE     /plot-arcs/{id}
 * 后端：`gofmt` 干净、`go build` / `go vet` 通过、`go test ./...` 全绿；新增用例：`api/auth_test.go`（无令牌 401 / 错令牌 401 / 缺 Bearer 前缀 401 / 正确令牌 200 / 健康检查放行 / 未配置令牌放行 / 限流 429）、`ai/validate_test.go`（12 个内网与非法目标被拒、3 个公网目标放行、开关语义）。
 * 前端：`tsc -b` + `vite build` 通过；`vitest` **11 个文件 45 例全绿**（新增 `api/client.test.ts` 3 例：带令牌、不带令牌、401 抛 UNAUTHORIZED 并广播事件）。
 * 端到端：开启鉴权后重跑 `scripts/smoke-phase8-outline.sh` **45/45**、`scripts/validate-e2e-deepseek.sh`（真实模型）**37/37**；手工验证匿名访问 `/api/v1/projects` 返回 401、`/api/v1/health` 放行且 `auth=enabled`。
+
+### 2026-10-04 · 按 muse 审查清单修复 P1（数据正确性 + 前端数据丢失）与部分 P2
+
+**后端数据正确性（迁移 0015 / 0016 / 0017）**
+
+* **P1-1 僵死任务回收**（`0015`）：新增 `tasks.next_run_at`；worker 启动时 + 每 2 分钟扫描一次，把卡在 RUNNING 超过 30 分钟的任务放回队列（此前 worker 崩溃/进程被杀后任务会永远停在 RUNNING）。同时按审查 P2 加上**指数退避**：失败后 2s/4s/8s…（上限 60s）才能重新领取，不再被 2 秒轮询瞬间烧完重试次数或反复锤上游。
+* **P1-2 大纲落成章节**（`0016`）：改为**一次事务**写完新建的卷与章节（`WritingRepo.MaterializeOutline`），中途失败整体回滚；并给 `creative_chapters.outline_node_id` 加部分唯一索引 —— 同一个大纲节点只落成一章，重复点「落成章节」只补新增，结果里如实返回 `chapters_skipped`。
+* **P1-3 映射去重**（`0017`）：先清历史重复行，再建 `(work, original_type, original_id, creative_id)` 部分唯一索引；写入改成 `ON CONFLICT ... DO UPDATE` 的 upsert，重复继承不再堆一模一样的映射。
+* **P1-4 继承/融合事务化**：`SaveInheritance`（人物 + 权重 + 映射）与 `SaveFusion`（人物 + 多条来源映射）改为单事务，和提案审核路径的实现保持一致。
+* **P1-5 恢复前备份不再吞错**：备份失败即中止恢复并报错（此前 `_, _ =` 让"误恢复可退回"静默失效）。
+* **P1-6 `chunkByLength` O(n²)**：字节偏移改为增量累加，不再每段做两次全量 `string(runes[:n])`（50MB 无标题文本曾要跑数分钟）。
+* **P1-7 大纲版本恢复原子化**：整树替换 + 标题/版本/来源回填放进同一事务（`RestoreTreeWithMeta`）；顺带修掉审查 P2 指出的 `if outline.Source == ""` 永假问题 —— 快照里的 AI/MANUAL 来源现在真的会恢复。
+* **P1-8 解压炸弹防护**：docx 先用 zip 头里的压缩/解压尺寸做校验（超 128MiB 或压缩比 >500:1 直接拒），再套一层读取上限；PDF 流上限从 1GiB 收到 128MiB，且**读满即报错**而不是静默截断半截内容。
+
+**前端数据丢失与竞态**
+
+* **P1-9 切章不再丢编辑**：切换章节时先把上一章未落库的改动 flush 到后端（并提示），另加 `beforeunload` 守卫。
+* **P1-10 AI 写本章不再覆盖用户编辑**：生成完成后若检测到未保存改动，弹确认框让作者选「用 AI 版本覆盖 / 保留我的修改」。
+* **P1-11 保存串行化**：加在途锁 + 待存标记，自动保存与手动保存不再互相覆盖；只有"保存期间没有新输入"才清脏标记。
+* **P1-12 章节阅读器翻页竞态**：`originalStore` 的章节/章节列表/原著详情都加请求序号，过期响应直接丢弃（URL 与内容不再对不上）。
+* **P1-13 2xx 空响应体**：不再返回 `null as T`，改为抛 `EMPTY_RESPONSE`。
+* **P1-14 Markdown 转义翻倍**：`inlineToHtml` 先还原 `\* \_ \`` 再解析，富文本↔源码来回切不再给正文叠反斜杠（新增回归用例）。
+
+**顺带修的 P2**
+
+* 请求体绑定错误不再被吞（`generateChapter` 等 6 处改走 `bindOptionalJSON`：空 body 合法、非法 JSON 返回 400）。
+* JSONB 解析失败改为记 warn 而不是静默置空（5 处），保留"界面仍可用"的容错取舍并写进注释。
+* GORM 日志开启 `ParameterizedQueries`：即便 `LOG_LEVEL=debug` 也不会把 SQL 参数值（含 API Key 密文）打进日志。
+* 任务列表 `output` 为 null 时不再让整张表崩；导出下载的 blob URL 延后回收（Firefox 可能中断下载）；编辑器支持 h1–h6（与 Markdown 输出对齐）；新建章节每次打开都重算章号；切章时版本/场景抽屉一并清空；源码模式不再每次击键重解析整篇 Markdown。
+
+**暂缓项（写明原因，不装作已修）**
+
+* 主密钥 KDF（裸 SHA-256）：换 HKDF/Argon2 需要兼容存量密文的迁移方案，单独一轮做。
+* Prompt 注入分隔符、前端 URL 参数编码、统一错误消息提取、菜单前缀高亮、上传大小客户端校验：影响面小、当前单用户本地部署风险低，排在 P1 之后。
+* `BuildContext` 前情章节全表扫描、大纲节点序号竞态：属性能/并发优化，功能正确性不受影响，已记录待排期。
+
+**验证**
+
+* 后端：`gofmt` 干净、`go build`/`go vet` 通过、`go test ./...` 全绿；新增用例：`task/worker_test.go` 回收僵死任务、`repository/task_repo_test.go` 退避期间不可领取、`parser/limits_test.go` 3 例（压缩比拦截、恰好读满不误报、切分偏移与内容一致）。
+* 前端：`tsc -b` + `vite build` 通过；`vitest` **11 个文件 46 例全绿**（新增 Markdown 转义往返回归）。
+* 端到端：`scripts/smoke-phase8-outline.sh` **47/47**（新增"落成防重"三项）；真实模型 `scripts/validate-e2e-deepseek.sh` **37/37**；迁移版本 **17**。

@@ -30,6 +30,7 @@ type taskModel struct {
 	CreatedAt       time.Time      `gorm:"column:created_at;not null"`
 	StartedAt       *time.Time     `gorm:"column:started_at"`
 	FinishedAt      *time.Time     `gorm:"column:finished_at"`
+	NextRunAt       *time.Time     `gorm:"column:next_run_at"`
 	UpdatedAt       time.Time      `gorm:"column:updated_at;not null"`
 	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index"`
 }
@@ -166,7 +167,8 @@ func (r *TaskRepo) ClaimNext(ctx context.Context) (*domain.Task, error) {
 		WHERE id = (
 			SELECT id FROM tasks
 			WHERE status = 'PENDING' AND deleted_at IS NULL
-			ORDER BY created_at ASC
+			  AND (next_run_at IS NULL OR next_run_at <= now())
+			ORDER BY next_run_at NULLS FIRST, created_at ASC
 			FOR UPDATE SKIP LOCKED
 			LIMIT 1
 		)
@@ -242,10 +244,15 @@ func (r *TaskRepo) Fail(ctx context.Context, id string, errMsg string) (domain.T
 		"error": errMsg, "updated_at": now,
 	}
 	if m.Attempts < m.MaxAttempts {
-		// 还能重试：回到队列，等下一次领取
+		// 还能重试：回到队列，并按尝试次数做指数退避（2s / 4s / 8s…，上限 60s）。
+		// 没有退避时，确定性失败会在 worker 的 2 秒轮询里被瞬间烧完次数，
+		// 瞬时故障（限流、网络抖动）则会在同一秒内反复打上游。
 		next = domain.TaskPending
+		backoff := retryBackoff(m.Attempts)
 		updates["status"] = string(domain.TaskPending)
-		updates["progress_message"] = fmt.Sprintf("第 %d 次尝试失败，等待重试", m.Attempts)
+		updates["started_at"] = nil
+		updates["next_run_at"] = now.Add(backoff)
+		updates["progress_message"] = fmt.Sprintf("第 %d 次尝试失败，%s 后重试", m.Attempts, backoff)
 	} else {
 		next = domain.TaskFailed
 		updates["status"] = string(domain.TaskFailed)
@@ -256,6 +263,43 @@ func (r *TaskRepo) Fail(ctx context.Context, id string, errMsg string) (domain.T
 		return "", fmt.Errorf("记录任务失败状态失败: %w", err)
 	}
 	return next, nil
+}
+
+// retryBackoff 返回第 attempts 次失败后的退避时长：2^attempts 秒，封顶 60 秒。
+func retryBackoff(attempts int) time.Duration {
+	if attempts < 1 {
+		attempts = 1
+	}
+	seconds := 1 << uint(attempts) // 2, 4, 8, 16, 32, 64…
+	if seconds > 60 {
+		seconds = 60
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+// RequeueStale 把"卡在 RUNNING 且超过阈值没有推进"的任务放回队列，返回回收数量。
+//
+// 为什么必须有：worker 崩溃、进程被 kill、机器重启都会让 RUNNING 任务永远留在 RUNNING，
+// 既不会被执行、也不会进重试，界面上就是一个"永远 30% 的任务"。
+func (r *TaskRepo) RequeueStale(ctx context.Context, staleAfter time.Duration) (int, error) {
+	if staleAfter <= 0 {
+		staleAfter = 30 * time.Minute
+	}
+	now := time.Now().UTC()
+	deadline := now.Add(-staleAfter)
+	res := r.db.WithContext(ctx).Model(&taskModel{}).
+		Where("status = ? AND deleted_at IS NULL AND COALESCE(started_at, updated_at) < ?", string(domain.TaskRunning), deadline).
+		Updates(map[string]any{
+			"status":           string(domain.TaskPending),
+			"started_at":       nil,
+			"next_run_at":      now,
+			"progress_message": "任务超时未完成，已放回队列重试",
+			"updated_at":       now,
+		})
+	if res.Error != nil {
+		return 0, fmt.Errorf("回收僵死任务失败: %w", res.Error)
+	}
+	return int(res.RowsAffected), nil
 }
 
 // Cancel 取消任务。

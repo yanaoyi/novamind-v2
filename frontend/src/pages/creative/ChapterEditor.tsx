@@ -110,37 +110,73 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
   // 用 ref 记录"用户是否改过"，避免刚加载就被自动保存覆盖
   const dirtyRef = useRef(false)
   const chapterIdRef = useRef(chapter.id)
+  // 始终指向最新的草稿：保存/切章时读它，避免用到闭包里的旧快照
+  const draftRef = useRef(draft)
+  // 保存串行化：自动保存与手动保存可能同时在途，后完成的旧快照会覆盖新内容
+  const savingRef = useRef(false)
+  const pendingSaveRef = useRef(false)
 
   useEffect(() => {
-    if (chapterIdRef.current === chapter.id) return
-    chapterIdRef.current = chapter.id
-    dirtyRef.current = false
-    setDraft(toDraft(chapter))
-    setSavedAt(null)
-  }, [chapter])
+    draftRef.current = draft
+  }, [draft])
+
+  // 关标签页/刷新前提醒（浏览器只允许提示文案，不能自定义）
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 
   const patch = useCallback((part: Partial<Draft>) => {
     dirtyRef.current = true
     setDraft((prev) => ({ ...prev, ...part }))
   }, [])
 
+  const bodyOf = (d: Draft) => ({
+    title: d.title,
+    summary: d.summary,
+    content: d.content,
+    status: d.status,
+    volume_id: d.volume_id,
+    purpose: d.purpose,
+    conflict: d.conflict,
+    outcome: d.outcome,
+  })
+
+  // 保存「上一章的未落库改动」：切章时调用，失败只提示不阻塞切换
+  const flushChapter = useCallback(
+    async (chapterId: string, draftToSave: Draft) => {
+      try {
+        await writingApi.updateChapter(chapterId, bodyOf(draftToSave))
+        message.info('已先保存上一章的修改')
+      } catch (err) {
+        message.error(`上一章的修改没能保存：${(err as Error).message}`)
+      }
+    },
+    [],
+  )
+
   const save = useCallback(
     async (silent = false) => {
-      const current = draft
-      const body = {
-        title: current.title,
-        summary: current.summary,
-        content: current.content,
-        status: current.status,
-        volume_id: current.volume_id,
-        purpose: current.purpose,
-        conflict: current.conflict,
-        outcome: current.outcome,
+      // 串行化（审查 P1-11）：自动保存与手动保存同时在途时，后完成的旧快照会覆盖新内容。
+      // 有在途保存时只登记"还要再存一次"，由那次保存的收尾逻辑补跑。
+      if (savingRef.current) {
+        pendingSaveRef.current = true
+        return null
       }
+      savingRef.current = true
       setSaving(true)
+      const current = draftRef.current
       try {
-        const res = await writingApi.updateChapter(chapter.id, body)
-        dirtyRef.current = false
+        const res = await writingApi.updateChapter(chapter.id, bodyOf(current))
+        // 只有"保存期间没有新输入"才把脏标记清掉，否则自动保存还要再跑一轮
+        if (draftRef.current === current) {
+          dirtyRef.current = false
+        }
         setSavedAt(new Date().toLocaleTimeString('zh-CN'))
         onChanged(res.chapter)
         if (!silent) message.success(res.version_created ? '已保存（正文已存为新版本）' : '已保存')
@@ -149,11 +185,46 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
         message.error((err as Error).message)
         throw err
       } finally {
+        savingRef.current = false
         setSaving(false)
+        if (pendingSaveRef.current) {
+          pendingSaveRef.current = false
+          void saveRef.current?.(true)
+        }
       }
     },
-    [chapter.id, draft, onChanged],
+    [chapter.id, onChanged],
   )
+
+  // 让 finally 里能"再存一次"而不引入递归依赖
+  const saveRef = useRef<((silent?: boolean) => Promise<CreativeChapter | null>) | null>(null)
+  useEffect(() => {
+    saveRef.current = save
+  }, [save])
+
+  // 切换章节：先把上一章未保存的改动落库，再切换（审查 P1-9：
+  // 之前 1.5 秒 debounce 内的输入会被静默丢弃）
+  useEffect(() => {
+    if (chapterIdRef.current === chapter.id) return
+    const previousId = chapterIdRef.current
+    const previousDraft = draftRef.current
+    const hadUnsaved = dirtyRef.current
+    chapterIdRef.current = chapter.id
+    dirtyRef.current = false
+    const fresh = toDraft(chapter)
+    setDraft(fresh)
+    draftRef.current = fresh
+    setSavedAt(null)
+    // 抽屉里的内容属于上一章，一并清空（审查 P2：抽屉会停在旧章节数据上）
+    setVersionsOpen(false)
+    setVersions([])
+    setPreview(null)
+    setScenesOpen(false)
+    setScenes([])
+    if (hadUnsaved && previousId) {
+      void flushChapter(previousId, previousDraft)
+    }
+  }, [chapter, flushChapter])
 
   // 自动保存：停止输入 1.5 秒后落库
   useEffect(() => {
@@ -197,8 +268,29 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
         throw new Error(finished.error || '生成失败')
       }
       const fresh = await writingApi.getChapter(chapter.id)
+      // 审查 P1-10：生成期间用户可能还在编辑器里改。AI 结果已经落库成新版本，
+      // 但不能不问一句就把用户正在写的内容覆盖掉。
+      if (dirtyRef.current) {
+        const useAIVersion = await new Promise<boolean>((resolve) => {
+          Modal.confirm({
+            title: 'AI 生成期间你还有未保存的修改',
+            content: 'AI 写的正文已经存为新版本。要不要用 AI 版本覆盖编辑器里的内容？',
+            okText: '用 AI 版本覆盖',
+            cancelText: '保留我的修改',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          })
+        })
+        if (!useAIVersion) {
+          onChanged(fresh)
+          message.info('已保留你正在编辑的内容（AI 版本在「版本」里可以随时找回）')
+          return
+        }
+      }
       dirtyRef.current = false
-      setDraft(toDraft(fresh))
+      const next = toDraft(fresh)
+      setDraft(next)
+      draftRef.current = next
       onChanged(fresh)
       message.success('AI 已写完本章并存入新版本')
     } catch (err) {

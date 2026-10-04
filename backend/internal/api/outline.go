@@ -407,7 +407,10 @@ func (s *Server) snapshotOutlineTreeHandler(c *gin.Context) {
 		return
 	}
 	var req snapshotOutlineRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := bindOptionalJSON(c, &req); err != nil {
+		Fail(c, http.StatusBadRequest, CodeBadRequest, err.Error(), nil)
+		return
+	}
 	version, err := s.outlines.SnapshotTree(c.Request.Context(), c.Param("id"), req.Note)
 	if err != nil {
 		s.failFromError(c, err)

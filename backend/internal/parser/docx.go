@@ -28,6 +28,10 @@ func ParseDOCX(data []byte) (string, error) {
 	if doc == nil {
 		return "", fmt.Errorf("docx 缺少 word/document.xml（可能是 .doc 旧格式或已损坏）")
 	}
+	// zip 炸弹防护（审查 P1-8）：先看 zip 头里的声明尺寸，再套一层读取上限
+	if err := checkCompressionRatio(doc.CompressedSize64, doc.UncompressedSize64, "word/document.xml"); err != nil {
+		return "", err
+	}
 
 	rc, err := doc.Open()
 	if err != nil {
@@ -35,7 +39,7 @@ func ParseDOCX(data []byte) (string, error) {
 	}
 	defer rc.Close()
 
-	text, err := extractDocumentText(rc)
+	text, err := extractDocumentText(limitReader(rc, maxDecompressedBytes, "word/document.xml"))
 	if err != nil {
 		return "", err
 	}

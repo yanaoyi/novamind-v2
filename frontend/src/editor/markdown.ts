@@ -20,6 +20,9 @@ export function escapeHtml(text: string): string {
 /** 行内 **加粗** / *斜体* / `代码` → HTML */
 function inlineToHtml(text: string): string {
   let out = escapeHtml(text)
+  // 先还原 Markdown 转义（审查 P1-14）：htmlToMarkdown 会把 * _ ` 转义成 \* \_ \`，
+  // 这里如果不还原，源码模式改一次就多一层反斜杠，正文会被污染。
+  out = out.replace(/\\([*_`\\])/g, '$1')
   out = out.replace(/`([^`]+)`/g, '<code>$1</code>')
   out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')

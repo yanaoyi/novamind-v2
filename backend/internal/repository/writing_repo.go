@@ -30,6 +30,7 @@ type chapterModel struct {
 	ID             string         `gorm:"column:id;type:uuid;primaryKey"`
 	CreativeWorkID string         `gorm:"column:creative_work_id;type:uuid;not null"`
 	VolumeID       *string        `gorm:"column:volume_id;type:uuid"`
+	OutlineNodeID  *string        `gorm:"column:outline_node_id;type:uuid"`
 	ChapterNo      int            `gorm:"column:chapter_no;not null"`
 	Title          string         `gorm:"column:title;size:200;not null"`
 	Summary        string         `gorm:"column:summary;not null;default:''"`
@@ -155,7 +156,8 @@ func (r *WritingRepo) CreateChapter(ctx context.Context, c *domain.CreativeChapt
 		ID: c.ID, CreativeWorkID: c.CreativeWorkID, VolumeID: c.VolumeID, ChapterNo: c.ChapterNo,
 		Title: c.Title, Summary: c.Summary, Content: c.Content, Status: string(c.Status),
 		WordCount: c.WordCount, Purpose: c.Purpose, Conflict: c.Conflict, Outcome: c.Outcome,
-		CreatedAt: now, UpdatedAt: now,
+		OutlineNodeID: c.OutlineNodeID,
+		CreatedAt:     now, UpdatedAt: now,
 	}
 	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
 		if isUniqueViolation(err) {
@@ -189,7 +191,7 @@ func (r *WritingRepo) GetChapter(ctx context.Context, id string) (*domain.Creati
 func (r *WritingRepo) ListChapters(ctx context.Context, workID string, withContent bool) ([]domain.CreativeChapter, error) {
 	query := r.db.WithContext(ctx).Model(&chapterModel{}).Where("creative_work_id = ?", workID)
 	if !withContent {
-		query = query.Select("id, creative_work_id, volume_id, chapter_no, title, summary, status, word_count, purpose, conflict, outcome, created_at, updated_at, deleted_at, '' as content")
+		query = query.Select("id, creative_work_id, volume_id, outline_node_id, chapter_no, title, summary, status, word_count, purpose, conflict, outcome, created_at, updated_at, deleted_at, '' as content")
 	}
 	var models []chapterModel
 	if err := query.Order("chapter_no ASC").Find(&models).Error; err != nil {
@@ -414,7 +416,8 @@ func (r *WritingRepo) UpdateIssueStatus(ctx context.Context, id, status string) 
 
 func toDomainCreativeChapter(m chapterModel) domain.CreativeChapter {
 	return domain.CreativeChapter{
-		ID: m.ID, CreativeWorkID: m.CreativeWorkID, VolumeID: m.VolumeID, ChapterNo: m.ChapterNo,
+		ID: m.ID, CreativeWorkID: m.CreativeWorkID, VolumeID: m.VolumeID,
+		OutlineNodeID: m.OutlineNodeID, ChapterNo: m.ChapterNo,
 		Title: m.Title, Summary: m.Summary, Content: m.Content, Status: domain.ChapterStatus(m.Status),
 		WordCount: m.WordCount, Purpose: m.Purpose, Conflict: m.Conflict, Outcome: m.Outcome,
 		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
@@ -434,9 +437,7 @@ func toDomainScene(m sceneModel) domain.CreativeScene {
 		Purpose: m.Purpose, Conflict: m.Conflict, EmotionalGoal: m.EmotionalGoal, Content: m.Content,
 		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, Characters: []string{},
 	}
-	if m.Characters != "" {
-		_ = json.Unmarshal([]byte(m.Characters), &s.Characters)
-	}
+	unmarshalJSONB("creative_scenes", "characters", m.Characters, &s.Characters)
 	return s
 }
 

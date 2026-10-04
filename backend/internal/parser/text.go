@@ -181,24 +181,36 @@ func matchChapterTitle(raw string) (string, bool) {
 
 // chunkByLength 按 rune 数兜底切分。
 func chunkByLength(text string, maxRunes int) []Chapter {
-	runes := []rune(strings.TrimSpace(text))
+	trimmed := strings.TrimSpace(text)
+	runes := []rune(trimmed)
 	if len(runes) == 0 {
 		return nil
 	}
+	if maxRunes <= 0 {
+		maxRunes = 8000
+	}
 	var chapters []Chapter
+	// 字节偏移增量累加：原来每切一段都做两次 string(runes[:n]) 全量转换，
+	// 50MB 无标题文本会退化成 O(n²)（审查 P1-6）。这里只累加"这一段占多少字节"。
+	byteOffset := int64(0)
+	// 前导空白在 TrimSpace 时已被去掉，记录它占的字节数，让偏移量仍对应原始文本
+	byteOffset += int64(len(text) - len(trimmed))
 	for start := 0; start < len(runes); start += maxRunes {
 		end := start + maxRunes
 		if end > len(runes) {
 			end = len(runes)
 		}
+		content := strings.TrimSpace(string(runes[start:end]))
+		segmentBytes := int64(len(string(runes[start:end])))
 		no := len(chapters) + 1
 		chapters = append(chapters, Chapter{
 			No:      no,
 			Title:   "第 " + strconv.Itoa(no) + " 段（自动切分）",
-			Content: strings.TrimSpace(string(runes[start:end])),
-			Start:   int64(len(string(runes[:start]))),
-			End:     int64(len(string(runes[:end]))),
+			Content: content,
+			Start:   byteOffset,
+			End:     byteOffset + segmentBytes,
 		})
+		byteOffset += segmentBytes
 	}
 	return chapters
 }

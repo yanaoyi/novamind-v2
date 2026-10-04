@@ -30,6 +30,11 @@ type CreativeRepository interface {
 	CreateMapping(ctx context.Context, m *domain.OriginalCreativeMapping) error
 	ListMappings(ctx context.Context, workID string) ([]domain.OriginalCreativeMapping, error)
 	DeleteMapping(ctx context.Context, id string) error
+	// 多步写入必须成组提交（审查 P1-4）：继承 = 人物 + 权重 + 映射；融合 = 人物 + 多条映射
+	SaveInheritance(ctx context.Context, character *domain.CreativeCharacter, isNew bool,
+		rule *domain.InheritanceRule, mapping *domain.OriginalCreativeMapping) error
+	SaveFusion(ctx context.Context, fused *domain.CreativeCharacter,
+		mappings []*domain.OriginalCreativeMapping) error
 
 	UpsertWorld(ctx context.Context, w *domain.CreativeWorld) error
 	GetWorld(ctx context.Context, creativeWorkID string) (*domain.CreativeWorld, error)
@@ -243,6 +248,7 @@ func (s *CreativeService) InheritCharacter(ctx context.Context, workID string, i
 	}
 
 	// 同名已存在：重新继承（未锁定才允许）
+	isNew := true
 	if existing, err := s.findByWorkAndName(ctx, work.ID, name); err != nil {
 		return nil, err
 	} else if existing != nil {
@@ -251,31 +257,26 @@ func (s *CreativeService) InheritCharacter(ctx context.Context, workID string, i
 		}
 		character.ID = existing.ID
 		character.CreatedAt = existing.CreatedAt
-		if err := s.repo.UpdateCharacter(ctx, character); err != nil {
-			return nil, err
-		}
-	} else if err := s.repo.CreateCharacter(ctx, character); err != nil {
-		return nil, err
+		isNew = false
 	}
 
 	rule.CreativeCharacterID = character.ID
 	rule.SourceCharacterID = source.ID
-	if err := s.repo.UpsertInheritanceRule(ctx, &rule); err != nil {
-		return nil, err
-	}
 
 	// 映射：原著人物 → 二创人物
 	mappingType := domain.MappingInherited
 	if sourceType == domain.SourceModified {
 		mappingType = domain.MappingModified
 	}
-	if err := s.repo.CreateMapping(ctx, &domain.OriginalCreativeMapping{
+	mapping := &domain.OriginalCreativeMapping{
 		CreativeWorkID: work.ID,
 		OriginalType:   "character", OriginalID: source.ID,
 		CreativeType: "creative_character", CreativeID: character.ID,
 		MappingType: mappingType,
 		Description: fmt.Sprintf("继承自原著人物「%s」", source.Name),
-	}); err != nil {
+	}
+	// 三步（人物 / 权重 / 映射）一次事务写完，避免留下半成品
+	if err := s.repo.SaveInheritance(ctx, character, isNew, &rule, mapping); err != nil {
 		return nil, err
 	}
 	return character, nil
@@ -368,20 +369,19 @@ func (s *CreativeService) FuseCharacter(ctx context.Context, workID string, in F
 	if err := fused.Validate(); err != nil {
 		return nil, err
 	}
-	if err := s.repo.CreateCharacter(ctx, fused); err != nil {
-		return nil, err
-	}
-
+	mappings := make([]*domain.OriginalCreativeMapping, 0, len(inputs))
 	for _, item := range inputs {
-		if err := s.repo.CreateMapping(ctx, &domain.OriginalCreativeMapping{
+		mappings = append(mappings, &domain.OriginalCreativeMapping{
 			CreativeWorkID: workID,
 			OriginalType:   "character", OriginalID: sourceIDOf(ctx, s, item.Fusion.CharacterID),
 			CreativeType: "creative_character", CreativeID: fused.ID,
 			MappingType: domain.MappingFused,
 			Description: fmt.Sprintf("融合来源：「%s」（权重 %d）", item.Fusion.Name, item.Fusion.Weight),
-		}); err != nil {
-			return nil, err
-		}
+		})
+	}
+	// 人物 + 多条来源映射一次事务写完
+	if err := s.repo.SaveFusion(ctx, fused, mappings); err != nil {
+		return nil, err
 	}
 	return fused, nil
 }

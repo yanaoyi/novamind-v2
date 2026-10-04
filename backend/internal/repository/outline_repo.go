@@ -290,13 +290,23 @@ func (r *OutlineRepo) ReplaceTree(
 	nodes []domain.OutlineNode,
 	parents []int,
 ) ([]domain.OutlineNode, error) {
+	return r.replaceTreeWith(ctx, r.db, outlineID, nodes, parents)
+}
+
+func (r *OutlineRepo) replaceTreeWith(
+	ctx context.Context,
+	db *gorm.DB,
+	outlineID string,
+	nodes []domain.OutlineNode,
+	parents []int,
+) ([]domain.OutlineNode, error) {
 	if len(nodes) != len(parents) {
 		return nil, errors.New("节点与父子关系长度不一致")
 	}
 	now := time.Now().UTC()
 	written := make([]domain.OutlineNode, len(nodes))
 
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&outlineNodeModel{}).
 			Where("outline_id = ? AND deleted_at IS NULL", outlineID).
 			Updates(map[string]any{"deleted_at": now, "updated_at": now}).Error; err != nil {
@@ -341,13 +351,50 @@ func (r *OutlineRepo) ReplaceTree(
 	return written, nil
 }
 
+// RestoreTreeWithMeta 在一次事务里完成"整树替换 + 大纲元信息（标题/概要/版本/来源）回填"。
+//
+// 审查 P1-7：版本恢复原本是 ReplaceTree → UpdateOutline → SnapshotTree 三步，
+// 若 UpdateOutline 失败，就会留下"树已经是旧版、标题/版本号还是新版"的不一致状态。
+// 恢复要么整体生效、要么整体不生效。
+func (r *OutlineRepo) RestoreTreeWithMeta(
+	ctx context.Context,
+	outline *domain.Outline,
+	nodes []domain.OutlineNode,
+	parents []int,
+) ([]domain.OutlineNode, error) {
+	if len(nodes) != len(parents) {
+		return nil, errors.New("节点与父子关系长度不一致")
+	}
+	var written []domain.OutlineNode
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		written, err = r.replaceTreeWith(ctx, tx, outline.ID, nodes, parents)
+		if err != nil {
+			return err
+		}
+		res := tx.Model(&outlineModel{}).Where("id = ?", outline.ID).Updates(map[string]any{
+			"title": outline.Title, "summary": outline.Summary, "version": outline.Version,
+			"source": string(outline.Source), "updated_at": time.Now().UTC(),
+		})
+		if res.Error != nil {
+			return fmt.Errorf("回填大纲元信息失败: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return domain.ErrOutlineNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return written, nil
+}
+
 // ---------- 转换 ----------
 
 func toDomainOutlineNode(m outlineNodeModel) domain.OutlineNode {
 	characters := []string{}
-	if m.Characters != "" {
-		_ = json.Unmarshal([]byte(m.Characters), &characters)
-	}
+	unmarshalJSONB("outline_nodes", "characters", m.Characters, &characters)
 	return domain.OutlineNode{
 		ID: m.ID, OutlineID: m.OutlineID, ParentID: m.ParentID, Level: domain.OutlineLevel(m.Level),
 		Sequence: m.Sequence, Title: m.Title, Summary: m.Summary, Purpose: m.Purpose,

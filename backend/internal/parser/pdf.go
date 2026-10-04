@@ -791,7 +791,9 @@ func applyFilter(name string, data []byte) ([]byte, error) {
 func inflate(data []byte) ([]byte, error) {
 	if r, err := zlib.NewReader(bytes.NewReader(data)); err == nil {
 		defer r.Close()
-		if out, err := io.ReadAll(io.LimitReader(r, 1<<30)); err == nil {
+		// 上限 128MiB，且读满即报错（Zip 炸弹防护，审查 P1-8）：
+		// 原来是 1GiB 且读满会静默截断，等于既放得进炸弹、又把半截内容当正文。
+		if out, err := io.ReadAll(limitReader(r, maxDecompressedBytes, "PDF 压缩流")); err == nil {
 			return out, nil
 		}
 	}

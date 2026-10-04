@@ -28,6 +28,8 @@ type Repository interface {
 	Complete(ctx context.Context, id string, output map[string]any) error
 	Fail(ctx context.Context, id string, errMsg string) (domain.TaskStatus, error)
 	IsCancelled(ctx context.Context, id string) (bool, error)
+	// RequeueStale 把卡死的 RUNNING 任务放回队列（worker 崩溃/重启后的兜底）
+	RequeueStale(ctx context.Context, staleAfter time.Duration) (int, error)
 }
 
 // Reporter 供 handler 上报进度与检查取消。
@@ -87,6 +89,9 @@ type Worker struct {
 	logger      *slog.Logger
 	concurrency int
 	pollEvery   time.Duration
+	// staleAfter / reapEvery 控制"僵死任务回收"：超过 staleAfter 没推进的任务会被放回队列
+	staleAfter time.Duration
+	reapEvery  time.Duration
 }
 
 // Option 是 Worker 可选项。
@@ -110,11 +115,30 @@ func WithPollInterval(d time.Duration) Option {
 	}
 }
 
+// WithStaleAfter 设置"任务多久没推进算僵死"（默认 30 分钟）。
+func WithStaleAfter(d time.Duration) Option {
+	return func(w *Worker) {
+		if d > 0 {
+			w.staleAfter = d
+		}
+	}
+}
+
+// WithReapInterval 设置回收扫描间隔（默认 2 分钟）。
+func WithReapInterval(d time.Duration) Option {
+	return func(w *Worker) {
+		if d > 0 {
+			w.reapEvery = d
+		}
+	}
+}
+
 // NewWorker 构建执行器。
 func NewWorker(repo Repository, registry *Registry, logger *slog.Logger, opts ...Option) *Worker {
 	w := &Worker{
 		repo: repo, registry: registry, logger: logger,
 		concurrency: 2, pollEvery: 2 * time.Second,
+		staleAfter: 30 * time.Minute, reapEvery: 2 * time.Minute,
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -125,6 +149,8 @@ func NewWorker(repo Repository, registry *Registry, logger *slog.Logger, opts ..
 // Run 启动 worker 直到 ctx 结束。
 func (w *Worker) Run(ctx context.Context) {
 	var wg sync.WaitGroup
+	// 启动时先回收一次：上次进程被杀留下的 RUNNING 任务立刻回到队列
+	w.reapOnce(ctx)
 	for i := 0; i < w.concurrency; i++ {
 		wg.Add(1)
 		go func(id int) {
@@ -132,6 +158,11 @@ func (w *Worker) Run(ctx context.Context) {
 			w.loop(ctx, id)
 		}(i)
 	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		w.reapLoop(ctx)
+	}()
 	if w.logger != nil {
 		w.logger.Info("任务 worker 已启动",
 			slog.Int("concurrency", w.concurrency),
@@ -139,6 +170,35 @@ func (w *Worker) Run(ctx context.Context) {
 		)
 	}
 	wg.Wait()
+}
+
+// reapLoop 周期性回收僵死任务。
+func (w *Worker) reapLoop(ctx context.Context) {
+	ticker := time.NewTicker(w.reapEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			w.reapOnce(ctx)
+		}
+	}
+}
+
+// reapOnce 执行一次回收；回收失败只记日志，不能让 worker 退出。
+func (w *Worker) reapOnce(ctx context.Context) {
+	n, err := w.repo.RequeueStale(ctx, w.staleAfter)
+	if err != nil {
+		if w.logger != nil {
+			w.logger.Error("回收僵死任务失败", slog.Any("error", err))
+		}
+		return
+	}
+	if n > 0 && w.logger != nil {
+		w.logger.Warn("已把超时未完成的任务放回队列", slog.Int("count", n),
+			slog.Duration("stale_after", w.staleAfter))
+	}
 }
 
 func (w *Worker) loop(ctx context.Context, workerID int) {

@@ -140,12 +140,14 @@ check "节信息以摘要前缀保留" "True" "$(echo "$CHAP" | field "d['items'
 check "章挂到了卷上" "True" "$(echo "$CHAP" | field "d['items'][0]['volume_id'] is not None")"
 MAT2=$(curl -sf -X POST "${API}/outlines/${OUTLINE}/materialize")
 check "再次落成复用卷" "2" "$(echo "$MAT2" | field "d['volumes_reused']")"
-check "再次落成只追加章节" "4" "$(curl -sf "${API}/creative/${CID}/chapters" | field "d['total']")"
+check "再次落成不重复建章" "0" "$(echo "$MAT2" | field "d['chapters_created']")"
+check "已落成的章被跳过" "2" "$(echo "$MAT2" | field "d['chapters_skipped']")"
+check "章节总数不变（防重生效）" "2" "$(curl -sf "${API}/creative/${CID}/chapters" | field "d['total']")"
 
 echo "== 7. 删除大纲"
 check "删除返回 200" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${API}/outlines/${OUTLINE}")"
 check "删除后查询 404" "404" "$(curl -s -o /dev/null -w '%{http_code}' "${API}/outlines/${OUTLINE}")"
-check "删除大纲不动章节（章还在）" "4" "$(curl -sf "${API}/creative/${CID}/chapters" | field "d['total']")"
+check "删除大纲不动章节（章还在）" "2" "$(curl -sf "${API}/creative/${CID}/chapters" | field "d['total']")"
 
 echo
 echo "== 结果：通过 ${PASS} 项，失败 ${FAIL} 项"

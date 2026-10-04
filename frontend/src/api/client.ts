@@ -55,5 +55,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       res.status,
     )
   }
+  // 2xx 但没有响应体：返回 null as T 会让调用方在下一次解引用时崩掉（审查 P1-13），
+  // 这里明确报错，让问题停在请求层而不是散落到各个页面。
+  if (body == null) {
+    throw new ApiError('EMPTY_RESPONSE', `接口返回了空响应体（HTTP ${res.status}）`, res.status)
+  }
   return body?.data as T
 }

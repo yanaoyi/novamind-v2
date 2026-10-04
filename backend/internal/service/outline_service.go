@@ -26,14 +26,16 @@ type OutlineRepository interface {
 	DeleteNodeSubtree(ctx context.Context, id string) (int, error)
 	NextNodeSequence(ctx context.Context, outlineID string, parentID *string) (int, error)
 	ReplaceTree(ctx context.Context, outlineID string, nodes []domain.OutlineNode, parents []int) ([]domain.OutlineNode, error)
+	// RestoreTreeWithMeta 整树替换 + 元信息回填，同一事务（审查 P1-7）
+	RestoreTreeWithMeta(ctx context.Context, outline *domain.Outline, nodes []domain.OutlineNode, parents []int) ([]domain.OutlineNode, error)
 }
 
 // OutlineMaterializer 是「大纲落成卷与章节」需要的最小写作能力（由 WritingRepo 提供）。
 type OutlineMaterializer interface {
 	ListVolumes(ctx context.Context, workID string) ([]domain.CreativeVolume, error)
-	CreateVolume(ctx context.Context, v *domain.CreativeVolume) error
 	ListChapters(ctx context.Context, workID string, withContent bool) ([]domain.CreativeChapter, error)
-	CreateChapter(ctx context.Context, c *domain.CreativeChapter) error
+	// MaterializeOutline 在**一次事务**里写完新建的卷与章节（半成品不可接受，见 P1-2）
+	MaterializeOutline(ctx context.Context, workID string, plan repository.MaterializePlan) (*repository.MaterializeOutcome, error)
 }
 
 // OutlineService 是大纲服务（规格书 §27；§68 的「生成二创大纲 → 生成章节」）。
@@ -302,6 +304,7 @@ type MaterializeResult struct {
 	VolumesCreated  int      `json:"volumes_created"`
 	VolumesReused   int      `json:"volumes_reused"`
 	ChaptersCreated int      `json:"chapters_created"`
+	ChaptersSkipped int      `json:"chapters_skipped"`
 	ChapterIDs      []string `json:"chapter_ids"`
 }
 
@@ -309,7 +312,8 @@ type MaterializeResult struct {
 //
 // 语义（刻意保守）：
 //   - 卷按标题复用：已有同名卷就挂上去，不重复建；
-//   - 章节一律**追加**，章号从现有最大章号继续排，不覆盖、不删除作者已经写好的内容；
+//   - 章节**按来源节点防重**：同一个大纲节点只落成一章，重复点「落成章节」只补新增的，
+//     已经落成过的节点跳过（章号从现有最大章号继续排），不覆盖、不删除作者已经写好的内容；
 //   - 「节」在写作系统里没有对应表（§28 只有卷→章），因此章节点若挂在节下面，
 //     会把节标题作为摘要前缀保留下来，避免结构信息凭空消失。
 func (s *OutlineService) Materialize(ctx context.Context, outlineID string) (*MaterializeResult, error) {
@@ -340,39 +344,66 @@ func (s *OutlineService) Materialize(ctx context.Context, outlineID string) (*Ma
 
 	result := &MaterializeResult{ChapterIDs: []string{}}
 	volumeOrder := len(volumes) + 1
+	// 已经落成过的大纲节点集合（防重）
+	alreadyDone := make(map[string]bool, len(chapters))
+	maxChapterNo := 0
+	for _, c := range chapters {
+		if c.OutlineNodeID != nil {
+			alreadyDone[*c.OutlineNodeID] = true
+		}
+		if c.ChapterNo > maxChapterNo {
+			maxChapterNo = c.ChapterNo
+		}
+	}
+	nextChapterNo = maxChapterNo + 1
 
-	var walk func(nodes []*domain.OutlineNodeTree, volumeID string, sectionTitle string) error
-	walk = func(nodes []*domain.OutlineNodeTree, volumeID string, sectionTitle string) error {
+	// 先把计划算出来（哪些卷要新建、哪些章节要写），再交给仓储一次事务写完
+	plan := repository.MaterializePlan{}
+	for _, v := range volumes {
+		plan.ExistingVolumeIDs = append(plan.ExistingVolumeIDs, v.ID)
+	}
+	newVolumeIndex := make(map[string]int) // 卷标题 → plan.NewVolumes 下标
+
+	var walk func(nodes []*domain.OutlineNodeTree, volumeIndex int, sectionTitle string)
+	walk = func(nodes []*domain.OutlineNodeTree, volumeIndex int, sectionTitle string) {
 		for _, n := range nodes {
 			switch n.Level {
 			case domain.OutlineLevelVolume:
+				childVolumeIndex := volumeIndex
 				id, ok := volumeByTitle[n.Title]
 				if ok {
 					result.VolumesReused++
+					idx := -1
+					for i, existing := range volumes {
+						if existing.ID == id {
+							idx = i
+							break
+						}
+					}
+					childVolumeIndex = idx
 				} else {
-					v := &domain.CreativeVolume{
-						CreativeWorkID: workID, Title: n.Title, Summary: n.Summary, Sequence: volumeOrder,
+					idx, planned := newVolumeIndex[n.Title]
+					if !planned {
+						idx = len(plan.NewVolumes)
+						newVolumeIndex[n.Title] = idx
+						plan.NewVolumes = append(plan.NewVolumes, repository.MaterializeVolume{
+							Title: n.Title, Summary: n.Summary, Sequence: volumeOrder,
+						})
+						volumeByTitle[n.Title] = "" // 占位：本批次内同名卷只建一次
+						volumeOrder++
+						result.VolumesCreated++
 					}
-					v.Normalize()
-					if err := v.Validate(); err != nil {
-						return err
-					}
-					if err := s.writing.CreateVolume(ctx, v); err != nil {
-						return err
-					}
-					volumeByTitle[n.Title] = v.ID
-					id = v.ID
-					volumeOrder++
-					result.VolumesCreated++
+					// 新卷在 plan 里的下标要换算成"现有卷数量 + 新卷序号"
+					childVolumeIndex = len(plan.ExistingVolumeIDs) + idx
 				}
-				if err := walk(n.Children, id, ""); err != nil {
-					return err
-				}
+				walk(n.Children, childVolumeIndex, "")
 			case domain.OutlineLevelSection:
-				if err := walk(n.Children, volumeID, n.Title); err != nil {
-					return err
-				}
+				walk(n.Children, volumeIndex, n.Title)
 			case domain.OutlineLevelChapter:
+				if alreadyDone[n.ID] {
+					result.ChaptersSkipped++
+					continue
+				}
 				summary := n.Summary
 				if sectionTitle != "" {
 					prefix := fmt.Sprintf("【%s】", sectionTitle)
@@ -382,33 +413,25 @@ func (s *OutlineService) Materialize(ctx context.Context, outlineID string) (*Ma
 						summary = prefix + summary
 					}
 				}
-				var volumeRef *string
-				if volumeID != "" {
-					v := volumeID
-					volumeRef = &v
-				}
-				chapter := &domain.CreativeChapter{
-					CreativeWorkID: workID, VolumeID: volumeRef, ChapterNo: nextChapterNo,
-					Title: n.Title, Summary: summary, Purpose: n.Purpose,
-					Conflict: n.Conflict, Outcome: n.Outcome, Status: domain.ChapterDraft,
-				}
-				chapter.Normalize()
-				if err := chapter.Validate(); err != nil {
-					return err
-				}
-				if err := s.writing.CreateChapter(ctx, chapter); err != nil {
-					return err
-				}
-				result.ChaptersCreated++
-				result.ChapterIDs = append(result.ChapterIDs, chapter.ID)
+				plan.Chapters = append(plan.Chapters, repository.MaterializeChapter{
+					VolumeIndex: volumeIndex, ChapterNo: nextChapterNo, Title: n.Title, Summary: summary,
+					Purpose: n.Purpose, Conflict: n.Conflict, Outcome: n.Outcome, OutlineNodeID: n.ID,
+				})
 				nextChapterNo++
 			}
 		}
-		return nil
 	}
-	if err := walk(detail.Nodes, "", ""); err != nil {
+	walk(detail.Nodes, -1, "")
+
+	if len(plan.Chapters) == 0 {
+		return result, nil // 全部已落成，无事可做（不产生任何写入）
+	}
+	outcome, err := s.writing.MaterializeOutline(ctx, workID, plan)
+	if err != nil {
 		return nil, err
 	}
+	result.ChapterIDs = outcome.ChapterIDs
+	result.ChaptersCreated = len(outcome.ChapterIDs)
 	return result, nil
 }
 
@@ -573,23 +596,22 @@ func (s *OutlineService) RestoreVersion(ctx context.Context, outlineID string, n
 		})
 		parents = append(parents, parent)
 	}
-	if _, err := s.repo.ReplaceTree(ctx, outlineID, nodes, parents); err != nil {
-		return nil, err
-	}
-
 	outline, err := s.repo.GetOutline(ctx, outlineID)
 	if err != nil {
 		return nil, err
 	}
 	outline.Title, outline.Summary, outline.Version = snap.Title, snap.Summary, snap.Version
-	if outline.Source == "" {
+	// 来源按快照回填（审查 P2）：DB 列是 NOT NULL DEFAULT 'MANUAL'，永远不会是空串，
+	// 原来写 `if outline.Source == ""` 等于永不执行，快照里的 AI/MANUAL 标记被丢掉。
+	if snap.Source != "" {
 		outline.Source = domain.OutlineSource(snap.Source)
 	}
 	outline.Normalize()
 	if err := outline.Validate(); err != nil {
 		return nil, err
 	}
-	if err := s.repo.UpdateOutline(ctx, outline); err != nil {
+	// 整树替换 + 元信息回填在同一事务里（审查 P1-7）
+	if _, err := s.repo.RestoreTreeWithMeta(ctx, outline, nodes, parents); err != nil {
 		return nil, err
 	}
 
@@ -597,7 +619,10 @@ func (s *OutlineService) RestoreVersion(ctx context.Context, outlineID string, n
 	if err != nil {
 		return nil, err
 	}
-	_, _ = s.SnapshotTree(ctx, outlineID, fmt.Sprintf("恢复自 v%d", no))
+	// 恢复后的状态也留一版；快照失败要如实报错（审查 P1-5），不能让作者以为历史完整
+	if _, err := s.SnapshotTree(ctx, outlineID, fmt.Sprintf("恢复自 v%d", no)); err != nil {
+		return nil, fmt.Errorf("恢复已完成，但记录恢复版本失败：%w", err)
+	}
 	return out, nil
 }
 

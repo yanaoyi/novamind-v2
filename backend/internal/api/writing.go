@@ -408,7 +408,10 @@ func (s *Server) generateChapter(c *gin.Context) {
 		return
 	}
 	var req generateChapterRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := bindOptionalJSON(c, &req); err != nil {
+		Fail(c, http.StatusBadRequest, CodeBadRequest, err.Error(), nil)
+		return
+	}
 
 	input := map[string]any{"chapter_id": chapter.ID, "target_words": req.TargetWords, "instruction": req.Instruction}
 	t, err := s.tasks.Enqueue(c.Request.Context(), service.EnqueueInput{
@@ -605,7 +608,10 @@ func (s *Server) checkConsistency(c *gin.Context) {
 		return
 	}
 	var req consistencyCheckRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := bindOptionalJSON(c, &req); err != nil {
+		Fail(c, http.StatusBadRequest, CodeBadRequest, err.Error(), nil)
+		return
+	}
 	workID := c.Param("id")
 	if _, err := s.creative.GetWork(c.Request.Context(), workID); err != nil {
 		s.failFromError(c, err)

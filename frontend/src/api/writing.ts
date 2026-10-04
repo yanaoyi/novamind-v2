@@ -147,5 +147,6 @@ export async function downloadExport(workId: string, format: 'txt' | 'md' | 'doc
   document.body.appendChild(link)
   link.click()
   link.remove()
-  URL.revokeObjectURL(url)
+  // 立刻回收在 Firefox 下可能中断下载：延后一点再释放（审查 P2）
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

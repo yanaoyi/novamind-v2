@@ -100,4 +100,18 @@ describe('富文本编辑器', () => {
       expect(onChange).toHaveBeenCalledWith('# 新标题\n\n新正文')
     })
   })
+
+  // 审查 P1-14：富文本 ↔ 源码来回切不能给正文叠反斜杠。
+  // 之前 htmlToMarkdown 会转义 * _ `，而 markdownToHtml 不还原，
+  // 于是每切一次源码模式、正文里的 \ 就翻一倍。
+  it('转义字符在 Markdown ↔ HTML 往返中保持稳定', () => {
+    const source = 'a*b 与 c_d 还有 `e`'
+    const once = htmlToMarkdown(markdownToHtml(source))
+    const twice = htmlToMarkdown(markdownToHtml(once))
+    expect(twice).toBe(once)
+    expect(once).not.toContain('\\\\*') // 不允许出现 \\* 这种双层转义
+    // 再转回 HTML 时，字面量星号仍然是文本，而不是变成斜体标记
+    const html = markdownToHtml(once)
+    expect(html).toContain('a*b')
+  })
 })

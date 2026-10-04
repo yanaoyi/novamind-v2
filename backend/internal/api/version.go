@@ -113,7 +113,10 @@ func (s *Server) snapshotCharacterHandler(c *gin.Context) {
 		return
 	}
 	var req versionNoteRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := bindOptionalJSON(c, &req); err != nil {
+		Fail(c, http.StatusBadRequest, CodeBadRequest, err.Error(), nil)
+		return
+	}
 	v, err := s.versions.SnapshotCharacter(c.Request.Context(), c.Param("id"), req.Note)
 	if err != nil {
 		s.failVersion(c, err)
@@ -181,7 +184,10 @@ func (s *Server) snapshotWorldHandler(c *gin.Context) {
 		return
 	}
 	var req versionNoteRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := bindOptionalJSON(c, &req); err != nil {
+		Fail(c, http.StatusBadRequest, CodeBadRequest, err.Error(), nil)
+		return
+	}
 	v, err := s.versions.SnapshotWorld(c.Request.Context(), c.Param("id"), req.Note)
 	if err != nil {
 		s.failVersion(c, err)
@@ -249,7 +255,10 @@ func (s *Server) snapshotOutlineHandler(c *gin.Context) {
 		return
 	}
 	var req versionNoteRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := bindOptionalJSON(c, &req); err != nil {
+		Fail(c, http.StatusBadRequest, CodeBadRequest, err.Error(), nil)
+		return
+	}
 	v, err := s.versions.SnapshotOutline(c.Request.Context(), c.Param("id"), req.Note)
 	if err != nil {
 		s.failVersion(c, err)

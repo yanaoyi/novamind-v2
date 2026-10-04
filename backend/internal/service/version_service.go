@@ -282,14 +282,12 @@ func (s *VersionService) Restore(ctx context.Context, t, entityID string, no int
 		_, err := s.outlineTree.RestoreVersion(ctx, entityID, no)
 		return err
 	}
-	// 恢复前先把"现状"留一版，误点恢复也能退回去
-	switch kind {
-	case domain.VersionCreativeCharacter:
-		_, _ = s.SnapshotCharacter(ctx, entityID, fmt.Sprintf("恢复 v%d 前的自动备份", no))
-	case domain.VersionCreativeWorld:
-		_, _ = s.SnapshotWorld(ctx, entityID, fmt.Sprintf("恢复 v%d 前的自动备份", no))
-	case domain.VersionCreativeOutline:
-		_, _ = s.SnapshotOutline(ctx, entityID, fmt.Sprintf("恢复 v%d 前的自动备份", no))
+	// 恢复前先把"现状"留一版，误点恢复也能退回去。
+	//
+	// 审查 P1-5：这里原本是 `_, _ =`（吞掉错误）。备份失败却继续恢复，
+	// 等于"误恢复可退回"的能力静默消失，作者直到想退回时才发现没有那一版。备份失败必须中止恢复。
+	if err := s.snapshotBeforeRestore(ctx, kind, entityID, no); err != nil {
+		return fmt.Errorf("恢复前的自动备份失败，已中止恢复：%w", err)
 	}
 
 	switch kind {
@@ -312,6 +310,21 @@ func (s *VersionService) Restore(ctx context.Context, t, entityID string, no int
 		_, err = s.SnapshotWorld(ctx, entityID, fmt.Sprintf("恢复自 v%d", no))
 	case domain.VersionCreativeOutline:
 		_, err = s.SnapshotOutline(ctx, entityID, fmt.Sprintf("恢复自 v%d", no))
+	}
+	return err
+}
+
+// snapshotBeforeRestore 在恢复前把当前状态存一版（按实体类型分发）。
+func (s *VersionService) snapshotBeforeRestore(ctx context.Context, kind domain.EntityVersionType, entityID string, no int) error {
+	note := fmt.Sprintf("恢复 v%d 前的自动备份", no)
+	var err error
+	switch kind {
+	case domain.VersionCreativeCharacter:
+		_, err = s.SnapshotCharacter(ctx, entityID, note)
+	case domain.VersionCreativeWorld:
+		_, err = s.SnapshotWorld(ctx, entityID, note)
+	case domain.VersionCreativeOutline:
+		_, err = s.SnapshotOutline(ctx, entityID, note)
 	}
 	return err
 }

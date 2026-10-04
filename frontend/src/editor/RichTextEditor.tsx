@@ -33,7 +33,8 @@ export default function RichTextEditor({ value, onChange, placeholder, minRows =
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
+        // 与 markdown.ts 的输出对齐（# → h1 … ###### → h6），否则 h4-h6 会被降级成段落（审查 P2）
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
       }),
     ],
     content: markdownToHtml(value),
@@ -82,7 +83,12 @@ export default function RichTextEditor({ value, onChange, placeholder, minRows =
           <Button
             size="small"
             type={mode === 'rich' ? 'primary' : 'default'}
-            onClick={() => setMode('rich')}
+            onClick={() => {
+              // 只在切回富文本时同步一次（审查 P2：源码模式每次击键都重解析
+              // 整篇 Markdown 并重建编辑器，既慢又会清掉撤销栈）
+              editor?.commands.setContent(markdownToHtml(value), { emitUpdate: false })
+              setMode('rich')
+            }}
           >
             富文本
           </Button>
@@ -157,7 +163,6 @@ export default function RichTextEditor({ value, onChange, placeholder, minRows =
           onChange={(e) => {
             lastEmitted.current = e.target.value
             onChange(e.target.value)
-            editor.commands.setContent(markdownToHtml(e.target.value), { emitUpdate: false })
           }}
           spellCheck={false}
           style={{

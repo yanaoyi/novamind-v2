@@ -72,18 +72,20 @@ type CreativeChapter struct {
 	ID             string
 	CreativeWorkID string
 	VolumeID       *string
-	ChapterNo      int
-	Title          string
-	Summary        string
-	Content        string
-	Status         ChapterStatus
-	WordCount      int
-	Purpose        string
-	Conflict       string
-	Outcome        string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	DeletedAt      *time.Time
+	// OutlineNodeID 记录这一章是从哪条大纲节点落成的（§27），用于防重与追溯
+	OutlineNodeID *string
+	ChapterNo     int
+	Title         string
+	Summary       string
+	Content       string
+	Status        ChapterStatus
+	WordCount     int
+	Purpose       string
+	Conflict      string
+	Outcome       string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     *time.Time
 }
 
 // Normalize 清洗输入并补默认值。

@@ -208,6 +208,11 @@ func (r *CreativeRepo) SetDivergencePoint(ctx context.Context, workID, divergenc
 
 // CreateCharacter 创建二创人物（DNA/融合说明一起写入）。
 func (r *CreativeRepo) CreateCharacter(ctx context.Context, c *domain.CreativeCharacter) error {
+	return r.createCharacterWith(ctx, r.db, c)
+}
+
+// createCharacterWith 是 CreateCharacter 的事务版实现（可传 tx）。
+func (r *CreativeRepo) createCharacterWith(ctx context.Context, db *gorm.DB, c *domain.CreativeCharacter) error {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return fmt.Errorf("生成二创人物 ID 失败: %w", err)
@@ -220,7 +225,7 @@ func (r *CreativeRepo) CreateCharacter(ctx context.Context, c *domain.CreativeCh
 	if err != nil {
 		return err
 	}
-	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
+	if err := db.WithContext(ctx).Create(&m).Error; err != nil {
 		if isUniqueViolation(err) {
 			return domain.ErrCreativeCharacterDup
 		}
@@ -281,12 +286,17 @@ func (r *CreativeRepo) UpdateCharacter(ctx context.Context, c *domain.CreativeCh
 	if existing.IsLocked && existing.SourceType != c.SourceType {
 		return domain.ErrCreativeCharacterLocked
 	}
+	return r.updateCharacterWith(ctx, r.db, c)
+}
+
+// updateCharacterWith 是 UpdateCharacter 的事务版实现（不含锁定校验，调用方负责）。
+func (r *CreativeRepo) updateCharacterWith(ctx context.Context, db *gorm.DB, c *domain.CreativeCharacter) error {
 	m, err := toCreativeCharacterModel(c)
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	res := r.db.WithContext(ctx).Model(&creativeCharacterModel{}).Where("id = ?", c.ID).Updates(map[string]any{
+	res := db.WithContext(ctx).Model(&creativeCharacterModel{}).Where("id = ?", c.ID).Updates(map[string]any{
 		"name":           m.Name,
 		"description":    m.Description,
 		"source_type":    m.SourceType,
@@ -327,8 +337,13 @@ func (r *CreativeRepo) DeleteCharacter(ctx context.Context, id string) error {
 
 // UpsertInheritanceRule 写入/更新继承权重。
 func (r *CreativeRepo) UpsertInheritanceRule(ctx context.Context, rule *domain.InheritanceRule) error {
+	return r.upsertInheritanceRuleWith(ctx, r.db, rule)
+}
+
+// upsertInheritanceRuleWith 是 UpsertInheritanceRule 的事务版实现（可传 tx）。
+func (r *CreativeRepo) upsertInheritanceRuleWith(ctx context.Context, db *gorm.DB, rule *domain.InheritanceRule) error {
 	var existing inheritanceRuleModel
-	err := r.db.WithContext(ctx).
+	err := db.WithContext(ctx).
 		First(&existing, "creative_character_id = ? AND source_character_id = ?", rule.CreativeCharacterID, rule.SourceCharacterID).Error
 	now := time.Now().UTC()
 
@@ -341,7 +356,7 @@ func (r *CreativeRepo) UpsertInheritanceRule(ctx context.Context, rule *domain.I
 		rule.ID = id.String()
 		rule.CreatedAt, rule.UpdatedAt = now, now
 		m := toInheritanceModel(*rule)
-		if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
+		if err := db.WithContext(ctx).Create(&m).Error; err != nil {
 			if isForeignKeyViolation(err) {
 				return domain.ErrSourceCharacterNotFound
 			}
@@ -354,7 +369,7 @@ func (r *CreativeRepo) UpsertInheritanceRule(ctx context.Context, rule *domain.I
 
 	rule.ID = existing.ID
 	rule.CreatedAt = existing.CreatedAt
-	res := r.db.WithContext(ctx).Model(&inheritanceRuleModel{}).Where("id = ?", existing.ID).Updates(map[string]any{
+	res := db.WithContext(ctx).Model(&inheritanceRuleModel{}).Where("id = ?", existing.ID).Updates(map[string]any{
 		"personality_weight":  rule.PersonalityWeight,
 		"value_weight":        rule.ValueWeight,
 		"motivation_weight":   rule.MotivationWeight,
@@ -408,6 +423,15 @@ func (r *CreativeRepo) ListInheritanceRules(ctx context.Context, creativeCharact
 
 // CreateMapping 记录一条原著↔二创映射。
 func (r *CreativeRepo) CreateMapping(ctx context.Context, m *domain.OriginalCreativeMapping) error {
+	return r.upsertMappingWith(ctx, r.db, m)
+}
+
+// upsertMappingWith 写入映射：同一 (作品, 原著类型, 原著 ID, 二创 ID) 只保留一行。
+//
+// 为什么是 upsert 而不是 insert：重复继承同一个人物、或重新融合一次，
+// 语义上是"同一个来源关系被更新"，不该在映射表里堆一串一模一样的行（审查 P1-3）。
+// 冲突目标是 0017 迁移建的部分唯一索引（deleted_at IS NULL），所以这里要带上同样的谓词。
+func (r *CreativeRepo) upsertMappingWith(ctx context.Context, db *gorm.DB, m *domain.OriginalCreativeMapping) error {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return fmt.Errorf("生成映射 ID 失败: %w", err)
@@ -416,20 +440,87 @@ func (r *CreativeRepo) CreateMapping(ctx context.Context, m *domain.OriginalCrea
 	now := time.Now().UTC()
 	m.CreatedAt, m.UpdatedAt = now, now
 
-	model := mappingModel{
-		ID: m.ID, CreativeWorkID: m.CreativeWorkID,
-		OriginalType: m.OriginalType, OriginalID: m.OriginalID,
-		CreativeType: m.CreativeType, CreativeID: m.CreativeID,
-		MappingType: string(m.MappingType), Description: m.Description,
-		CreatedAt: now, UpdatedAt: now,
-	}
-	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+	const upsertSQL = `
+		INSERT INTO original_creative_mappings
+			(id, creative_work_id, original_type, original_id, creative_type, creative_id,
+			 mapping_type, description, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (creative_work_id, original_type, original_id, creative_id) WHERE deleted_at IS NULL
+		DO UPDATE SET mapping_type = EXCLUDED.mapping_type,
+		              description  = EXCLUDED.description,
+		              updated_at   = EXCLUDED.updated_at
+		RETURNING id`
+	var storedID string
+	res := db.WithContext(ctx).Raw(upsertSQL,
+		m.ID, m.CreativeWorkID, m.OriginalType, m.OriginalID, m.CreativeType, m.CreativeID,
+		string(m.MappingType), m.Description, now, now,
+	).Scan(&storedID)
+	if res.Error != nil {
+		err := res.Error
 		if isForeignKeyViolation(err) {
 			return domain.ErrCreativeNotFound
 		}
 		return fmt.Errorf("写入映射失败: %w", err)
 	}
+	if storedID != "" {
+		m.ID = storedID // 命中既有行时返回的是原本那行的 ID
+	}
 	return nil
+}
+
+// SaveInheritance 在一次事务里完成"人物（新建或更新）+ 继承权重 + 映射"三步写入。
+//
+// 审查 P1-4：这三步原本各自调用仓储方法，中间失败会留下"人物建了、权重没写"这类半成品，
+// 而同一个项目的提案审核路径（applyProposal）本来就是走事务的 —— 实现不一致，这里补齐。
+func (r *CreativeRepo) SaveInheritance(
+	ctx context.Context,
+	character *domain.CreativeCharacter,
+	isNew bool,
+	rule *domain.InheritanceRule,
+	mapping *domain.OriginalCreativeMapping,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		if isNew {
+			err = r.createCharacterWith(ctx, tx, character)
+		} else {
+			err = r.updateCharacterWith(ctx, tx, character)
+		}
+		if err != nil {
+			return err
+		}
+		rule.CreativeCharacterID = character.ID
+		if err := r.upsertInheritanceRuleWith(ctx, tx, rule); err != nil {
+			return err
+		}
+		if mapping != nil {
+			mapping.CreativeID = character.ID
+			if err := r.upsertMappingWith(ctx, tx, mapping); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// SaveFusion 在一次事务里完成"融合人物 + 多条来源映射"的写入。
+func (r *CreativeRepo) SaveFusion(
+	ctx context.Context,
+	fused *domain.CreativeCharacter,
+	mappings []*domain.OriginalCreativeMapping,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := r.createCharacterWith(ctx, tx, fused); err != nil {
+			return err
+		}
+		for _, m := range mappings {
+			m.CreativeID = fused.ID
+			if err := r.upsertMappingWith(ctx, tx, m); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ListMappings 列出二创作品的全部映射。
@@ -899,15 +990,9 @@ func toDomainCreativeCharacter(m creativeCharacterModel) (domain.CreativeCharact
 			return domain.CreativeCharacter{}, fmt.Errorf("解析二创人物 DNA 失败: %w", err)
 		}
 	}
-	if m.FusionSources != "" {
-		_ = json.Unmarshal([]byte(m.FusionSources), &c.FusionSources)
-	}
-	if m.FusionDetail != "" {
-		_ = json.Unmarshal([]byte(m.FusionDetail), &c.FusionDetail)
-	}
-	if m.Modifications != "" {
-		_ = json.Unmarshal([]byte(m.Modifications), &c.Modifications)
-	}
+	unmarshalJSONB("creative_characters", "fusion_sources", m.FusionSources, &c.FusionSources)
+	unmarshalJSONB("creative_characters", "fusion_detail", m.FusionDetail, &c.FusionDetail)
+	unmarshalJSONB("creative_characters", "modifications", m.Modifications, &c.Modifications)
 	if m.DeletedAt.Valid {
 		t := m.DeletedAt.Time
 		c.DeletedAt = &t

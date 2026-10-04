@@ -231,7 +231,17 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
       <Button icon={<PlusOutlined />} onClick={() => setVolumeOpen(true)} disabled={!workId}>
         新建卷
       </Button>
-      <Button type="primary" icon={<FileAddOutlined />} onClick={() => setChapterOpen(true)} disabled={!workId}>
+      <Button
+        type="primary"
+        icon={<FileAddOutlined />}
+        onClick={() => {
+          // 每次打开都重算章号（审查 P2：initialValues 只在首次挂载生效，
+          // 取消后重开会显示上一次的旧章号，容易撞唯一约束）
+          chapterForm.setFieldsValue({ chapter_no: (sortedChapters.at(-1)?.chapter_no ?? 0) + 1 })
+          setChapterOpen(true)
+        }}
+        disabled={!workId}
+      >
         新建章节
       </Button>
       <Button icon={<CheckCircleOutlined />} loading={checking} onClick={() => void runConsistencyCheck()} disabled={!workId}>
@@ -460,11 +470,7 @@ export default function WritingWorkspacePage({ defaultTab = 'chapters' }: Props)
         onOk={() => void createChapter()}
         width={640}
       >
-        <Form
-          form={chapterForm}
-          layout="vertical"
-          initialValues={{ chapter_no: (sortedChapters.at(-1)?.chapter_no ?? 0) + 1 }}
-        >
+        <Form form={chapterForm} layout="vertical">
           <Row gutter={12}>
             <Col span={8}>
               <Form.Item name="chapter_no" label="章号" rules={[{ required: true, message: '请输入章号' }]}>

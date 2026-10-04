@@ -140,8 +140,11 @@ export default function TasksPage() {
             </Tooltip>
           )
         }
-        const summary = (record.output as { summary?: unknown }).summary
-        const created = (record.output as { proposals_created?: unknown }).proposals_created
+        // output 可能为 null（后端初始值是 {}，但历史数据/失败任务可能没有），
+        // 直接解引用会让整张表崩掉（审查 P2）
+        const output = (record.output ?? {}) as { summary?: unknown; proposals_created?: unknown }
+        const summary = output.summary
+        const created = output.proposals_created
         return (
           <Typography.Text type="secondary">
             {typeof summary === 'string' ? summary : created !== undefined ? `产出提案 ${created} 条` : '—'}

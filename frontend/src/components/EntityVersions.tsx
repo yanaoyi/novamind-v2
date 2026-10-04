@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react'
 
 import { versionApi } from '../api/versions'
 import { ENTITY_VERSION_LABEL, type EntityVersion, type EntityVersionType } from '../api/types'
+import VersionDiff from './VersionDiff'
 
 interface Props {
   entityType: EntityVersionType
@@ -35,6 +36,7 @@ export default function EntityVersions({
   const [preview, setPreview] = useState<EntityVersion | null>(null)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [diffFrom, setDiffFrom] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -109,11 +111,14 @@ export default function EntityVersions({
     },
     {
       title: '操作',
-      width: 150,
+      width: 210,
       render: (_, row) => (
         <Space size="small">
           <Button size="small" onClick={() => void openPreview(row.version_no)}>
             预览
+          </Button>
+          <Button size="small" onClick={() => setDiffFrom(row.version_no)}>
+            比较
           </Button>
           <Button
             size="small"
@@ -188,6 +193,16 @@ export default function EntityVersions({
           {preview?.payload ? JSON.stringify(preview.payload, null, 2) : '（空）'}
         </pre>
       </Modal>
+
+      <VersionDiff
+        entityType={entityType}
+        entityId={entityId}
+        versions={items.map((v) => ({ version_no: v.version_no, note: v.note }))}
+        open={diffFrom !== null}
+        initialFrom={diffFrom ?? undefined}
+        initialTo={0}
+        onClose={() => setDiffFrom(null)}
+      />
     </>
   )
 }

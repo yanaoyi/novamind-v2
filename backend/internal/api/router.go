@@ -175,6 +175,8 @@ func (s *Server) Router() *gin.Engine {
 			chapters.GET("/:id/scenes", s.listChapterScenes)
 		}
 		v1.POST("/ai/rewrite", s.rewriteText)
+		// 版本比较（规格书 §59）：四类版本共用一个入口
+		v1.GET("/versions/compare", s.compareVersions)
 		consistencyIssues := v1.Group("/consistency-issues")
 		{
 			consistencyIssues.PUT("/:id", s.updateConsistencyIssue)

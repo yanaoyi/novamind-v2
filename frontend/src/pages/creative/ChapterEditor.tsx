@@ -33,6 +33,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { pollTask } from '../../api/taskPoll'
 import { writingApi } from '../../api/writing'
+import VersionDiff from '../../components/VersionDiff'
 import RichTextEditor from '../../editor/RichTextEditor'
 import {
   CHAPTER_STATUS_COLOR,
@@ -99,6 +100,7 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
   const [versionsOpen, setVersionsOpen] = useState(false)
   const [versions, setVersions] = useState<ChapterVersion[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
+  const [diffFrom, setDiffFrom] = useState<number | null>(null)
   const [preview, setPreview] = useState<ChapterVersion | null>(null)
 
   const [scenesOpen, setScenesOpen] = useState(false)
@@ -276,11 +278,14 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
     },
     {
       title: '操作',
-      width: 150,
+      width: 210,
       render: (_, row) => (
         <Space size="small">
           <Button size="small" onClick={() => void openPreview(row.version_no)}>
             预览
+          </Button>
+          <Button size="small" onClick={() => setDiffFrom(row.version_no)}>
+            比较
           </Button>
           <Popconfirm
             title={`恢复到 v${row.version_no}？`}
@@ -494,6 +499,16 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
           {preview?.content}
         </pre>
       </Modal>
+
+      <VersionDiff
+        entityType="chapter"
+        entityId={chapter.id}
+        versions={versions.map((v) => ({ version_no: v.version_no, note: v.note }))}
+        open={diffFrom !== null}
+        initialFrom={diffFrom ?? undefined}
+        initialTo={0}
+        onClose={() => setDiffFrom(null)}
+      />
 
       <Drawer title="场景（§29）" width={720} open={scenesOpen} onClose={() => setScenesOpen(false)}>
         <Form form={sceneForm} layout="vertical">

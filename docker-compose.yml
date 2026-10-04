@@ -1,0 +1,81 @@
+# NovaMind V2 —— 部署 / CI 用编排文件（规格书 §50）
+#
+# 说明：本机开发环境没有 Docker，本地验收不依赖本文件（见 docs/ARCHITECTURE.md §13）。
+# 这里给出的是可部署的完整栈：PostgreSQL(pgvector) + Redis + 后端 + 前端。
+# 用法：
+#   docker compose up -d --build
+#   docker compose exec backend ./migrate up
+
+services:
+  postgres:
+    # 用 pgvector 官方镜像，向量检索（规格书 §55）开箱可用
+    image: pgvector/pgvector:pg16
+    container_name: novamind-postgres
+    environment:
+      POSTGRES_USER: novamind
+      POSTGRES_PASSWORD: novamind
+      POSTGRES_DB: novamind
+    ports:
+      - "5432:5432"
+    volumes:
+      - novamind-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U novamind -d novamind"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: novamind-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - novamind-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: novamind-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      HTTP_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://novamind:novamind@postgres:5432/novamind?sslmode=disable
+      REDIS_ADDR: redis:6379
+      REDIS_DB: "0"
+      STORAGE_DIR: /data/uploads
+      UPLOAD_MAX_MB: "50"
+      LOG_LEVEL: info
+      # NOVAMIND_SECRET 必须由部署方注入（密钥加密主密钥，禁止写死在镜像里）
+      NOVAMIND_SECRET: ${NOVAMIND_SECRET:?请在 .env 或环境中提供 NOVAMIND_SECRET}
+    ports:
+      - "8080:8080"
+    volumes:
+      - novamind-uploads:/data/uploads
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: novamind-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  novamind-pgdata:
+  novamind-redisdata:
+  novamind-uploads:

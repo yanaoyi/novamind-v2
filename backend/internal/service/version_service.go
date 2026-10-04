@@ -90,9 +90,23 @@ type outlineSnapshot struct {
 
 // SnapshotCharacter 存一份人物快照（内容与上一版相同则跳过）。
 func (s *VersionService) SnapshotCharacter(ctx context.Context, characterID, note string) (*domain.EntityVersion, error) {
-	detail, err := s.creative.GetCharacter(ctx, characterID)
+	payload, workID, err := s.buildCharacterPayloadWithWork(ctx, characterID)
 	if err != nil {
 		return nil, err
+	}
+	return s.save(ctx, domain.VersionCreativeCharacter, characterID, workID, payload, note)
+}
+
+// buildCharacterPayload 只组装快照内容，不写库（供快照与「版本比较」共用）。
+func (s *VersionService) buildCharacterPayload(ctx context.Context, characterID string) (map[string]any, error) {
+	payload, _, err := s.buildCharacterPayloadWithWork(ctx, characterID)
+	return payload, err
+}
+
+func (s *VersionService) buildCharacterPayloadWithWork(ctx context.Context, characterID string) (map[string]any, string, error) {
+	detail, err := s.creative.GetCharacter(ctx, characterID)
+	if err != nil {
+		return nil, "", err
 	}
 	c := detail.Character
 	payload, err := toPayload(characterSnapshot{
@@ -101,13 +115,22 @@ func (s *VersionService) SnapshotCharacter(ctx context.Context, characterID, not
 		SourceType: c.SourceType,
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return s.save(ctx, domain.VersionCreativeCharacter, c.ID, c.CreativeWorkID, payload, note)
+	return payload, c.CreativeWorkID, nil
 }
 
 // SnapshotWorld 存一份世界观快照（世界设定 + 全部规则）。
 func (s *VersionService) SnapshotWorld(ctx context.Context, workID, note string) (*domain.EntityVersion, error) {
+	payload, err := s.buildWorldPayload(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	return s.save(ctx, domain.VersionCreativeWorld, workID, workID, payload, note)
+}
+
+// buildWorldPayload 只组装世界观快照内容，不写库。
+func (s *VersionService) buildWorldPayload(ctx context.Context, workID string) (map[string]any, error) {
 	detail, err := s.creative.GetWorldDetail(ctx, workID)
 	if err != nil {
 		return nil, err
@@ -129,11 +152,20 @@ func (s *VersionService) SnapshotWorld(ctx context.Context, workID, note string)
 	if err != nil {
 		return nil, err
 	}
-	return s.save(ctx, domain.VersionCreativeWorld, workID, workID, payload, note)
+	return payload, nil
 }
 
 // SnapshotOutline 存一份大纲快照（卷 + 章节的大纲字段，不含正文）。
 func (s *VersionService) SnapshotOutline(ctx context.Context, workID, note string) (*domain.EntityVersion, error) {
+	payload, err := s.buildOutlinePayload(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	return s.save(ctx, domain.VersionCreativeOutline, workID, workID, payload, note)
+}
+
+// buildOutlinePayload 只组装大纲快照内容，不写库。
+func (s *VersionService) buildOutlinePayload(ctx context.Context, workID string) (map[string]any, error) {
 	if _, err := s.creative.GetWork(ctx, workID); err != nil {
 		return nil, err
 	}
@@ -161,7 +193,7 @@ func (s *VersionService) SnapshotOutline(ctx context.Context, workID, note strin
 	if err != nil {
 		return nil, err
 	}
-	return s.save(ctx, domain.VersionCreativeOutline, workID, workID, payload, note)
+	return payload, nil
 }
 
 // save 落库；与最新一版内容一致时不产生新版本（返回 nil, nil）。

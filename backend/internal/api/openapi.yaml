@@ -2942,6 +2942,79 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
+  /versions/compare:
+    get:
+      tags: [versions]
+      summary: 版本比较
+      description: |
+        比较同一实体的两个版本（规格书 §59）。实体类型支持：
+        `chapter`（章节正文，行级 diff）、`creative_character`（人物）、
+        `creative_world`（世界观）、`creative_outline`（大纲）。
+        版本号传 0 表示「当前状态」（现算快照，不落库）。
+      parameters:
+        - name: entity_type
+          in: query
+          required: true
+          schema: { type: string, enum: [chapter, creative_character, creative_world, creative_outline] }
+        - name: entity_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0 }
+        - name: to
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: 差异结果（changes 为字段级差异，lines 为正文行级差异）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          entity_type: { type: string }
+                          entity_id: { type: string }
+                          from: { type: integer }
+                          to: { type: integer }
+                          summary:
+                            type: object
+                            properties:
+                              added: { type: integer }
+                              removed: { type: integer }
+                              changed: { type: integer }
+                              same: { type: integer }
+                          changes:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                path: { type: string }
+                                kind: { type: string, enum: [added, removed, changed] }
+                                before: {}
+                                after: {}
+                          lines:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                kind: { type: string, enum: [same, added, removed] }
+                                old_no: { type: integer }
+                                new_no: { type: integer }
+                                text: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /creative/{id}/consistency/check:
     post:
       tags: [consistency]

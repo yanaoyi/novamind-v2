@@ -1,5 +1,11 @@
 import { request } from './client'
-import type { EntityVersion, EntityVersionType, ListOf } from './types'
+import type {
+  EntityVersion,
+  EntityVersionType,
+  ListOf,
+  VersionCompare,
+  VersionCompareEntityType,
+} from './types'
 
 /** 版本历史（规格书 §59）：人物 / 世界观 / 大纲 */
 export const versionApi = {
@@ -24,6 +30,21 @@ export const versionApi = {
       pathFor(entityType, entityId, 'versions'),
       { method: 'POST', body: JSON.stringify({ note: note ?? '' }) },
     )
+  },
+  /** 版本比较（规格书 §59）；版本号传 0 表示「当前状态」 */
+  compare(params: {
+    entityType: VersionCompareEntityType
+    entityId: string
+    from: number
+    to: number
+  }) {
+    const query = new URLSearchParams({
+      entity_type: params.entityType,
+      entity_id: params.entityId,
+      from: String(params.from),
+      to: String(params.to),
+    })
+    return request<VersionCompare>(`/versions/compare?${query.toString()}`)
   },
 }
 

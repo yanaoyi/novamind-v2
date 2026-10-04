@@ -886,3 +886,39 @@ export interface EntityVersion {
   note: string
   created_at: string
 }
+
+/** 版本比较（规格书 §59）：可比较的四类实体 */
+export type VersionCompareEntityType = 'chapter' | EntityVersionType
+
+export interface VersionValueChange {
+  path: string
+  kind: 'added' | 'removed' | 'changed'
+  before: unknown
+  after: unknown
+}
+
+export interface VersionTextLine {
+  kind: 'same' | 'added' | 'removed'
+  old_no?: number
+  new_no?: number
+  text: string
+}
+
+export interface VersionCompareSummary {
+  added: number
+  removed: number
+  changed: number
+  same: number
+}
+
+export interface VersionCompare {
+  entity_type: VersionCompareEntityType
+  entity_id: string
+  from: number
+  to: number
+  from_note?: string
+  to_note?: string
+  changes: VersionValueChange[]
+  lines: VersionTextLine[]
+  summary: VersionCompareSummary
+}

@@ -244,6 +244,19 @@ func (s *ModelProviderService) ResolveConfig(ctx context.Context, id string) (ai
 	if strings.TrimSpace(key) == "" {
 		return ai.ProviderConfig{}, errors.New("该模型配置还没有填 API Key")
 	}
+	// KDF 升级的懒迁移（审查 P2）：读到的还是 v1（裸 SHA-256）密文时，
+	// 用 v2（HKDF + 盐）重新加密写回。老数据不用作者重填 Key，也不用停机一次性迁移 ——
+	// 用到哪条升级哪条；升级失败只记日志，不影响本次调用。
+	if ai.IsLegacyCipher(cipher) {
+		if upgraded, encErr := ai.EncryptSecret(s.secret, key); encErr == nil {
+			if updErr := s.repo.Update(ctx, provider, &upgraded); updErr == nil {
+				slog.Info("模型密钥已升级为 v2 加密", slog.String("provider_id", provider.ID))
+			} else {
+				slog.Warn("模型密钥升级失败（不影响本次调用）",
+					slog.String("provider_id", provider.ID), slog.Any("error", updErr))
+			}
+		}
+	}
 
 	return ai.ProviderConfig{
 		Type: provider.Provider, APIBase: provider.APIBase, APIKey: key, ModelName: provider.ModelName,

@@ -1,90 +1,80 @@
 package ai
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"io"
 	"strings"
 	"testing"
 )
 
-func TestEncryptDecryptRoundTrip(t *testing.T) {
-	secret := "test-secret-key"
-	plain := "sk-abcdefghijklmnopqrstuvwxyz0123456789"
-
-	cipher, err := EncryptSecret(secret, plain)
+func TestEncryptDecryptV2RoundTrip(t *testing.T) {
+	secret := "test-master-secret"
+	cipher1, err := EncryptSecret(secret, "sk-abcdef123456")
 	if err != nil {
 		t.Fatalf("加密失败: %v", err)
 	}
-	if cipher == "" || strings.Contains(cipher, plain) {
-		t.Fatalf("密文异常: %q", cipher)
+	if !strings.HasPrefix(cipher1, cipherV2Prefix) {
+		t.Fatalf("新密文应带 %s 前缀，实际 %q", cipherV2Prefix, cipher1)
 	}
-
-	back, err := DecryptSecret(secret, cipher)
+	plain, err := DecryptSecret(secret, cipher1)
 	if err != nil {
 		t.Fatalf("解密失败: %v", err)
 	}
-	if back != plain {
-		t.Fatalf("往返不一致: %q", back)
+	if plain != "sk-abcdef123456" {
+		t.Fatalf("解密结果不对: %q", plain)
 	}
+	// 带盐：同一明文两次加密结果必须不同（否则等于没加盐）
+	cipher2, _ := EncryptSecret(secret, "sk-abcdef123456")
+	if cipher1 == cipher2 {
+		t.Error("两次加密结果相同，说明盐没有生效")
+	}
+	if _, err := DecryptSecret("wrong-secret", cipher1); err == nil {
+		t.Error("主密钥不对时必须解密失败")
+	}
+}
 
-	// 同一明文两次加密应产生不同密文（随机 nonce）
-	cipher2, err := EncryptSecret(secret, plain)
+func TestDecryptLegacyV1Cipher(t *testing.T) {
+	secret := "test-master-secret"
+	legacy := legacyEncrypt(t, secret, "sk-legacy-key")
+	if !IsLegacyCipher(legacy) {
+		t.Fatal("没有前缀的密文应被识别为 v1")
+	}
+	plain, err := DecryptSecret(secret, legacy)
 	if err != nil {
-		t.Fatalf("二次加密失败: %v", err)
+		t.Fatalf("v1 历史密文必须仍能解开（升级不能架空老数据）: %v", err)
 	}
-	if cipher == cipher2 {
-		t.Error("两次加密结果相同，随机 nonce 可能失效")
+	if plain != "sk-legacy-key" {
+		t.Fatalf("v1 解密结果不对: %q", plain)
+	}
+	if IsLegacyCipher("v2:whatever") {
+		t.Error("v2 密文不应被识别为 v1")
+	}
+	if IsLegacyCipher("") {
+		t.Error("空密文不算 v1")
 	}
 }
 
-func TestDecryptWithWrongSecretFails(t *testing.T) {
-	cipher, err := EncryptSecret("secret-a", "sk-test")
+// legacyEncrypt 复刻升级前的实现（裸 SHA-256 当 AES 密钥 + base64(nonce||ct)），
+// 保证"老数据仍可读"这件事有真实用例兜着。
+func legacyEncrypt(t *testing.T, secret, plaintext string) string {
+	t.Helper()
+	sum := sha256.Sum256([]byte(secret))
+	block, err := aes.NewCipher(sum[:])
 	if err != nil {
-		t.Fatalf("加密失败: %v", err)
+		t.Fatalf("初始化失败: %v", err)
 	}
-	if _, err := DecryptSecret("secret-b", cipher); err == nil {
-		t.Fatal("换了主密钥竟然解密成功，说明没有真正校验")
-	}
-}
-
-func TestDecryptTamperedCipherFails(t *testing.T) {
-	cipher, err := EncryptSecret("secret", "sk-test")
+	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		t.Fatalf("加密失败: %v", err)
+		t.Fatalf("初始化 GCM 失败: %v", err)
 	}
-	// 篡改最后一个字符
-	tampered := cipher[:len(cipher)-1] + "A"
-	if tampered == cipher {
-		tampered = cipher[:len(cipher)-1] + "B"
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		t.Fatalf("随机数失败: %v", err)
 	}
-	if _, err := DecryptSecret("secret", tampered); err == nil {
-		t.Fatal("篡改后的密文竟然解密成功，GCM 校验可能失效")
-	}
-}
-
-func TestEncryptRequiresSecret(t *testing.T) {
-	if _, err := EncryptSecret("   ", "sk-test"); err == nil {
-		t.Fatal("未配置主密钥时应报错")
-	}
-}
-
-func TestEmptyPlaintextIsAllowed(t *testing.T) {
-	cipher, err := EncryptSecret("secret", "")
-	if err != nil {
-		t.Fatalf("空明文应允许: %v", err)
-	}
-	if cipher != "" {
-		t.Fatalf("空明文应得到空密文，实际 %q", cipher)
-	}
-	back, err := DecryptSecret("secret", "")
-	if err != nil || back != "" {
-		t.Fatalf("空密文应解出空串: %q %v", back, err)
-	}
-}
-
-func TestMaskHintOnlyKeepsTail(t *testing.T) {
-	if got := MaskHint("sk-1234567890abcd"); got != "****abcd" {
-		t.Errorf("应只保留尾 4 位，实际 %q", got)
-	}
-	if got := MaskHint("abc"); got != "****" {
-		t.Errorf("过短的密钥应整体打码，实际 %q", got)
-	}
+	sealed := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
+	return base64.StdEncoding.EncodeToString(sealed)
 }

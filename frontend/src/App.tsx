@@ -9,6 +9,7 @@ import TasksPage from './pages/TasksPage'
 import CreativePage from './pages/CreativePage'
 import ConsistencyPage from './pages/creative/ConsistencyPage'
 import CreativeOverviewPage from './pages/creative/CreativeOverviewPage'
+import OutlinePage from './pages/creative/OutlinePage'
 import WritingWorkspacePage from './pages/creative/WritingWorkspacePage'
 import ChapterReaderPage from './pages/original/ChapterReaderPage'
 import OriginalAnalysisPage from './pages/original/OriginalAnalysisPage'
@@ -159,7 +160,7 @@ export default function App() {
                   p.path === 'overview' ? (
                     <CreativeOverviewPage key="creative-overview" />
                   ) : p.path === 'outline' ? (
-                    <WritingWorkspacePage key="creative-outline" defaultTab="outline" />
+                    <OutlinePage key="creative-outline" />
                   ) : p.path === 'chapters' ? (
                     <WritingWorkspacePage key="creative-chapters" defaultTab="chapters" />
                   ) : ['characters', 'world', 'timeline', 'mappings'].includes(p.path) ? (

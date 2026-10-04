@@ -56,5 +56,7 @@ function pathFor(entityType: EntityVersionType, entityId: string, suffix: string
       return `/creative/${entityId}/world/${suffix}`
     case 'creative_outline':
       return `/creative/${entityId}/outline/${suffix}`
+    case 'creative_outline_tree':
+      return `/outlines/${entityId}/${suffix}`
   }
 }

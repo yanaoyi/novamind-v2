@@ -766,6 +766,73 @@ export const CHAPTER_STATUS_COLOR: Record<ChapterStatus, string> = {
   FINAL: 'green',
 }
 
+/** 大纲（规格书 §27）：一份作品可以有多份大纲 */
+export type OutlineSource = 'MANUAL' | 'AI'
+
+export interface Outline {
+  id: string
+  creative_work_id: string
+  title: string
+  summary: string
+  version: number
+  source: OutlineSource
+  node_count: number
+  created_at: string
+  updated_at: string
+}
+
+/** 大纲节点层级：1 卷 / 2 节 / 3 章 */
+export type OutlineLevel = 1 | 2 | 3
+
+export const OUTLINE_LEVEL_LABEL: Record<OutlineLevel, string> = {
+  1: '卷',
+  2: '节',
+  3: '章',
+}
+
+export interface OutlineNode {
+  id: string
+  outline_id: string
+  parent_id: string | null
+  level: OutlineLevel
+  level_name: string
+  sequence: number
+  title: string
+  summary: string
+  purpose: string
+  characters: string[]
+  location: string
+  conflict: string
+  outcome: string
+  children: OutlineNode[]
+  created_at: string
+  updated_at: string
+}
+
+/** 提交给后端的节点入参：层级由嵌套深度决定（第 1 层 = 卷） */
+export interface OutlineNodeInput {
+  title: string
+  summary?: string
+  purpose?: string
+  characters?: string[]
+  location?: string
+  conflict?: string
+  outcome?: string
+  children?: OutlineNodeInput[]
+}
+
+export interface OutlineDetail {
+  outline: Outline
+  nodes: OutlineNode[]
+}
+
+export interface OutlineMaterializeResult {
+  volumes_created: number
+  volumes_reused: number
+  chapters_created: number
+  chapter_ids: string[]
+}
+
 export interface CreativeVolume {
   id: string
   title: string
@@ -872,12 +939,17 @@ export const REWRITE_ACTIONS: RewriteAction[] = [
 
 // ---------- 版本历史（规格书 §59） ----------
 
-export type EntityVersionType = 'creative_character' | 'creative_world' | 'creative_outline'
+export type EntityVersionType =
+  | 'creative_character'
+  | 'creative_world'
+  | 'creative_outline'
+  | 'creative_outline_tree'
 
 export const ENTITY_VERSION_LABEL: Record<EntityVersionType, string> = {
   creative_character: '人物',
   creative_world: '世界观',
   creative_outline: '大纲',
+  creative_outline_tree: '大纲树',
 }
 
 export interface EntityVersion {

@@ -2,15 +2,25 @@
 
 面向"基于原著进行二次创作"的专业 AI 写作系统。开发规格见根目录 **`NovaMind_V2_开发规格说明书.md`**（72 节 / 2571 行，**v1 与 v2 是同一套规格，唯一验收基准**）；[`docs/SPEC.md`](docs/SPEC.md) 是实施状态对账表（记录「规格要求 → 代码实现」的差距），配套 `docs/ARCHITECTURE.md` / `docs/PRODUCT_SPEC.md`。
 
-**当前状态（2026-10-03）**：规格书 §63 的 Phase 1–7 全部完成 —— 工程管理、原著导入（TXT / DOCX / **PDF**）与结构化、AI 分析（提案→作者审核）、二创（继承/融合/分叉点/时间线）、写作（卷·章节·场景·**富文本编辑器**·版本·AI 写作）、一致性检查、导出（txt/md/docx）、**人物/世界观/大纲版本历史**。尚未实现的 6 个页面（二创设定/剧情/素材、原著人物关系/知识库、AI 助手）见 规格书 §36.2，页面上如实标注"未实现"，不伪装成可用功能。
+**当前状态（2026-10-04）**：规格书 §63 的 Phase 1–7 全部完成，Phase 8 正在按规格书逐条补齐缺口 —— 工程管理、原著导入（TXT / DOCX / **PDF**）与结构化、AI 分析（提案→作者审核）、二创（继承/融合/分叉点/时间线）、**大纲独立模型（卷 → 节 → 章，可直接落成章节）**、写作（卷·章节·场景·**富文本编辑器**·版本·AI 写作）、一致性检查（五类上下文）、导出（txt/md/docx）、版本比较、人物/世界观/大纲版本历史、`docker-compose.yml`。尚未实现的 6 个页面（二创设定/剧情/素材、原著人物关系/知识库、AI 助手）见 `docs/SPEC.md` 缺口清单，页面上如实标注"未实现"，不伪装成可用功能。
+
+## 评审入口
+
+| 想看什么 | 看这里 |
+|---|---|
+| **完整开发规格**（2571 行 / 72 节，v1 = v2，唯一验收基准） | [`NovaMind_V2_开发规格说明书.md`](NovaMind_V2_开发规格说明书.md) |
+| 规格逐条对账：哪些已实现、哪些还缺 | [`docs/SPEC.md`](docs/SPEC.md) |
+| 产品边界与技术架构 | [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| 每一轮改了什么、怎么验证的 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) |
+| 当前开发状态与下一步 | [`docs/CODEX_STATE.md`](docs/CODEX_STATE.md) |
 
 验证方式（都可复跑）：
 
 ```bash
 bash scripts/dev-up.sh                    # 起服务
 cd backend && go test ./... -count=1      # 后端 8 个包
-cd frontend && npx vitest run             # 前端 8 个文件 30 例
-bash scripts/smoke-phase5.sh              # 各阶段端到端冒烟（共 9 个脚本 268 项）
+cd frontend && npx vitest run             # 前端 10 个文件 42 例
+bash scripts/smoke-phase5.sh              # 各阶段端到端冒烟（含 smoke-phase8-outline.sh 45 项）
 bash scripts/check-pdf-extract.sh 120 777 # PDF 解析质量（与 PyMuPDF 对照）
 ```
 

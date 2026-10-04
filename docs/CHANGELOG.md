@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## [2026-10-04] Phase 8 起步：补 §50 部署编排、§59 版本比较、§39 一致性检查闭环
+
+### §50 文件结构 —— 补齐 `docker-compose.yml`
+
+`docker/` 之前是空目录。现在补上可部署的完整栈：PostgreSQL(**pgvector 镜像**) + Redis + 后端 + 前端，另含 `docker/backend.Dockerfile`、`docker/frontend.Dockerfile`、`docker/nginx.conf`。本机没有 Docker，本地验收流程依旧不依赖它（见 `docs/ARCHITECTURE.md` §13）。
+
+### §59 版本管理 —— 补「比较」
+
+* 后端：新增版本 diff 引擎。结构化实体（人物/世界观/大纲）把 JSON 快照拍平成字段路径逐项比对，输出 `added / removed / changed`；章节正文用行级 LCS 做 diff（先掐公共前后缀，超过 400 万格退化为粗粒度，避免大长篇打满 CPU）。
+* 接口：`GET /api/v1/versions/compare?entity_type=&entity_id=&from=&to=`，四类实体共用一个入口；版本号传 `0` 表示「当前状态」（现算快照，不落库）。之所以不做成 `/:id/versions/compare`，是因为 gin 路由树里 `/:no` 与 `compare` 同层会冲突。
+* 前端：新增通用 `VersionDiff` 组件（双版本选择 + 差异统计 + 字段级表格 + 正文行级视图，相同行可折叠），接入人物/世界观/大纲版本抽屉与章节版本抽屉的「比较」按钮。
+* 测试：新增 4 个 diff 单测（字段增删改、行级替换、CRLF 归一、空正文）。
+
+### §39 一致性检查 —— 从「两类」补到「五类」
+
+之前只有人物与世界观是真的，时间线是一句固定占位文案，剧情与原著继承根本没进 Prompt；单章 JSON 解析失败还会被静默 `continue`（等于把"解析失败"当成"这章没问题"）。现在：
+
+* 新增 `BuildConsistencyContext`：五类上下文全部真实装配 —— 人物（含 DNA 权重）、世界规则、**二创时间线**（按 `sequence` 排序，带继承状态与时间标签）、**剧情大纲链**（章节摘要/冲突/目的/结果）、**原著↔二创映射**（查原著继承一致性）；
+* Prompt 升级为 `consistency_check.v2.md`（v1 保持原样，遵守 §37 版本化纪律），新增 `PlotContext`/`InheritanceContext` 占位与第五类审查维度，并把 `type` 取值范围写进要求；
+* §57/§58 落地：模型输出不是合法 JSON 时**自动重试一次**，两次都失败则记入 `failed_chapters`，任务输出里如实列出章号，不再静默跳过。
+
+回归：后端 8 个包全绿，`gofmt` / `go vet` 无输出。
+
 ## [2026-10-04] 基准归位 · 按全文规格继续开发
 
 **BOSS 拍板**：v1 与 v2 是同一套规格。规格书已改名移入本仓库根目录 `NovaMind_V2_开发规格说明书.md`（72 节 / 2571 行），它是**唯一验收基准**；不存在"窄口径"版本。

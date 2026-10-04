@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yanaoyi/novamindv2/backend/internal/domain"
 	"github.com/yanaoyi/novamindv2/backend/internal/service"
@@ -65,7 +66,7 @@ func RegisterWritingHandlers(reg *Registry, writing *service.WritingService, run
 				}
 			}
 		}
-		count, err := writing.CheckConsistency(ctx, workID, chapterIDs, runner, func(stage string, percent int) {
+		result, err := writing.CheckConsistency(ctx, workID, chapterIDs, runner, func(stage string, percent int) {
 			if r.Cancelled() {
 				return
 			}
@@ -74,9 +75,16 @@ func RegisterWritingHandlers(reg *Registry, writing *service.WritingService, run
 		if err != nil {
 			return nil, err
 		}
+		summary := fmt.Sprintf("检查 %d 章，发现 %d 个问题", result.Checked, result.Created)
+		if len(result.FailedChapters) > 0 {
+			summary += fmt.Sprintf("；%d 章检查失败（模型输出不是合法 JSON）：%s",
+				len(result.FailedChapters), strings.Join(result.FailedChapters, "、"))
+		}
 		return map[string]any{
-			"issues_created": count,
-			"summary":        fmt.Sprintf("发现 %d 个问题", count),
+			"checked":         result.Checked,
+			"issues_created":  result.Created,
+			"failed_chapters": result.FailedChapters,
+			"summary":         summary,
 		}, nil
 	})
 }

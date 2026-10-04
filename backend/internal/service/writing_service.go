@@ -38,6 +38,9 @@ type WritingRepository interface {
 type ChapterContextReader interface {
 	ListCharacters(ctx context.Context, workID string) ([]domain.CreativeCharacter, error)
 	GetWorldDetail(ctx context.Context, workID string) (*WorldDetail, error)
+	// 一致性检查（规格书 §39）还要：二创时间线 + 原著↔二创映射（查"原著继承一致性"）
+	GetTimeline(ctx context.Context, workID string) ([]domain.CreativeTimelineEvent, error)
+	ListMappings(ctx context.Context, workID string) ([]domain.OriginalCreativeMapping, error)
 }
 
 // WritingService 是写作系统服务。
@@ -463,26 +466,26 @@ func (s *WritingService) CheckConsistency(
 	chapterIDs []string,
 	runner PromptRunner,
 	report func(stage string, percent int),
-) (int, error) {
+) (ConsistencyResult, error) {
 	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
-		return 0, err
+		return ConsistencyResult{}, err
 	}
 	chapters := make([]domain.CreativeChapter, 0)
 	if len(chapterIDs) > 0 {
 		for _, id := range chapterIDs {
 			c, err := s.repo.GetChapter(ctx, id)
 			if err != nil {
-				return 0, err
+				return ConsistencyResult{}, err
 			}
 			if c.CreativeWorkID != workID {
-				return 0, errors.New("章节不属于该二创作品")
+				return ConsistencyResult{}, errors.New("章节不属于该二创作品")
 			}
 			chapters = append(chapters, *c)
 		}
 	} else {
 		all, err := s.repo.ListChapters(ctx, workID, true)
 		if err != nil {
-			return 0, err
+			return ConsistencyResult{}, err
 		}
 		for _, c := range all {
 			if strings.TrimSpace(c.Content) != "" {
@@ -491,48 +494,25 @@ func (s *WritingService) CheckConsistency(
 		}
 	}
 	if len(chapters) == 0 {
-		return 0, errors.New("没有可检查的正文（章节还是空的）")
+		return ConsistencyResult{}, errors.New("没有可检查的正文（章节还是空的）")
 	}
 
-	charactersContext := ""
-	worldContext := ""
-	if s.ctxReader != nil {
-		if characters, err := s.ctxReader.ListCharacters(ctx, workID); err == nil {
-			var sb strings.Builder
-			for _, c := range characters {
-				fmt.Fprintf(&sb, "- %s（%s）：%s\n", c.Name, c.SourceType, c.Description)
-			}
-			charactersContext = sb.String()
-		}
-		if detail, err := s.ctxReader.GetWorldDetail(ctx, workID); err == nil && detail.World != nil {
-			var sb strings.Builder
-			for _, rule := range detail.Rules {
-				if rule.Status == domain.RuleRemoved {
-					continue
-				}
-				fmt.Fprintf(&sb, "- [%s] %s：%s\n", rule.Category, rule.Name, rule.Description)
-			}
-			worldContext = sb.String()
-		}
-	}
+	cctx := s.BuildConsistencyContext(ctx, workID)
 
-	total := 0
+	result := ConsistencyResult{}
 	for i, chapter := range chapters {
 		if report != nil {
 			report(fmt.Sprintf("检查第 %d/%d 章", i+1, len(chapters)), 10+int(float64(i)/float64(len(chapters))*80))
 		}
-		reply, err := runner.RunPrompt(ctx, "consistency_check", map[string]any{
-			"CharacterContext": charactersContext,
-			"WorldContext":     worldContext,
-			"TimelineContext":  "（时间线检查在 Phase 4 的二创时间线里维护）",
-			"ChapterText":      trimChars(chapter.Content, maxAnalysisChars),
-		})
+		result.Checked++
+
+		// 规格书 §57/§58：模型输出必须结构化；失败要重试，重试仍失败要如实记录。
+		// 以前是直接 continue —— 跳过等于"这章没问题"，是假阴性。
+		obj, err := runConsistencyPrompt(ctx, runner, cctx, chapter.Content)
 		if err != nil {
-			return total, err
-		}
-		obj, err := ExtractJSONObject(reply)
-		if err != nil {
-			continue // 单章解析失败不拖垮整批
+			result.FailedChapters = append(result.FailedChapters,
+				fmt.Sprintf("第%d章 %s", chapter.ChapterNo, chapter.Title))
+			continue
 		}
 		chapterID := chapter.ID
 		issues := make([]domain.ConsistencyIssue, 0)
@@ -550,14 +530,53 @@ func (s *WritingService) CheckConsistency(
 		}
 		created, err := s.repo.CreateIssues(ctx, issues)
 		if err != nil {
-			return total, err
+			return result, err
 		}
-		total += created
+		result.Created += created
 	}
 	if report != nil {
 		report("完成", 100)
 	}
-	return total, nil
+	return result, nil
+}
+
+// ConsistencyResult 是一次一致性检查的结果（规格书 §58：失败必须可见，不能静默吞掉）。
+type ConsistencyResult struct {
+	Checked        int      `json:"checked"`
+	Created        int      `json:"issues_created"`
+	FailedChapters []string `json:"failed_chapters"`
+}
+
+// runConsistencyPrompt 送审单章；模型输出不是合法 JSON 时重试一次，
+// 两次都不行就返回错误，由调用方记为「本章检查失败」。
+func runConsistencyPrompt(
+	ctx context.Context,
+	runner PromptRunner,
+	cctx ConsistencyContext,
+	chapterContent string,
+) (map[string]any, error) {
+	vars := map[string]any{
+		"CharacterContext":   cctx.Characters,
+		"WorldContext":       cctx.World,
+		"TimelineContext":    cctx.Timeline,
+		"PlotContext":        cctx.Plot,
+		"InheritanceContext": cctx.Inheritance,
+		"ChapterText":        trimChars(chapterContent, maxAnalysisChars),
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= 2; attempt++ {
+		reply, err := runner.RunPrompt(ctx, "consistency_check", vars)
+		if err != nil {
+			return nil, err
+		}
+		obj, err := ExtractJSONObject(reply)
+		if err == nil {
+			return obj, nil
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("模型输出两次都不是合法 JSON：%w", lastErr)
 }
 
 // ListIssues 列出一致性问题。

@@ -89,4 +89,16 @@ describe('路径参数编码与错误消息提取', () => {
     expect(errorMessage({ weird: true })).toBe('未知错误')
     expect(errorMessage(undefined)).toBe('未知错误')
   })
+
+  // v3 复审指出这条分支缺测试：2xx 但响应体为空时必须显式报错，
+  // 不能把 null 当数据返回（调用方解引用时会崩，且崩在离现场很远的地方）。
+  it('2xx 但空响应体时抛 EMPTY_RESPONSE', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response('', { status: 200 })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(request('/projects')).rejects.toMatchObject({
+      code: 'EMPTY_RESPONSE',
+      status: 200,
+    })
+  })
 })

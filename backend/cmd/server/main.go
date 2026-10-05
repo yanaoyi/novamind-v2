@@ -156,7 +156,14 @@ func run() error {
 		repository.NewCreativeRepo(pg.DB),
 		creative,
 	)
+	// 检索仓储（Phase 9 §9.1）：数据源 + 写入端 + 索引任务共用
+	chunkRepo := repository.NewChunkRepo(pg.DB)
+	userRepo := repository.NewUserRepo(pg.DB)
+
 	task.RegisterWritingHandlers(registry, writing, invoker)
+	// 检索索引任务（Phase 9 §9.1.4）：把作品内容切片写进 chunks
+	indexSvc := service.NewIndexService(chunkRepo, userRepo, originalRepo, repository.NewWritingRepo(pg.DB))
+	task.RegisterIndexHandlers(registry, indexSvc)
 	// 大纲（规格书 §27）：卷 → 节 → 章的独立模型 + 落成章节
 	outlines := service.NewOutlineService(
 		repository.NewOutlineRepo(pg.DB),
@@ -164,9 +171,7 @@ func run() error {
 		repository.NewWritingRepo(pg.DB),
 		repository.NewEntityVersionRepo(pg.DB),
 	)
-	// 检索（Phase 9 §9.1）：分块仓储既当数据源又当写入端
-	chunkRepo := repository.NewChunkRepo(pg.DB)
-	userRepo := repository.NewUserRepo(pg.DB)
+	// 检索（Phase 9 §9.1）：分块仓储既当数据源又当写入端（变量在任务注册前已声明）
 	retrievalSvc := service.NewRetrievalService(chunkRepo, userRepo)
 
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）

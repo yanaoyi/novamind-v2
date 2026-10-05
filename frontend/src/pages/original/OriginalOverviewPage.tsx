@@ -99,6 +99,17 @@ export default function OriginalOverviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetProjectId, projects, workId])
 
+  // 只有一个原著文章时自动选中。
+  //
+  // 为什么：未选文章时这个页面只显示一个下拉框（"导入原文"区域在选中之后才渲染），
+  // 作者会以为"导入界面不见了"（2026-10-05 BOSS 实际遇到）。只有一个候选时没有歧义，
+  // 直接选中，页面立刻可用。
+  useEffect(() => {
+    if (workId || selectedProject || projects.length !== 1) return
+    void onSelectProject(projects[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, workId, selectedProject])
+
   const onCreate = async () => {
     if (!selectedProject) return
     try {
@@ -142,7 +153,8 @@ export default function OriginalOverviewPage() {
         <Card title="选择原著文章">
           <Space direction="vertical" size="small" style={{ display: 'flex' }}>
             <Typography.Text type="secondary">
-              原著绑定在「原著类型」的文章上。先选一个文章，再导入原文。
+              原著绑定在「原著类型」的文章上。<b>先选一个文章</b>，下方的「导入原文」区域就会出现；
+              文章下已有原著时，直接进入该书详情（可在详情页继续导入或重新导入原文）。
             </Typography.Text>
             <Select
               style={{ width: 420 }}

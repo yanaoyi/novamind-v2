@@ -32,6 +32,7 @@ type Server struct {
 	writing    *service.WritingService
 	outlines   *service.OutlineService
 	versions   *service.VersionService
+	retrieval  *service.RetrievalService
 	invoker    *service.ModelInvoker
 }
 
@@ -54,6 +55,7 @@ func NewServer(
 	writing *service.WritingService,
 	outlines *service.OutlineService,
 	versions *service.VersionService,
+	retrieval *service.RetrievalService,
 	invoker *service.ModelInvoker,
 ) *Server {
 	return &Server{
@@ -62,7 +64,7 @@ func NewServer(
 		events: events, providers: providers, prompts: promptEngine,
 		tasks: tasks, taskTypes: taskTypes, analysis: analysis, creative: creative,
 		writing: writing, outlines: outlines, invoker: invoker,
-		versions: versions,
+		versions: versions, retrieval: retrieval,
 	}
 }
 
@@ -201,6 +203,11 @@ func (s *Server) Router() *gin.Engine {
 			chapters.POST("/:id/scenes", s.createChapterScene)
 			chapters.GET("/:id/scenes", s.listChapterScenes)
 		}
+		// 检索（Phase 9 §9.1）：调试接口，看"AI 能翻到哪些旧账"
+		retrievalGroup := v1.Group("/retrieval")
+		{
+			retrievalGroup.POST("/search", s.retrievalSearch)
+		}
 		// AI 端点（§38 / §49）：会真实调用上游、消耗额度，单独限流
 		aiGroup := v1.Group("/ai", RateLimit(60, time.Minute))
 		{
@@ -327,7 +334,7 @@ func (s *Server) Router() *gin.Engine {
 func (s *Server) requireServices(c *gin.Context) bool {
 	if s.projects == nil || s.originals == nil || s.characters == nil || s.worlds == nil ||
 		s.events == nil || s.providers == nil || s.tasks == nil || s.analysis == nil ||
-		s.creative == nil || s.writing == nil || s.outlines == nil || s.versions == nil {
+		s.creative == nil || s.writing == nil || s.outlines == nil || s.versions == nil || s.retrieval == nil {
 		Fail(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE",
 			"服务未就绪：数据库未连接或初始化失败", nil)
 		return false

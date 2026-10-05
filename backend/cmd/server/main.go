@@ -164,6 +164,11 @@ func run() error {
 		repository.NewWritingRepo(pg.DB),
 		repository.NewEntityVersionRepo(pg.DB),
 	)
+	// 检索（Phase 9 §9.1）：分块仓储既当数据源又当写入端
+	chunkRepo := repository.NewChunkRepo(pg.DB)
+	userRepo := repository.NewUserRepo(pg.DB)
+	retrievalSvc := service.NewRetrievalService(chunkRepo, userRepo)
+
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)
 	versions.SetOutlineTreeVersioner(outlines)
@@ -191,6 +196,7 @@ func run() error {
 		writing,
 		outlines,
 		versions,
+		retrievalSvc,
 		invoker,
 	)
 

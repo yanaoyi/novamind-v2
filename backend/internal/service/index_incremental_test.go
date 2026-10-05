@@ -26,7 +26,15 @@ type replaceCall struct {
 	chunks    []domain.RetrievalChunk
 }
 
-type fakeChunkStore struct{ calls []replaceCall }
+type pruneCall struct {
+	refKind string
+	keep    []string
+}
+
+type fakeChunkStore struct {
+	calls  []replaceCall
+	prunes []pruneCall
+}
 
 func (f *fakeChunkStore) ReplaceChunks(
 	_ context.Context, _, workKind, workID, refKind string,
@@ -36,6 +44,11 @@ func (f *fakeChunkStore) ReplaceChunks(
 		workKind: workKind, workID: workID, refKind: refKind,
 		refID: refID, chapterID: chapterID, chunks: chunks,
 	})
+	return nil
+}
+
+func (f *fakeChunkStore) PruneChunks(_ context.Context, _, _, _, refKind string, keep []string) error {
+	f.prunes = append(f.prunes, pruneCall{refKind: refKind, keep: keep})
 	return nil
 }
 
@@ -73,7 +86,7 @@ func TestIndexRefRebuildsOnlyThatChapter(t *testing.T) {
 		Content: "沈砚推开老宅的门。" + strings.Repeat("雨下了一整夜。", 200),
 	}}
 	svc := NewIndexService(store, fakeOwnerResolver{id: "owner-1"},
-		&fakeOriginalReader{}, reader)
+		&fakeOriginalReader{}, reader, nil, nil)
 
 	result, err := svc.IndexRef(context.Background(), domain.WorkKindCreative, "cw-1", domain.ChunkRefChapter, "ch-1")
 	if err != nil {
@@ -102,7 +115,7 @@ func TestIndexRefUnsupportedFallsBackToFullRebuild(t *testing.T) {
 	originals := &fakeOriginalReader{all: []domain.OriginalChapter{
 		{ID: "oc-1", Content: "第一章正文"}, {ID: "oc-2", Content: "第二章正文"},
 	}}
-	svc := NewIndexService(store, fakeOwnerResolver{id: "owner-1"}, originals, &fakeCreativeChapterReader{})
+	svc := NewIndexService(store, fakeOwnerResolver{id: "owner-1"}, originals, &fakeCreativeChapterReader{}, nil, nil)
 
 	if _, err := svc.IndexRef(context.Background(), domain.WorkKindOriginal, "ow-1", domain.ChunkRefChapter, "oc-1"); err != nil {
 		t.Fatalf("回退全量重建失败: %v", err)
@@ -118,7 +131,7 @@ func TestIndexRefUnsupportedFallsBackToFullRebuild(t *testing.T) {
 func TestIndexRefClearsChunksWhenChapterGone(t *testing.T) {
 	store := &fakeChunkStore{}
 	reader := &fakeCreativeChapterReader{err: domain.ErrCreativeChapterNotFound}
-	svc := NewIndexService(store, fakeOwnerResolver{id: "owner-1"}, &fakeOriginalReader{}, reader)
+	svc := NewIndexService(store, fakeOwnerResolver{id: "owner-1"}, &fakeOriginalReader{}, reader, nil, nil)
 
 	if _, err := svc.IndexRef(context.Background(), domain.WorkKindCreative, "cw-1", domain.ChunkRefChapter, "ch-x"); err != nil {
 		t.Fatalf("章节已删除时不该报错（应清空它的旧块）: %v", err)
@@ -131,7 +144,7 @@ func TestIndexRefClearsChunksWhenChapterGone(t *testing.T) {
 func TestIndexRefPropagatesUnexpectedError(t *testing.T) {
 	store := &fakeChunkStore{}
 	reader := &fakeCreativeChapterReader{err: errors.New("数据库炸了")}
-	svc := NewIndexService(store, fakeOwnerResolver{id: "owner-1"}, &fakeOriginalReader{}, reader)
+	svc := NewIndexService(store, fakeOwnerResolver{id: "owner-1"}, &fakeOriginalReader{}, reader, nil, nil)
 
 	if _, err := svc.IndexRef(context.Background(), domain.WorkKindCreative, "cw-1", domain.ChunkRefChapter, "ch-1"); err == nil {
 		t.Fatal("非“章节不存在”的错误应向上抛，交给任务重试")

@@ -80,6 +80,32 @@ func (r *ChunkRepo) ReplaceChunks(
 	})
 }
 
+// PruneChunks 删掉该 (作品, 来源类型) 下不在 keepRefIDs 里的旧块。
+//
+// 用途：全量重建时只 Replace 了现存来源，被删掉的章节/规则/大纲节点如果不剪，
+// 旧块会永远留在索引里，检索会召回已经不存在的设定。
+// ref_id IS NULL 的孤儿行一并清掉（它不对应任何现存来源）。
+func (r *ChunkRepo) PruneChunks(
+	ctx context.Context,
+	ownerUserID, workKind, workID, refKind string,
+	keepRefIDs []string,
+) error {
+	query := r.db.WithContext(ctx).
+		Where("work_kind = ? AND work_id = ? AND ref_kind = ?", workKind, workID, refKind)
+	if ownerUserID != "" {
+		query = query.Where("owner_user_id = ?", ownerUserID)
+	}
+	if len(keepRefIDs) == 0 {
+		query = query.Where("1 = 1")
+	} else {
+		query = query.Where("ref_id IS NULL OR ref_id::text NOT IN ?", keepRefIDs)
+	}
+	if err := query.Delete(&chunkModel{}).Error; err != nil {
+		return fmt.Errorf("清理过期分块失败: %w", err)
+	}
+	return nil
+}
+
 // CountByWork 统计某个作品当前的分块数（冒烟与排障用）。
 func (r *ChunkRepo) CountByWork(ctx context.Context, workKind, workID string) (int, error) {
 	var n int64

@@ -162,7 +162,11 @@ func run() error {
 
 	task.RegisterWritingHandlers(registry, writing, invoker)
 	// 检索索引任务（Phase 9 §9.1.4）：把作品内容切片写进 chunks
-	indexSvc := service.NewIndexService(chunkRepo, userRepo, originalRepo, repository.NewWritingRepo(pg.DB))
+	indexSvc := service.NewIndexService(
+		chunkRepo, userRepo, originalRepo, repository.NewWritingRepo(pg.DB),
+		creative,                         // 二创人物 / 世界规则
+		repository.NewOutlineRepo(pg.DB), // 大纲节点
+	)
 	task.RegisterIndexHandlers(registry, indexSvc)
 	// 大纲（规格书 §27）：卷 → 节 → 章的独立模型 + 落成章节
 	outlines := service.NewOutlineService(
@@ -184,6 +188,9 @@ func run() error {
 	// 索引自动触发（Phase 9 §9.1.4）：原著导入完成、二创正文保存/生成/删除时重建对应索引
 	originals.SetIndexTrigger(tasks)
 	writing.SetIndexTrigger(tasks)
+	// 设定类内容（人物 / 世界规则 / 大纲节点）变更也要追平索引
+	creative.SetIndexTrigger(tasks)
+	outlines.SetIndexTrigger(tasks)
 
 	// 长篇记忆（Phase 9 §9.3）：正文变化 → 抽取事实/摘要 → 写索引 → 自动查一次一致性
 	memorySvc := service.NewMemoryService(

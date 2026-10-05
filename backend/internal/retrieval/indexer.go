@@ -15,6 +15,16 @@ type ChunkStore interface {
 		refID *string, chapterID *string,
 		chunks []domain.RetrievalChunk,
 	) error
+	// PruneChunks 删掉该 (作品, 来源类型) 下**不在 keepRefIDs 里**的旧块。
+	//
+	// 为什么必须有：全量重建时我们只会 ReplaceChunks 现存来源，
+	// 被删除的章节 / 被移除的世界规则 / 被删掉的大纲节点如果不剪，
+	// 它们的旧块会永远留在索引里 —— 检索会召回已经不存在的设定。
+	PruneChunks(
+		ctx context.Context,
+		ownerUserID, workKind, workID, refKind string,
+		keepRefIDs []string,
+	) error
 }
 
 // SourceItem 是待索引的一条来源（章节正文 / 大纲节点 / 世界规则 / 人物 / 事件 / 记忆事实…）。

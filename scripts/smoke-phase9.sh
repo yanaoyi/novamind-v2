@@ -54,14 +54,18 @@ post_json() {
   rm -f "${tmp}"
 }
 
-# mk：POST 建对象并取字段；失败即终止（后续步骤都依赖这些 ID，硬撑只会产生连环假失败）。
-mk() { # mk PATH BODY FIELD_EXPR
-  local out
-  if ! out="$(post_json "$1" "$2")"; then
-    echo "== 中断（前置调用 ${1} 失败，已清理）" >&2
+# mkv：POST 建对象并把某个字段写进变量；失败即终止。
+#
+# 为什么是"写进变量"而不是 `X=$(mk ...)`：命令替换里的函数跑在**子 shell**，
+# 里面的 exit 只结束子 shell，主脚本会带着空 ID 继续往下跑，
+# 表现成"后面一连串莫名其妙的失败"。这里用 printf -v 直接赋值，exit 才真的能终止脚本。
+mkv() { # mkv VAR_NAME LABEL PATH BODY FIELD_EXPR
+  local __var="$1" __label="$2" out
+  if ! out="$(post_json "$3" "$4")"; then
+    echo "== 中断（${__label} 失败，已清理）" >&2
     exit 1
   fi
-  echo "${out}" | field "$3"
+  printf -v "${__var}" '%s' "$(echo "${out}" | field "$5")"
 }
 
 wait_task() { # wait_task <task_id> [max_seconds]
@@ -116,8 +120,8 @@ with open(sys.argv[1], "w", encoding="utf-8") as f:
             f.write(plant[ch] + "\n\n")
 PY
 
-PID=$(mk /projects '{"name":"Phase9上下文验收-原著","type":"ORIGINAL"}' "d['id']")
-OID=$(mk "/projects/${PID}/original" '{"title":"Phase9上下文验收原著"}' "d['id']")
+mkv PID  "创建原著工程" /projects '{"name":"Phase9上下文验收-原著","type":"ORIGINAL"}' "d['id']"
+mkv OID  "创建原著作品" "/projects/${PID}/original" '{"title":"Phase9上下文验收原著"}' "d['id']"
 if ! curl -s -o "${WORK_DIR}/import.json" -w '%{http_code}' -X POST "${API}/original/${OID}/import" \
   -F "file=@${WORK_DIR}/book.txt" | grep -q '^2'; then
   echo "  ✗ 原著导入失败：$(head -c 300 "${WORK_DIR}/import.json")" >&2
@@ -137,15 +141,36 @@ HIT=$(echo "${RESP}" | field "d['items'][0]['content'] if d['items'] else ''")
 check "原著检索能召回第 1 章伏笔" "True" "$([[ "${HIT}" == *青铜钥匙* ]] && echo True || echo False)"
 
 echo "== 3. 建二创作品：作者写第 1 章（索引自动触发）"
-CPID=$(mk /projects '{"name":"Phase9上下文验收-二创","type":"CREATIVE"}' "d['id']")
-CID=$(mk "/original/${OID}/create-creative" "{\"project_id\":\"${CPID}\",\"title\":\"Phase9上下文验收同人\",\"description\":\"验收用\"}" "d['id']")
-VOL=$(mk "/creative/${CID}/volumes" '{"title":"第一卷","summary":"开局","sequence":1}' "d['id']")
-CH1=$(mk "/creative/${CID}/chapters" \
+mkv CPID "创建二创工程" /projects '{"name":"Phase9上下文验收-二创","type":"CREATIVE"}' "d['id']"
+mkv CID  "创建二创作品" "/original/${OID}/create-creative" "{\"project_id\":\"${CPID}\",\"title\":\"Phase9上下文验收同人\",\"description\":\"验收用\"}" "d['id']"
+mkv VOL  "创建卷" "/creative/${CID}/volumes" '{"title":"第一卷","summary":"开局","sequence":1}' "d['id']"
+# 二创世界要先继承出来，否则新增世界规则会 404（CREATIVE_WORLD_NOT_FOUND）
+post_json "/creative/${CID}/world/inherit" '{"mode":"FULL"}' >/dev/null || {
+  echo "== 中断（继承二创世界失败，已清理）" >&2
+  exit 1
+}
+mkv CH1 "创建第 1 章" "/creative/${CID}/chapters" \
   "{\"volume_id\":\"${VOL}\",\"chapter_no\":1,\"title\":\"雨夜归人\",\"summary\":\"沈砚回到老宅\",\"content\":\"沈砚推开老宅的木门。他左肩的箭伤在雨里隐隐作痛，怀里揣着从祖宅第三块砖下挖出的青铜钥匙。\",\"purpose\":\"交代沈砚与青铜钥匙\",\"conflict\":\"旧伤与旧案\",\"outcome\":\"钥匙到手\"}" \
-  "d['id']")
-CH2=$(mk "/creative/${CID}/chapters" \
+  "d['id']"
+mkv CH2 "创建第 2 章" "/creative/${CID}/chapters" \
   "{\"volume_id\":\"${VOL}\",\"chapter_no\":2,\"title\":\"账房里的灯\",\"summary\":\"他拿着钥匙去开夹墙\",\"purpose\":\"让沈砚用青铜钥匙打开夹墙，发现三十年前的军需账册\",\"conflict\":\"督军的人开始盯梢\",\"outcome\":\"夹墙打开\"}" \
-  "d['id']")
+  "d['id']"
+
+# 设定类来源（§9.1"其余来源"）：世界规则 + 大纲节点，改了就该自动进索引
+mkv RULE "创建世界规则" "/creative/${CID}/world/rules" \
+  '{"category":"社会","name":"夜禁","description":"子时后不得出城，违者按通敌论处","importance":4}' \
+  "d['id']"
+mkv OUTLINE "创建大纲" "/creative/${CID}/outlines" "{\"title\":\"主大纲\",\"summary\":\"验收用大纲\"}" "d['outline']['id']"
+mkv NODE "创建大纲节点" "/outlines/${OUTLINE}/nodes" \
+  '{"title":"夜审账房","summary":"沈砚夜审账房先生","purpose":"逼出账册被改的真相","conflict":"督军的人盯梢","outcome":"账册落到沈砚手里"}' \
+  "d['id']"
+check "设定类来源变更自动触发索引" "COMPLETED" "$(wait_index creative_work_id "${CID}")"
+SETCHUNKS=$(psqlq "select count(*) from chunks where work_id='${CID}' and ref_kind in ('world_rule','outline_node')")
+check "世界规则与大纲节点已进索引" "True" "$([ "${SETCHUNKS:-0}" -gt 0 ] && echo True || echo False)"
+RULEHIT=$(curl -s -X POST "${API}/retrieval/search" -H 'Content-Type: application/json' \
+  -d "{\"work_kind\":\"creative\",\"work_id\":\"${CID}\",\"query\":\"夜禁 子时 出城\",\"top_k\":8}" \
+  | field "any(c['ref_kind']=='world_rule' for c in d['items'])")
+check "检索能召回世界规则（不只是章节正文）" "True" "${RULEHIT}"
 
 # 注意：二创作品在 tasks 表里走 creative_work_id —— tasks.work_id 的外键指向 original_works，
 # 把二创 id 塞进 work_id 会被外键拒绝（第一版脚本就是在这里静默失败的）。
@@ -156,7 +181,7 @@ CH1REFS=$(psqlq "select count(*) from chunks where work_id='${CID}' and ref_id='
 check "分块按章节 ref 归属（增量索引语义）" "True" "$([ "${CH1REFS:-0}" -gt 0 ] && echo True || echo False)"
 
 echo "== 4. AI 写第 2 章 → 落上下文快照（§9.2）"
-TASK=$(mk "/chapters/${CH2}/generate" '{"target_words":300,"instruction":"克制的短句，呼应第 1 章的伤口与钥匙"}' "d['id']")
+mkv TASK "触发写本章" "/chapters/${CH2}/generate" '{"target_words":300,"instruction":"克制的短句，呼应第 1 章的伤口与钥匙"}' "d['id']"
 check "写本章任务完成" "COMPLETED" "$(wait_task "${TASK}")"
 
 SNAPS=$(curl -sf "${API}/chapters/${CH2}/snapshots")

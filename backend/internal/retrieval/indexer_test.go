@@ -35,6 +35,11 @@ func (f *fakeStore) ReplaceChunks(
 	return nil
 }
 
+// PruneChunks 只满足接口：索引编排本身不做剪枝（剪枝由 service 层在全量重建后调用）。
+func (f *fakeStore) PruneChunks(context.Context, string, string, string, string, []string) error {
+	return nil
+}
+
 func TestIndexWorkSplitsByKindAndReplaces(t *testing.T) {
 	store := &fakeStore{}
 	chapterID := "ch-1"

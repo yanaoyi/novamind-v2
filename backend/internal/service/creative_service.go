@@ -76,6 +76,9 @@ type CreativeService struct {
 	characters    CharacterSourceLookup
 	origWorlds    OriginalWorldReader
 	origTimelines OriginalTimelineReader
+	// indexer 是"设定类内容变了就重建索引"的触发点（Phase 9 §9.1.4）。
+	// 人物 / 世界规则改了却不更新索引，检索会一直召回旧人设 —— 那比"没索引"更坏。
+	indexer IndexTrigger
 }
 
 // NewCreativeService 构建服务。
@@ -90,6 +93,20 @@ func NewCreativeService(
 	return &CreativeService{
 		repo: repo, projects: projects, works: works, characters: characters,
 		origWorlds: origWorlds, origTimelines: origTimelines,
+	}
+}
+
+// SetIndexTrigger 注入索引入队能力（Phase 9 §9.1.4）。
+func (s *CreativeService) SetIndexTrigger(t IndexTrigger) { s.indexer = t }
+
+// triggerIndex 入队重建某个设定类来源的索引；refKind 为空表示全量重建。
+// 失败只记日志：索引是可追平的派生数据，不该阻塞作者保存。
+func (s *CreativeService) triggerIndex(ctx context.Context, workID, refKind, refID string) {
+	if s.indexer == nil || strings.TrimSpace(workID) == "" {
+		return
+	}
+	if err := s.indexer.EnqueueIndex(ctx, domain.WorkKindCreative, workID, refKind, refID); err != nil {
+		fmt.Printf("[warn] 设定类索引入队失败（不影响保存）: work=%s %s/%s %v\n", workID, refKind, refID, err)
 	}
 }
 
@@ -279,6 +296,7 @@ func (s *CreativeService) InheritCharacter(ctx context.Context, workID string, i
 	if err := s.repo.SaveInheritance(ctx, character, isNew, &rule, mapping); err != nil {
 		return nil, err
 	}
+	s.triggerIndex(ctx, workID, domain.ChunkRefCharacter, character.ID)
 	return character, nil
 }
 
@@ -306,6 +324,7 @@ func (s *CreativeService) CreateNewCharacter(ctx context.Context, workID string,
 	if err := s.repo.CreateCharacter(ctx, character); err != nil {
 		return nil, err
 	}
+	s.triggerIndex(ctx, workID, domain.ChunkRefCharacter, character.ID)
 	return character, nil
 }
 
@@ -383,6 +402,7 @@ func (s *CreativeService) FuseCharacter(ctx context.Context, workID string, in F
 	if err := s.repo.SaveFusion(ctx, fused, mappings); err != nil {
 		return nil, err
 	}
+	s.triggerIndex(ctx, workID, domain.ChunkRefCharacter, fused.ID)
 	return fused, nil
 }
 
@@ -499,12 +519,22 @@ func (s *CreativeService) UpdateCharacter(ctx context.Context, id string, in Upd
 	if err := s.repo.UpdateCharacter(ctx, character); err != nil {
 		return nil, err
 	}
+	s.triggerIndex(ctx, character.CreativeWorkID, domain.ChunkRefCharacter, character.ID)
 	return character, nil
 }
 
 // DeleteCharacter 删除二创人物。
 func (s *CreativeService) DeleteCharacter(ctx context.Context, id string) error {
-	return s.repo.DeleteCharacter(ctx, id)
+	// 先取一次拿作品归属：删掉之后就查不到它属于哪部作品了
+	character, err := s.repo.GetCharacter(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.DeleteCharacter(ctx, id); err != nil {
+		return err
+	}
+	s.triggerIndex(ctx, character.CreativeWorkID, domain.ChunkRefCharacter, id)
+	return nil
 }
 
 // ListMappings 列出映射。
@@ -614,6 +644,8 @@ func (s *CreativeService) InheritWorld(ctx context.Context, workID string, mode 
 			return nil, err
 		}
 	}
+	// 世界继承会一次写入多条规则 → 直接全量重建（按 ref 逐条入队反而更慢更啰嗦）
+	s.triggerIndex(ctx, workID, "", "")
 	return s.GetWorldDetail(ctx, workID)
 }
 
@@ -707,6 +739,7 @@ func (s *CreativeService) CreateWorldRule(ctx context.Context, workID string, in
 	if err := s.repo.CreateWorldRule(ctx, rule); err != nil {
 		return nil, err
 	}
+	s.triggerIndex(ctx, workID, domain.ChunkRefWorldRule, rule.ID)
 	return rule, nil
 }
 
@@ -736,6 +769,9 @@ func (s *CreativeService) UpdateWorldRule(ctx context.Context, id string, in Wor
 	if err := s.repo.UpdateWorldRule(ctx, rule); err != nil {
 		return nil, err
 	}
+	if workID, err := s.WorkIDByCreativeWorld(ctx, rule.CreativeWorldID); err == nil {
+		s.triggerIndex(ctx, workID, domain.ChunkRefWorldRule, rule.ID)
+	}
 	return rule, nil
 }
 
@@ -755,15 +791,27 @@ func (s *CreativeService) RemoveWorldRule(ctx context.Context, id string) error 
 		if err != nil {
 			return err
 		}
-		return s.repo.CreateMapping(ctx, &domain.OriginalCreativeMapping{
+		if err := s.repo.CreateMapping(ctx, &domain.OriginalCreativeMapping{
 			CreativeWorkID: workID,
 			OriginalType:   "world_rule", OriginalID: *rule.SourceRuleID,
 			CreativeType: "creative_world_rule", CreativeID: rule.ID,
 			MappingType: domain.MappingRemoved,
 			Description: "在二创中删除了这条原著规则",
-		})
+		}); err != nil {
+			return err
+		}
+		// 规则变成 REMOVED → 它不该再出现在检索结果里（索引侧会把块清掉）
+		s.triggerIndex(ctx, workID, domain.ChunkRefWorldRule, id)
+		return nil
 	}
-	return s.repo.DeleteWorldRule(ctx, id)
+	if err := s.repo.DeleteWorldRule(ctx, id); err != nil {
+		return err
+	}
+	// 用删除前取到的 rule 反查作品（软删除后再按 id 查就可能查不到了）
+	if workID, err := s.repo.GetWorkIDByCreativeWorld(ctx, rule.CreativeWorldID); err == nil {
+		s.triggerIndex(ctx, workID, domain.ChunkRefWorldRule, id)
+	}
+	return nil
 }
 
 // ---------- 分叉点与二创时间线（规格书 §24-§25） ----------

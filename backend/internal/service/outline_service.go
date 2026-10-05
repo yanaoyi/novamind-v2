@@ -46,6 +46,8 @@ type OutlineService struct {
 	creative CreativeWorkReader
 	writing  OutlineMaterializer
 	versions *repository.EntityVersionRepo
+	// indexer 是"大纲节点变了就重建索引"的触发点（Phase 9 §9.1.4）。
+	indexer IndexTrigger
 }
 
 // NewOutlineService 构建服务。
@@ -56,6 +58,36 @@ func NewOutlineService(
 	versions *repository.EntityVersionRepo,
 ) *OutlineService {
 	return &OutlineService{repo: repo, creative: creative, writing: writing, versions: versions}
+}
+
+// SetIndexTrigger 注入索引入队能力（Phase 9 §9.1.4）。
+func (s *OutlineService) SetIndexTrigger(t IndexTrigger) { s.indexer = t }
+
+// triggerIndex 入队重建某个大纲节点的索引；refID 为空表示按作品全量重建。
+// 失败只记日志：索引是派生数据，不该阻塞作者改大纲。
+func (s *OutlineService) triggerIndex(ctx context.Context, workID, refID string) {
+	if s.indexer == nil || strings.TrimSpace(workID) == "" {
+		return
+	}
+	refKind := ""
+	if refID != "" {
+		refKind = domain.ChunkRefOutlineNode
+	}
+	if err := s.indexer.EnqueueIndex(ctx, domain.WorkKindCreative, workID, refKind, refID); err != nil {
+		fmt.Printf("[warn] 大纲索引入队失败（不影响保存）: work=%s node=%s %v\n", workID, refID, err)
+	}
+}
+
+// triggerIndexByOutline 用大纲 ID 反查作品后入队（大纲→作品要查一次，集中在这里）。
+func (s *OutlineService) triggerIndexByOutline(ctx context.Context, outlineID, nodeID string) {
+	if s.indexer == nil || strings.TrimSpace(outlineID) == "" {
+		return
+	}
+	outline, err := s.repo.GetOutline(ctx, outlineID)
+	if err != nil {
+		return
+	}
+	s.triggerIndex(ctx, outline.CreativeWorkID, nodeID)
 }
 
 // OutlineDetail 是一份大纲及其完整节点树。
@@ -175,6 +207,8 @@ func (s *OutlineService) ReplaceTree(ctx context.Context, outlineID string, inpu
 	if err := s.replaceTree(ctx, outline, inputs); err != nil {
 		return nil, err
 	}
+	// 整棵树换掉了 → 节点 ref 全变，直接按作品全量重建
+	s.triggerIndex(ctx, outline.CreativeWorkID, "")
 	return s.GetOutline(ctx, outlineID)
 }
 
@@ -238,6 +272,7 @@ func (s *OutlineService) CreateNode(ctx context.Context, outlineID string, in Cr
 	if err := s.repo.CreateNodeLocked(ctx, node); err != nil {
 		return nil, err
 	}
+	s.triggerIndexByOutline(ctx, outlineID, node.ID)
 	return node, nil
 }
 
@@ -290,12 +325,24 @@ func (s *OutlineService) UpdateNode(ctx context.Context, nodeID string, in Updat
 	if err := s.repo.UpdateNode(ctx, node); err != nil {
 		return nil, err
 	}
+	s.triggerIndexByOutline(ctx, node.OutlineID, node.ID)
 	return node, nil
 }
 
 // DeleteNode 删除节点及其子树，返回删除数量。
 func (s *OutlineService) DeleteNode(ctx context.Context, nodeID string) (int, error) {
-	return s.repo.DeleteNodeSubtree(ctx, nodeID)
+	// 先取一次拿大纲归属：删掉之后就查不到它属于哪份大纲了
+	node, err := s.repo.GetNode(ctx, nodeID)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := s.repo.DeleteNodeSubtree(ctx, nodeID)
+	if err != nil {
+		return 0, err
+	}
+	// 子树一起被删了 → 按作品全量重建最稳妥（逐节点清块容易漏）
+	s.triggerIndexByOutline(ctx, node.OutlineID, "")
+	return deleted, nil
 }
 
 // MaterializeResult 是「大纲落成章节」的结果。
@@ -431,6 +478,9 @@ func (s *OutlineService) Materialize(ctx context.Context, outlineID string) (*Ma
 	}
 	result.ChapterIDs = outcome.ChapterIDs
 	result.ChaptersCreated = len(outcome.ChapterIDs)
+	// 落成章节是直接写仓储（不走 WritingService），所以章节索引与记忆抽取都不会自动触发；
+	// 这里至少把索引补上（章节是空的，真正有内容时作者一保存就会走正常链路）。
+	s.triggerIndex(ctx, workID, "")
 	return result, nil
 }
 

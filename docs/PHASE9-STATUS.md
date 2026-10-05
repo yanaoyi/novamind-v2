@@ -54,7 +54,7 @@
 | §9.2.1 预算与截断顺序 | ✅ | 8 段预算（总 8000；章节目标/人物/世界为固定段不截）；4 例单测锁定截断顺序 |
 | §9.2.1 组装 | ✅ | `BuildSections` / `FormatRetrieval`（带来源标注与相关度）/ `AssembleForChapter`；3 例单测 |
 | §9.2.2 快照表 + 仓储 + 服务 | ✅ | 迁移 `0020`（只增不改、六种 kind 落 CHECK）；`ContextSnapshotRepo`；`SnapshotService.Record/ListByChapter/Get` |
-| §9.2 接线（写作主链路 + 落快照） | ⏳ **下一步** | 需改 `GenerateChapterDraft`/一致性检查 → `AssembleForChapter`，prompt 模板 version+1，**以 e2e 37/37 不回归为验收门槛** |
+| §9.2 接线（写作主链路 + 落快照） | 🟡 **生成链路已通** | `GenerateChapterDraft` 调模型前写 `kind=generate` 快照（窄接口 `SnapshotRecorder` 注入，避免循环依赖）；真实验收：**e2e 37/37 + 库中 1 行 kind=generate**。**剩余**：continue/rewrite/expand/analyze/consistency 五条链路同样落快照；`retrieved_sources` 目前是空数组，待把 BM25 检索结果接进上下文；`model`/`prompt_version` 目前是占位常量，需从实际调用路径回传 |
 | §9.2 查询接口 + 前端查看页 | ⏳ | `GET /chapters/:id/snapshots`、`GET /snapshots/:id` + JSON 查看页 |
 | §9.3 Memory / §9.4 接线 / §9.5 Schema / §9.6 总验收 | ⏳ 未开始 | §9.3/§9.6 需要真实模型（Key 已就位，见下） |
 

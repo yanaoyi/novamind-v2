@@ -800,7 +800,8 @@ func inflate(data []byte) ([]byte, error) {
 	// 少数流是裸 deflate（没有 zlib 头）
 	r := flate.NewReader(bytes.NewReader(data))
 	defer r.Close()
-	if out, err := io.ReadAll(io.LimitReader(r, 1<<30)); err == nil {
+	// 与 zlib 分支同样受限（v3 复审指出的死角：这里原来还是 1GiB 且读满静默截断）
+	if out, err := io.ReadAll(limitReader(r, maxDecompressedBytes, "PDF 裸 deflate 流")); err == nil {
 		return out, nil
 	}
 	return nil, errors.New("解压失败")

@@ -6,6 +6,7 @@ import (
 
 	"github.com/yanaoyi/novamindv2/backend/internal/ai"
 	ctxengine "github.com/yanaoyi/novamindv2/backend/internal/context"
+	"github.com/yanaoyi/novamindv2/backend/internal/domain"
 )
 
 // TestPromptTemplatesRenderWithServiceVars 是"模板 ↔ 调用方变量"的契约测试。
@@ -76,5 +77,33 @@ func TestChapterGenerateVarsCarryTruncatedInstruction(t *testing.T) {
 	}
 	if vars["TargetWords"] != 1000 {
 		t.Errorf("目标字数应进模板变量，实际 %v", vars["TargetWords"])
+	}
+}
+
+// 事实抽取模板同样受 missingkey=error 约束，且它的变量集与写作链路完全不同，单独守一条。
+func TestFactExtractTemplateRendersWithServiceVars(t *testing.T) {
+	engine, err := ai.NewEngine()
+	if err != nil {
+		t.Fatalf("Prompt 引擎构建失败: %v", err)
+	}
+	chapter := &domain.CreativeChapter{
+		ID: "ch-3", CreativeWorkID: "cw-1", ChapterNo: 3, Title: "雨夜归人",
+		Content: "沈砚推开老宅的木门，怀里揣着青铜钥匙。", Purpose: "交代钥匙来源",
+	}
+	prompt, err := engine.Get("fact_extract", "")
+	if err != nil {
+		t.Fatalf("取模板失败: %v", err)
+	}
+	out, err := prompt.Render(factExtractVars(chapter, "- 沈砚：克制", "世界：江城"))
+	if err != nil {
+		t.Fatalf("fact_extract 用服务的变量集渲染失败: %v", err)
+	}
+	for _, want := range []string{"第 3 章", "雨夜归人", "青铜钥匙", "沈砚：克制"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("渲染结果应含 %q", want)
+		}
+	}
+	if !strings.Contains(out, "character_state") {
+		t.Error("模板应列出 kind 取值，否则模型容易写出枚举外的类型")
 	}
 }

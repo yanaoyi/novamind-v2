@@ -9,5 +9,5 @@ import "embed"
 
 // FS 包含全部 Prompt 模板与 JSON Schema。
 //
-//go:embed original/*.md character/*.md world/*.md plot/*.md outline/*.md writing/*.md review/*.md schemas/*.json
+//go:embed original/*.md character/*.md world/*.md plot/*.md outline/*.md writing/*.md review/*.md memory/*.md schemas/*.json
 var FS embed.FS

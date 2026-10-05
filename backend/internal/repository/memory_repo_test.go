@@ -58,26 +58,29 @@ func TestMemoryFactsSupersedeAndKeepHistory(t *testing.T) {
 	repo, userID, workID, _ := newMemoryRepoForTest(t)
 	chapterID := newChapterForTest(t, repo, workID, 1)
 
-	created, superseded, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{
+	outcome, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{
 		{Kind: string(domain.FactCharacterState), Subject: "沈砚", Fact: "左臂受伤，无法用剑", ChapterID: &chapterID},
 		{Kind: string(domain.FactItem), Subject: "青铜钥匙", Fact: "藏在祖宅第三块砖下", ChapterID: &chapterID},
 	})
 	if err != nil {
 		t.Fatalf("写入事实失败: %v", err)
 	}
-	if created != 2 || superseded != 0 {
-		t.Fatalf("首次写入应为 2 新增 0 替代，实际 %d/%d", created, superseded)
+	if len(outcome.Created) != 2 || len(outcome.Superseded) != 0 {
+		t.Fatalf("首次写入应为 2 新增 0 替代，实际 %d/%d", len(outcome.Created), len(outcome.Superseded))
+	}
+	if outcome.Created[0].ID == "" {
+		t.Error("新增事实必须带回 ID（调用方要用它写检索索引）")
 	}
 
 	// 同一 subject+kind 的新状态：旧事实被替代（不是删除）
-	created, superseded, err = repo.CreateFacts(ctx, userID, workID, []FactWrite{
+	outcome, err = repo.CreateFacts(ctx, userID, workID, []FactWrite{
 		{Kind: string(domain.FactCharacterState), Subject: "沈砚", Fact: "左臂已痊愈"},
 	})
 	if err != nil {
 		t.Fatalf("写入新状态失败: %v", err)
 	}
-	if created != 1 || superseded != 1 {
-		t.Fatalf("应新增 1 条并替代 1 条，实际 %d/%d", created, superseded)
+	if len(outcome.Created) != 1 || len(outcome.Superseded) != 1 {
+		t.Fatalf("应新增 1 条并替代 1 条，实际 %d/%d", len(outcome.Created), len(outcome.Superseded))
 	}
 
 	active, err := repo.ListFacts(ctx, workID, true)
@@ -116,15 +119,15 @@ func TestMemoryFactsSkipsIdenticalFact(t *testing.T) {
 	repo, userID, workID, _ := newMemoryRepoForTest(t)
 	fact := FactWrite{Kind: string(domain.FactPlot), Subject: "主线", Fact: "沈家账册被改"}
 
-	if _, _, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{fact}); err != nil {
+	if _, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{fact}); err != nil {
 		t.Fatalf("首次写入失败: %v", err)
 	}
-	created, superseded, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{fact})
+	outcome, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{fact})
 	if err != nil {
 		t.Fatalf("重复写入失败: %v", err)
 	}
-	if created != 0 || superseded != 0 {
-		t.Errorf("重复抽取不该长出新行或替代旧行，实际 %d/%d", created, superseded)
+	if len(outcome.Created) != 0 || len(outcome.Superseded) != 0 {
+		t.Errorf("重复抽取不该长出新行或替代旧行，实际 %d/%d", len(outcome.Created), len(outcome.Superseded))
 	}
 }
 
@@ -132,12 +135,12 @@ func TestMemoryFactsRejectsInvalidInput(t *testing.T) {
 	ctx := context.Background()
 	repo, userID, workID, _ := newMemoryRepoForTest(t)
 
-	if _, _, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{
+	if _, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{
 		{Kind: "mood", Subject: "沈砚", Fact: "心情不错"},
 	}); !errors.Is(err, domain.ErrFactKindInvalid) {
 		t.Errorf("非法 kind 应被拒绝，实际 %v", err)
 	}
-	if _, _, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{
+	if _, err := repo.CreateFacts(ctx, userID, workID, []FactWrite{
 		{Kind: string(domain.FactPlot), Subject: "  ", Fact: "有内容"},
 	}); !errors.Is(err, domain.ErrFactSubjectEmpty) {
 		t.Errorf("空 subject 应被拒绝，实际 %v", err)

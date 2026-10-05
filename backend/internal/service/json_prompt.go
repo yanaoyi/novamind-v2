@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+
+	"github.com/yanaoyi/novamindv2/backend/internal/ai"
 )
 
 // jsonRetryHint 是"上一次输出没有形成合法 JSON"时追加给模型的收敛提示（规格书 §58：错误处理要能自动修复重试）。
@@ -44,6 +46,40 @@ func RunJSONPrompt(
 		lastErr = err
 	}
 	return nil, fmt.Errorf("模型输出不是合法 JSON（已重试 %d 次）：%w", maxAttempts, lastErr)
+}
+
+// RunJSONPromptValidated 在 RunJSONPrompt 之上加一道 JSON Schema 校验（Phase 9 §9.5）。
+//
+// 与"JSON 解析失败重试"的区别：解析失败是**格式**问题（通常被截断），
+// 校验失败是**内容**问题（枚举越界、缺字段、长度越界）——后者必须把校验器给出的
+// 具体问题喂回模型，它才知道该改哪里（§9.3.2 要求的"修一次"）。
+func RunJSONPromptValidated(
+	ctx context.Context,
+	runner PromptRunner,
+	promptName, schemaName string,
+	vars map[string]any,
+	maxAttempts int,
+) (map[string]any, error) {
+	if maxAttempts <= 0 {
+		maxAttempts = 2
+	}
+	var lastErr error
+	payload := vars
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		obj, err := RunJSONPrompt(ctx, runner, promptName, payload, 1)
+		if err != nil {
+			lastErr = err
+		} else if err := ai.ValidateObject(obj, schemaName); err != nil {
+			lastErr = err
+			// 把校验器的问题清单原样喂回去 —— 它带 JSON 路径与允许值，模型能照着改
+			payload = withExtraInstruction(payload,
+				"\n\n【上一次的输出没有通过结构校验】请按下面的问题逐条修正后重新输出完整的 JSON："+
+					"\n"+err.Error())
+		} else {
+			return obj, nil
+		}
+	}
+	return nil, fmt.Errorf("模型输出两次都不合格（已重试 %d 次）：%w", maxAttempts, lastErr)
 }
 
 // withExtraInstruction 复制一份变量并给"作者要求"追加提示，不改动调用方的 map。

@@ -185,6 +185,18 @@ func run() error {
 	originals.SetIndexTrigger(tasks)
 	writing.SetIndexTrigger(tasks)
 
+	// 长篇记忆（Phase 9 §9.3）：正文变化 → 抽取事实/摘要 → 写索引 → 自动查一次一致性
+	memorySvc := service.NewMemoryService(
+		repository.NewMemoryRepo(pg.DB),
+		repository.NewWritingRepo(pg.DB),
+		creative,
+		userRepo,
+		indexSvc,
+	)
+	memorySvc.SetConsistencyTrigger(tasks)
+	task.RegisterMemoryHandlers(registry, memorySvc, invoker)
+	writing.SetFactExtractTrigger(tasks)
+
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)
 	versions.SetOutlineTreeVersioner(outlines)

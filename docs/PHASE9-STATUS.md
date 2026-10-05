@@ -61,7 +61,9 @@
 | §9.1 其余来源（大纲节点/世界规则/人物/事件） | ⏳ | 只有章节正文进了索引；其余来源的取数与触发点未做（见"接手建议"第 3 条） |
 | §9.3.1 Memory 表 + supersede 语义 | 🟡 **存储层完成** | 迁移 `0023`（`memory_facts` 含六类 kind CHECK / `superseded_by` 自引用且禁止自指 / 部分索引；`chapter_summaries` 一章一条）；`MemoryRepo.CreateFacts` 事务内"同 kind+subject 旧事实标记被替代（只标记不删）+ 完全相同文本跳过"，另有 `ListFacts(onlyActive)` / `UpsertSummary` / `GetSummary`；真库测试 4 例 |
 | §9.5 JSON Schema 校验 | 🟡 **校验器完成** | `internal/ai/schema.go`（手写轻量子集）+ `prompts/schemas/fact_extract.json`；不支持的关键字**报错而非忽略**；错误信息带 JSON 路径与允许值（供 §9.3.2 "喂回模型修一次"）；防漂移测试锁定 schema 枚举 = `domain.FactKinds()` |
-| §9.3.2 事实抽取 / §9.4 回写与一致性接线 | ⏳ **下一步** | 抽取模板 + `extract_facts` 任务 + 章节保存触发 + facts/summary 增量索引 + 抽取后自动触发一致性检查 |
+| §9.3.2 事实抽取 | ✅ **本轮打通** | 模板 `memory/fact_extract.v1.md` + `MemoryService.ExtractFacts` + 任务 `extract_facts`；章节创建（有正文）/正文变更自动入队（要调模型的任务用 20s 折叠窗口）；输出过 §9.5 Schema 校验，不通过把问题喂回模型修一次，两次不合格则 FAILED 且**不落任何库** |
+| §9.3.2 回写（facts/summary → 检索） | ✅ | 新事实写 `ref_kind='memory_fact'`、摘要写 `ref_kind='chapter_summary'`（`IndexService.IndexText`）；**被替代的旧事实清空索引块**（否则会同时召回"受伤"与"已痊愈"） |
+| §9.4 一致性接线（自动触发） | 🟡 部分 | 抽取完成自动排一次 `consistency_check`（已有）；**剩余**：一致性检查的上下文源已走 `context.Assemble`（§9.2 完成），但"与 memory_facts 的冲突检测"维度尚未单独加强（`consistency_check.v3` 已有第 6 类"记忆一致性"，靠检索带回既有内容实现，未直接读 memory_facts 表） |
 | §9.6 总验收 | ⏳ 未开始 | 需要真实模型（Key 已就位，见下） |
 
 ## 本期抓到的两个真缺陷（都写进 CHANGELOG）
@@ -111,11 +113,12 @@
 1. 先读：`Phase9-任务书.md` → 本文件 → `docs/CHANGELOG.md`（2026-10-05 几条）→ `AGENTS.md`（Git 规则）
 2. ~~做 §9.2 接线~~ ✅ 已于 2026-10-05 晚完成（六条链路全部走 Context Engine）
 3. ~~增量索引（按 ref 重建）+ 自动触发~~ ✅ 已于 2026-10-05 晚完成（原著导入 / 章节保存·生成·删除）
-4. 补 §9.1 **其余来源**（大纲节点 / 世界规则 / 人物 / 事件）的取数与触发点 —— **这是下一步**
+4. ~~§9.3 Memory（存储层 + 抽取 + 回写 + 自动查一致性）与 §9.5 Schema 校验~~ ✅ 已于 2026-10-05 晚完成
+5. 补 §9.1 **其余来源**（大纲节点 / 世界规则 / 人物 / 事件）的取数与触发点 —— **这是下一步**
    （触发点：大纲节点变更、世界规则变更；二创侧这些实体的读取接口在 `ChapterContextReader` 里已有）
-5. §9.3 Memory：`memory_facts` / `chapter_summaries` 表 + 事实抽取任务（prompt + §9.5 JSON Schema 校验）+ supersede 语义 + 自动回灌一致性检查
-6. §9.6 总验收：3 章剧本 → 第 4 章 snapshot 含第 1 章伏笔 → 一致性检查指出预设矛盾；性能基线（检索 P95 < 2s）记录在案
-7. §9.1 向量路①②（索引写向量、检索向量路）——代码 + 假上游单测可先做，真实召回验收仍需 embeddings Key
+6. §9.4 余项：一致性检查直接读 `memory_facts` 做"事实冲突"维度（现在靠检索带回既有内容，未直接引用该表）
+7. §9.6 总验收：3 章剧本 → 第 4 章 snapshot 含第 1 章伏笔 → 一致性检查指出预设矛盾；性能基线（检索 P95 < 2s）记录在案
+8. §9.1 向量路①②（索引写向量、检索向量路）——代码 + 假上游单测可先做，真实召回验收仍需 embeddings Key
 
 ## 本轮（2026-10-05 晚·第二次会话）完成（一）：§9.2 接线
 
@@ -160,6 +163,19 @@
 **19/19 全过** —— 其中三条专门验这件事：原著索引由导入自动触发、二创章节索引由保存自动触发、
 分块按 `ref_id` 归属到该章。另跑：e2e **37/37**、后端 `go test ./...` 全绿、跑完数据库 0 残留。
 
+## 本轮（2026-10-05 晚·第二次会话）完成（三）：§9.3 长篇记忆（P0-4 / P0-5）
+
+| 改动 | 说明 |
+|---|---|
+| 存储层 | 迁移 `0023`：`memory_facts`（六类 kind、`superseded_by` 自引用且禁止自指、部分索引）+ `chapter_summaries`；`MemoryRepo.CreateFacts` 事务内"同 kind+subject 旧事实标记被替代（只标记不删）+ 完全相同文本跳过"，返回值带**新增行 ID 与被替代行 ID** |
+| §9.5 校验器 | `internal/ai/schema.go`（手写轻量子集，**不认识的关键字报错而非忽略**）+ `prompts/schemas/fact_extract.json`；错误信息带 JSON 路径与允许值；防漂移测试锁定 schema 枚举 = `domain.FactKinds()` |
+| 抽取 | 模板 `memory/fact_extract.v1.md` + `MemoryService.ExtractFacts` + 任务 `extract_facts`；`RunJSONPromptValidated` 把校验问题喂回模型修一次，两次不合格 FAILED 且不落库 |
+| 回写 | 事实/摘要写进检索索引（`IndexText`，单条即一块）；**被替代事实的旧块清空**（否则"受伤"与"已痊愈"会同时被召回） |
+| 触发 | 章节正文变化 → 索引（5s 折叠）+ 记忆抽取（20s 折叠，因为要调模型）；抽取完成 → 自动排一次一致性检查 |
+
+**验收证据**：`smoke-phase9.sh` 扩到 **25/25**（新增 6 条覆盖"抽取自动触发→入库→进检索→能召回→自动查一致性"）；
+e2e **37/37**；后端全绿；跑完 0 残留。
+
 ## 分支健康度复验（2026-10-05，phase9 最新提交）
 
 | 检查 | 结果 |
@@ -167,7 +183,7 @@
 | 后端 `gofmt` / `go test ./...` | 干净；**10 个包全绿** |
 | 前端 `tsc -b` / `vitest` | 通过；**11 文件 50 例全绿** |
 | Phase 9 §9.1 验收 `scripts/smoke-phase9-retrieval.sh` | **5/5 召回**（100 章测试书 → 300 块 → 5 个 query 全部命中） |
-| Phase 9 §9.2 验收 `scripts/smoke-phase9.sh` | **17/17**（索引 → 检索 → 写本章 → 快照字段全断言；真库真模型） |
+| Phase 9 §9.1/§9.2/§9.3 验收 `scripts/smoke-phase9.sh` | **25/25**（自动索引 → 检索召回 → 写本章 → 快照断言 → 记忆抽取/入库/进索引/可召回/自动查一致性；真库真模型） |
 | 真实模型端到端 `scripts/validate-e2e-deepseek.sh` | **37/37 通过**（导入→分析→二创→大纲→落成章节→写本章→续写→分析→问答→一致性→导出） |
 
 结论：`v2.1.0-dev` 分支当前状态**可用于继续开发**——已完成的提交各自带测试、全量回归与既有 MVP 验收均通过，未引入回归。

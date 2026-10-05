@@ -75,12 +75,12 @@ wait_task() { # wait_task <task_id> [max_seconds]
   echo "${status:-TIMEOUT}"
 }
 
-# wait_index：等"系统自动触发"的 index_chunks 任务完成（本脚本不手工入队 —— 那正是要验的东西）。
-# 入参是过滤参数名与值：原著用 work_id，二创用 creative_work_id。
-wait_index() {
-  local param="$1" id="$2" limit="${3:-180}" status="" i=0
+# wait_auto_task：等"系统自动触发"的某类任务完成（本脚本不手工入队 —— 那正是要验的东西）。
+# 入参：过滤参数名（work_id / creative_work_id）、值、任务类型。
+wait_auto_task() {
+  local param="$1" id="$2" kind="$3" limit="${4:-180}" status="" i=0
   while [ "${i}" -lt "${limit}" ]; do
-    status="$(curl -s "${API}/tasks?${param}=${id}&type=index_chunks&page_size=1" \
+    status="$(curl -s "${API}/tasks?${param}=${id}&type=${kind}&page_size=1" \
       | field "d['items'][0]['status'] if d['items'] else ''" 2>/dev/null || echo '')"
     case "${status}" in COMPLETED|FAILED|CANCELLED) echo "${status}"; return ;; esac
     sleep 1
@@ -88,6 +88,8 @@ wait_index() {
   done
   echo "${status:-NO_TASK}"
 }
+
+wait_index() { wait_auto_task "$1" "$2" "index_chunks" "${3:-180}"; }
 
 PID=""; OID=""; CPID=""; CID=""
 cleanup() {
@@ -187,6 +189,25 @@ check "快照记每段用量（8 段）" "8" "${BY_SEC}"
 
 SEC=$(echo "${DETAIL}" | field "'character_context' in d['snapshot'] and 'world_context' in d['snapshot'] and 'timeline_context' in d['snapshot'] and 'prev_summary' in d['snapshot'] and 'retrieved_original' in d['snapshot'] and 'author_instruction' in d['snapshot'] and 'outline_context' in d['snapshot']")
 check "8 段上下文齐备（§9.2.1）" "True" "${SEC}"
+
+echo
+echo "== 5. 记忆回写（§9.3：正文落库自动抽事实/摘要 → 进检索 → 自动查一致性）"
+check "记忆抽取任务由保存自动触发并完成" "COMPLETED" "$(wait_auto_task creative_work_id "${CID}" extract_facts)"
+FACTS=$(psqlq "select count(*) from memory_facts where creative_work_id='${CID}'")
+check "记忆事实已入库" "True" "$([ "${FACTS:-0}" -gt 0 ] && echo True || echo False)"
+SUMS=$(psqlq "select count(*) from chapter_summaries where chapter_id='${CH2}'")
+check "本章摘要已入库（一章一条）" "1" "${SUMS}"
+FCHUNKS=$(psqlq "select count(*) from chunks where work_id='${CID}' and ref_kind in ('memory_fact','chapter_summary')")
+check "事实与摘要进了检索索引" "True" "$([ "${FCHUNKS:-0}" -gt 0 ] && echo True || echo False)"
+
+SUBJECT=$(psqlq "select subject from memory_facts where creative_work_id='${CID}' order by created_at desc limit 1")
+RESP=$(curl -s -X POST "${API}/retrieval/search" -H 'Content-Type: application/json' \
+  -d "{\"work_kind\":\"creative\",\"work_id\":\"${CID}\",\"query\":\"${SUBJECT}\",\"top_k\":8}")
+RECALLED=$(echo "${RESP}" | field "any(c['ref_kind'] in ('memory_fact','chapter_summary') for c in d['items'])")
+check "同 work 检索能召回记忆（越写越懂的闭环）" "True" "${RECALLED}"
+
+AUTOCHECK=$(psqlq "select count(*) from tasks where creative_work_id='${CID}' and type='consistency_check'")
+check "抽取后自动触发一致性检查" "True" "$([ "${AUTOCHECK:-0}" -gt 0 ] && echo True || echo False)"
 
 echo
 echo "== 结果：通过 ${PASS} 项，失败 ${FAIL} 项"

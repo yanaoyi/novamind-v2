@@ -86,6 +86,24 @@ func (s *IndexService) IndexWork(ctx context.Context, workKind, workID string) (
 	return retrieval.IndexWork(ctx, s.store, ownerID, workKind, workID, items)
 }
 
+// IndexText 把一个"单条即一块"的来源写进检索索引（记忆事实 / 章节摘要用）。
+//
+// 空文本表示清空该来源的块 —— 记忆事实被新事实替代时就要这么做，
+// 否则检索会同时召回"受伤"与"已痊愈"两条，凭空制造矛盾。
+func (s *IndexService) IndexText(
+	ctx context.Context,
+	workKind, workID, refKind, refID, text string,
+	chapterID *string,
+) error {
+	ownerID, err := s.users.DefaultUserID(ctx)
+	if err != nil {
+		return err
+	}
+	id := refID
+	return s.store.ReplaceChunks(ctx, ownerID, workKind, workID, refKind, &id, chapterID,
+		retrieval.ChunkSingle(text))
+}
+
 // IndexRef 只重建某一个来源（增量索引，§9.1.4 的"只重建受影响的 ref"）。
 //
 // 当前支持「二创 + 章节」——那是唯一会被反复修改的来源（作者编辑、AI 写本章）；

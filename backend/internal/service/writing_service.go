@@ -61,6 +61,8 @@ type WritingService struct {
 	retriever ContextRetriever
 	// indexer 是"正文变了就重建这部分索引"的触发点（Phase 9 §9.1.4）。未注入时不留索引。
 	indexer IndexTrigger
+	// facts 是"正文变了就重新抽取记忆"的触发点（Phase 9 §9.3.2）。未注入时不抽取。
+	facts FactExtractTrigger
 }
 
 // SnapshotRecorder 是"记录一次 AI 调用前的上下文快照"的能力（由 SnapshotService 实现）。
@@ -84,6 +86,28 @@ func (s *WritingService) SetRetriever(r ContextRetriever) { s.retriever = r }
 
 // SetIndexTrigger 注入索引入队能力（Phase 9 §9.1.4：正文保存/生成完成就重建该章索引）。
 func (s *WritingService) SetIndexTrigger(t IndexTrigger) { s.indexer = t }
+
+// FactExtractTrigger 是"正文变化后重新抽取记忆"的能力（由 TaskService 实现）。
+type FactExtractTrigger interface {
+	EnqueueFactExtract(ctx context.Context, workID, chapterID string) error
+}
+
+// SetFactExtractTrigger 注入记忆抽取触发点（Phase 9 §9.3.2）。
+func (s *WritingService) SetFactExtractTrigger(t FactExtractTrigger) { s.facts = t }
+
+// triggerContentSideEffects 是"正文变化"的统一后置动作：重建本章索引 + 重新抽取记忆。
+//
+// 两个都只记日志：正文已经保存成功了，索引与记忆都是**可追平的**派生数据，
+// 不该因为它们出问题而让作者以为保存失败。
+func (s *WritingService) triggerContentSideEffects(ctx context.Context, workID, chapterID string) {
+	s.triggerChapterIndex(ctx, workID, chapterID)
+	if s.facts == nil {
+		return
+	}
+	if err := s.facts.EnqueueFactExtract(ctx, workID, chapterID); err != nil {
+		fmt.Printf("[warn] 记忆抽取入队失败（不影响保存）: chapter=%s %v\n", chapterID, err)
+	}
+}
 
 // triggerChapterIndex 入队重建本章索引；失败只记日志。
 //
@@ -185,8 +209,9 @@ func (s *WritingService) CreateChapter(ctx context.Context, workID string, in Cr
 		if err := s.snapshot(ctx, c, "创建章节"); err != nil {
 			return nil, err
 		}
-		// 正文一落库就把索引追平（§9.1.4 触发点）：作者手写的第 1 章马上可以被后续章节检索到
-		s.triggerChapterIndex(ctx, c.CreativeWorkID, c.ID)
+		// 正文一落库就把索引追平、把记忆抽出来（§9.1.4 / §9.3.2 触发点）：
+		// 作者手写的第 1 章马上可以被后续章节检索到，也会进入记忆档案
+		s.triggerContentSideEffects(ctx, c.CreativeWorkID, c.ID)
 	}
 	return c, nil
 }
@@ -246,7 +271,7 @@ func (s *WritingService) UpdateChapter(ctx context.Context, id string, in Update
 		if err := s.snapshot(ctx, c, "编辑正文"); err != nil {
 			return nil, false, err
 		}
-		s.triggerChapterIndex(ctx, c.CreativeWorkID, c.ID)
+		s.triggerContentSideEffects(ctx, c.CreativeWorkID, c.ID)
 	}
 	return c, contentChanged, nil
 }

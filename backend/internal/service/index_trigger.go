@@ -32,6 +32,13 @@ type IndexTrigger interface {
 // 后续任何一次保存（或全量重建）都会把索引追平。
 const indexDedupWindow = 5 * time.Second
 
+// taskDedupWindow 是"要调模型的任务"（事实抽取 / 自动一致性检查）的折叠窗口。
+//
+// 比索引入队窗口长：这两个任务每次都要真金白银地调模型，不能让作者打字把它们打爆。
+// 折叠掉的那次同样不丢数据：任务执行时读到的是"当时的正文"，
+// 之后再改再存会重新触发；记忆晚十几秒入库不影响正确性。
+const taskDedupWindow = 20 * time.Second
+
 // indexDedup 是入队去重器（独立成类型是为了能脱离仓储单测）。
 type indexDedup struct {
 	mu     sync.Mutex
@@ -91,5 +98,41 @@ func (s *TaskService) EnqueueIndex(ctx context.Context, workKind, workID, refKin
 		in.CreativeWorkID = &workID
 	}
 	_, err := s.Enqueue(ctx, in)
+	return err
+}
+
+// EnqueueFactExtract 排一次"从本章正文抽取记忆事实"的任务（Phase 9 §9.3.2）。
+func (s *TaskService) EnqueueFactExtract(ctx context.Context, workID, chapterID string) error {
+	if strings.TrimSpace(workID) == "" || strings.TrimSpace(chapterID) == "" {
+		return fmt.Errorf("%w：事实抽取缺 work_id 或 chapter_id", ErrBadRequest)
+	}
+	if s.taskDedup != nil && !s.taskDedup.allow("facts|"+chapterID, time.Now()) {
+		return nil
+	}
+	_, err := s.Enqueue(ctx, EnqueueInput{
+		Type:           "extract_facts",
+		CreativeWorkID: &workID,
+		Input:          map[string]any{"chapter_id": chapterID},
+	})
+	return err
+}
+
+// EnqueueConsistencyCheck 排一次一致性检查（§9.4：记忆回写完成后自动查一次）。
+func (s *TaskService) EnqueueConsistencyCheck(ctx context.Context, workID string, chapterIDs []string) error {
+	if strings.TrimSpace(workID) == "" {
+		return fmt.Errorf("%w：一致性检查缺 work_id", ErrBadRequest)
+	}
+	ids := chapterIDs
+	if ids == nil {
+		ids = []string{}
+	}
+	if s.taskDedup != nil && !s.taskDedup.allow("consistency|"+workID+"|"+strings.Join(ids, ","), time.Now()) {
+		return nil
+	}
+	_, err := s.Enqueue(ctx, EnqueueInput{
+		Type:           "consistency_check",
+		CreativeWorkID: &workID,
+		Input:          map[string]any{"work_id": workID, "chapter_ids": ids},
+	})
 	return err
 }

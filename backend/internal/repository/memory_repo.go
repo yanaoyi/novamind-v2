@@ -45,6 +45,15 @@ type FactWrite struct {
 	ChapterID *string
 }
 
+// FactWriteOutcome 是一次写入的结果。
+//
+// 为什么要带 ID 而不是只给计数：调用方（记忆服务）紧接着要把新事实写进检索索引、
+// 把被替代事实的旧索引清掉 —— 没有 ID 就没法精确定位，只能"全量重建"糊过去。
+type FactWriteOutcome struct {
+	Created    []domain.MemoryFact
+	Superseded []string
+}
+
 // MemoryRepo 是长篇记忆的仓储（Phase 9 §9.3）。
 type MemoryRepo struct {
 	db *gorm.DB
@@ -68,8 +77,9 @@ func (r *MemoryRepo) CreateFacts(
 	ctx context.Context,
 	ownerUserID, workID string,
 	facts []FactWrite,
-) (created, superseded int, err error) {
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+) (FactWriteOutcome, error) {
+	outcome := FactWriteOutcome{}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, in := range facts {
 			fact := domain.MemoryFact{Kind: domain.FactKind(in.Kind), Subject: in.Subject, Fact: in.Fact}
 			fact.Normalize()
@@ -109,7 +119,11 @@ func (r *MemoryRepo) CreateFacts(
 				}
 				return fmt.Errorf("写入记忆事实失败: %w", err)
 			}
-			created++
+			outcome.Created = append(outcome.Created, domain.MemoryFact{
+				ID: row.ID, OwnerUserID: ownerUserID, CreativeWorkID: workID,
+				Kind: domain.FactKind(row.Kind), Subject: row.Subject, Fact: row.Fact,
+				ChapterID: row.ChapterID, CreatedAt: row.CreatedAt,
+			})
 
 			if len(active) > 0 {
 				ids := make([]string, 0, len(active))
@@ -121,15 +135,15 @@ func (r *MemoryRepo) CreateFacts(
 					Update("superseded_by", row.ID).Error; err != nil {
 					return fmt.Errorf("标记旧事实被替代失败: %w", err)
 				}
-				superseded += len(ids)
+				outcome.Superseded = append(outcome.Superseded, ids...)
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, 0, err
+		return FactWriteOutcome{}, err
 	}
-	return created, superseded, nil
+	return outcome, nil
 }
 
 // ListFacts 列出某部作品的记忆事实（新到旧）。

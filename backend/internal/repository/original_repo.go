@@ -355,6 +355,29 @@ func (r *OriginalRepo) ListChapterContents(ctx context.Context, workID string, l
 	return out, nil
 }
 
+// ListAllChapterContents 取该原著的全部章节正文（**不设上限**）。
+//
+// 为什么单独开一个方法：ListChapterContents 的 limit<=0 会被当成默认 50 章
+// （那是给"送入模型上下文"设计的截断），索引重建却需要**全量**。
+// 2026-10-05 的 §9.1 召回验收正是被这个默认值坑了：只索引了前 50 章，
+// 第 73/95 章的埋点压根没进索引 → 召回 3/5 不达标。
+func (r *OriginalRepo) ListAllChapterContents(ctx context.Context, workID string) ([]domain.OriginalChapter, error) {
+	if _, err := uuid.Parse(workID); err != nil {
+		return nil, domain.ErrOriginalNotFound
+	}
+	var models []originalChapterModel
+	if err := r.db.WithContext(ctx).
+		Where("original_work_id = ?", workID).
+		Order("chapter_no ASC").Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("查询章节正文失败: %w", err)
+	}
+	out := make([]domain.OriginalChapter, 0, len(models))
+	for _, m := range models {
+		out = append(out, toDomainChapter(m))
+	}
+	return out, nil
+}
+
 // GetChapter 按章节号取单章（含正文）。
 func (r *OriginalRepo) GetChapter(ctx context.Context, workID string, chapterNo int) (*domain.OriginalChapter, error) {
 	if _, err := uuid.Parse(workID); err != nil {

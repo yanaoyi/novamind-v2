@@ -12,7 +12,8 @@ import (
 
 // IndexWorkReader 取原著章节正文（由 OriginalRepo 实现）。
 type IndexWorkReader interface {
-	ListChapterContents(ctx context.Context, workID string, limit int) ([]domain.OriginalChapter, error)
+	// 索引必须全量：不要用带 limit 的 ListChapterContents（它的 limit<=0 会被当成默认 50 章）
+	ListAllChapterContents(ctx context.Context, workID string) ([]domain.OriginalChapter, error)
 }
 
 // CreativeChapterReader 取二创章节正文（由 WritingRepo 实现）。
@@ -51,7 +52,7 @@ func (s *IndexService) IndexWork(ctx context.Context, workKind, workID string) (
 	var items []retrieval.SourceItem
 	switch strings.TrimSpace(workKind) {
 	case domain.WorkKindOriginal:
-		chapters, err := s.originals.ListChapterContents(ctx, workID, 0)
+		chapters, err := s.originals.ListAllChapterContents(ctx, workID)
 		if err != nil {
 			return nil, err
 		}

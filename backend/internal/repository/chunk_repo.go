@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/yanaoyi/novamindv2/backend/internal/domain"
+	"github.com/yanaoyi/novamindv2/backend/internal/retrieval"
 )
 
 type chunkModel struct {
@@ -87,4 +88,31 @@ func (r *ChunkRepo) CountByWork(ctx context.Context, workKind, workID string) (i
 		return 0, fmt.Errorf("统计分块失败: %w", err)
 	}
 	return int(n), nil
+}
+
+// ListChunks 实现 retrieval.ChunkSource：取出某作品的全部分块供 BM25 打分。
+//
+// owner 隔离：ownerUserID 非空时只取该用户名下的块（admin/运维排查可传空串表示不过滤）。
+// BM25 需要全量打分，所以这里不分页；单作品万级 chunk 在内存里算完全可接受
+// （任务书也认可这个量级；真到十万级再加 ivfflat 与分页裁剪）。
+func (r *ChunkRepo) ListChunks(
+	ctx context.Context,
+	ownerUserID, workKind, workID string,
+) ([]retrieval.IndexedChunk, error) {
+	query := r.db.WithContext(ctx).Model(&chunkModel{}).
+		Where("work_kind = ? AND work_id = ?", workKind, workID)
+	if ownerUserID != "" {
+		query = query.Where("owner_user_id = ?", ownerUserID)
+	}
+	var models []chunkModel
+	if err := query.Order("ref_kind ASC, ref_id ASC, seq ASC").Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("查询分块失败: %w", err)
+	}
+	out := make([]retrieval.IndexedChunk, 0, len(models))
+	for _, m := range models {
+		out = append(out, retrieval.IndexedChunk{
+			ID: m.ID, RefKind: m.RefKind, RefID: m.RefID, Seq: m.Seq, Content: m.Content,
+		})
+	}
+	return out, nil
 }

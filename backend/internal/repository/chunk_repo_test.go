@@ -2,11 +2,13 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/yanaoyi/novamindv2/backend/internal/domain"
+	"github.com/yanaoyi/novamindv2/backend/internal/retrieval"
 )
 
 func newChunkRepoForTest(t *testing.T) (*ChunkRepo, string, string) {
@@ -52,5 +54,42 @@ func TestChunkRepoReplaceIsIdempotent(t *testing.T) {
 	}
 	if n, _ := repo.CountByWork(ctx, domain.WorkKindCreative, workID); n != 0 {
 		t.Fatalf("清空后应 0 块，实际 %d", n)
+	}
+}
+
+// 端到端（真库）：分块写进 chunks → 用仓储当数据源跑 BM25 → 相关块排在前面。
+// 这一步证明"检索能真的从库里召回"，而不只是纯函数的单元测试。
+func TestChunkRepoSearchEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	repo, userID, workID := newChunkRepoForTest(t)
+	refID := workID
+	chunks := []domain.RetrievalChunk{
+		{Seq: 0, Content: "雨夜。沈砚翻开账册，发现第二笔银子的去向不对劲。", TokenCount: 24},
+		{Seq: 1, Content: "清晨的集市很热闹，卖鱼的老汉在吆喝。", TokenCount: 18},
+	}
+	if err := repo.ReplaceChunks(ctx, userID, domain.WorkKindCreative, workID,
+		domain.ChunkRefChapter, &refID, &refID, chunks); err != nil {
+		t.Fatalf("写入分块失败: %v", err)
+	}
+	got, err := retrieval.Search(ctx, repo, userID, domain.WorkKindCreative, workID, "账册 银子", 5)
+	if err != nil {
+		t.Fatalf("检索失败: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("应从库里召回至少一块")
+	}
+	if !strings.Contains(got[0].Content, "账册") {
+		t.Fatalf("首条结果应包含查询词，实际: %s", got[0].Content)
+	}
+	if got[0].RefKind != domain.ChunkRefChapter {
+		t.Errorf("命中结果应带回来源信息，实际 ref_kind=%s", got[0].RefKind)
+	}
+	// owner 隔离：换一个不存在的 owner 检索，必须召回不到这部作品的块
+	others, err := retrieval.Search(ctx, repo, "00000000-0000-7000-8000-0000000000ff", domain.WorkKindCreative, workID, "账册", 5)
+	if err != nil {
+		t.Fatalf("隔离检索出错: %v", err)
+	}
+	if len(others) != 0 {
+		t.Fatalf("不同 owner 不应召回同一作品的块，实际 %d 条", len(others))
 	}
 }

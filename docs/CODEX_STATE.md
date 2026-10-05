@@ -1,6 +1,6 @@
 # CODEX_STATE.md — 当前开发状态
 
-> 最后更新：2026-10-04（**基准归位：唯一验收基准 = 根目录 `NovaMind_V2_开发规格说明书.md`（v1=v2，全文 72 节）；按规格补齐缺口进入 Phase 8**）
+> 最后更新：2026-10-05（**唯一验收基准 = 根目录 `NovaMind_V2_开发规格说明书.md`（v1=v2，全文 72 节）；§68 MVP 已用真实模型验收通过；muse 代码/安全审查报告的全部 P0/P1/P2 已闭环**）
 > **每次 Codex 重启，先读这四份**：`docs/CODEX_STATE.md` → 根目录 `NovaMind_V2_开发规格说明书.md` → `docs/SPEC.md`（实施状态对账表）→ `docs/ARCHITECTURE.md`。
 
 ---
@@ -46,7 +46,7 @@
 
 ## 3. 正在进行
 
-**无进行中的开发项**。Phase 5/6/7 已收官：`scripts/smoke-phase5.sh` 30 项全过；后端 8 个包测试全绿；前端 6 个文件 19 例全绿；迁移版本 12。
+**无进行中的开发项**（2026-10-05 更新）：Phase 1–8 全部收官，§68 MVP 真实模型验收 37/37；10 个冒烟脚本合计 **315 项全过**；后端各包全绿；前端 **11 文件 49 例**全绿；迁移版本 **17**。muse 审查清单已全部闭环，剩余待办只有"交付前 purge 验证账号 + 复跑一次全量验收"。
 
 ### Phase 5/6/7 任务拆分（写作 / 一致性 / 版本与导出）
 
@@ -91,7 +91,7 @@
 | — | PDF 解析 | ✅ 已完成（2026-09-28） |
 
 运行现状：PostgreSQL 15.19（集群 `15 main 5432 online`）与 Redis 7.0.15 均 active；
-业务账号 `novamind` 可登录；**迁移版本 = 12**（dirty=false）；各冒烟脚本用 `trap` 自清理，测试不在库里留数据。
+业务账号 `novamind` 可登录（**口令已于 2026-10-05 轮换，只存在 `backend/.env`**）；**迁移版本 = 17**（dirty=false）；各冒烟脚本用 `trap` 自清理，测试不在库里留数据。
 
 ---
 
@@ -146,7 +146,7 @@
 | 子系统 | 状态 |
 |---|---|
 | 后端 | **全 Phase 完成**：config / infra / domain / repository / service / api / ai / task 各层贯通；gin v1.12.0、gorm v1.31.2、go-redis v9、golang-migrate v4；`go test ./...` 8 个包全绿 |
-| 数据库 | **迁移版本 13**：projects → originals/characters/world/events → model_providers → tasks（+creative_work_id）→ analysis_proposals → creative core/world/timeline → writing（卷/章节/场景/版本/一致性问题）→ entity_versions（人物/世界/大纲快照）；全部可 up/down/重建 |
+| 数据库 | **迁移版本 17**：projects → originals/characters/world/events → model_providers → tasks（+creative_work_id/next_run_at）→ analysis_proposals → creative core/world/timeline → writing（卷/章节/场景/版本/一致性问题，+outline_node_id）→ entity_versions（人物/世界/大纲快照）→ outlines/outline_nodes（§27 大纲树）→ mappings 唯一索引；全部可 up/down/重建 |
 | API | **P1-5 完成**：`/api/v1/projects` CRUD + `/api/v1/health` + `/api/v1/openapi.yaml` + `/swagger/index.html` |
 | 原著系统 | **P2-1 ~ P2-6 完成**：导入与章节（5 API）、人物/DNA/关系（9 API）、世界观（14 API）、事件/时间线/剧情弧（11 API）；前端全链路可用；PDF 解析已于 2026-09-28 补齐 |
 | AI 层 | **Phase 3 P3-1 完成**：Model Gateway（OpenAI 兼容 + Anthropic，含重试与错误语义）、Prompt Engine（7 个版本化模板，编译进二进制）、模型配置 CRUD + 连通性测试；密钥 AES-256-GCM 加密，接口不返回密钥 |
@@ -214,3 +214,9 @@
 | 2026-10-04 | **基准归位 + 缺口对账**：BOSS 确认 v1=v2，唯一验收基准 = 根目录 `NovaMind_V2_开发规格说明书.md`；全仓引用改回「规格书 §N」；`docs/SPEC.md` 重写为实施状态对账表（✅/🟡/❌ 逐章对账 + 14 项缺口清单）；清理本文件里 PDF、AI 模型、任务系统、一致性引擎等自相矛盾的旧行。**按规格书 §68，MVP 尚未通过** |
 | 2026-10-04 | Phase 8 起步：补 `docker-compose.yml`（§50）、版本比较（§59）、一致性检查五类上下文与失败重试（§39/§57/§58） |
 | 2026-10-04 | **验证账号纪律**：BOSS 定「验证期可用 DeepSeek，交付前必须删除，使用者自备 Key」。新增 `scripts/validation-account.sh`（seed/status/purge/check）；修复模型配置删除只软删、密钥密文残留的真缺陷（改为先清密文再软删）；本机实清 5 条残留 → 0 行 / 0 密文 |
+| 2026-10-04 | Phase 8-5：**大纲独立模型（§27）** —— 迁移 `0014` 建 `outlines`/`outline_nodes`（卷→节→章）+ 14 个 API + 前端「二创 · 大纲」页（AI 候选采纳 / 一键落成章节 / 版本与比较）；`smoke-phase8-outline.sh` 45→47 项全过 |
+| 2026-10-04 | **§68 MVP 真实模型验收通过**：`validate-e2e-deepseek.sh` **37/37**（含「AI 生成大纲 → 采纳落库 → 一键落成 3 卷 18 章」）。过程中修掉两个真缺陷：正文类提示词被强制 JSON 模式导致写本章随机空正文（拆出 `RunTextPrompt`）；结构化输出被截断无兜底（`RunJSONPrompt` 带收敛提示重试） |
+| 2026-10-04 | **P0 安全修复**：接口鉴权（Bearer `ADMIN_TOKEN`，生产未配置拒绝启动）、SSRF 收敛（`api_base` 校验 + 拒绝内网/元数据 + 连通性测试不回显上游响应体 + `/ai/*` 与 test 限流）、compose 端口只绑本机；前端令牌弹窗；脚本用 `CURL_HOME/.curlrc` 自动带令牌 |
+| 2026-10-04 | **muse 审查 P1 全部修复**：僵死任务回收 + 重试退避（`0015`）、大纲落成单事务 + 防重（`0016`）、映射 upsert（`0017`）、继承/融合事务化、备份不再吞错、`chunkByLength` 去 O(n²)、大纲恢复原子化 + `source` 回填、docx/pdf 解压炸弹防护；前端切章丢编辑 / AI 覆盖编辑 / 保存竞态 / 翻页竞态 / 空响应 / markdown 转义六项 |
+| 2026-10-05 | **口令轮换 + 脚本凭据收口**：轮换本机数据库口令（只存 `backend/.env`）；新增 `scripts/lib/db-url.sh`，删掉 11 个脚本里写死的连接串；`setup-local-db.sh` 去掉弱口令默认值。顺带修掉"同用途已有默认模型"被误报成"同名配置已存在"的缺陷，并让三个冒烟脚本临时抢占默认模型后还原 |
+| 2026-10-05 | **muse 审查 P2 全部闭环**：前情查询下推（不再全表扫描）、节点序号 advisory lock、菜单前缀高亮、上传体积预检、路径参数编码（请求层统一）、统一 `errorMessage`、Prompt 注入边界标记（`<<<USER_CONTENT>>>`）、**KDF 升级为 HKDF-SHA256 + 版本前缀 + 存量密文懒迁移**（实测 v1→v2 迁移成功，e2e 仍 37/37）。全量冒烟 315 项、真实模型 e2e 37/37、前端 49 例全绿 |

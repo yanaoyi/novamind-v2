@@ -59,18 +59,22 @@ func (p ProviderPurpose) Valid() bool {
 // 注意：结构体里**没有明文密钥字段** —— 密钥只在 service 层解密后直接交给
 // gateway 使用，不进入任何返回值或日志（规格书 §64.13）。
 type ModelProvider struct {
-	ID          string
-	Name        string
-	Provider    ProviderType
-	APIBase     string
-	ModelName   string
-	Purpose     ProviderPurpose
-	Temperature float64
-	MaxTokens   int
-	TimeoutSec  int
-	Enabled     bool
-	IsDefault   bool
-	Notes       string
+	ID        string
+	Name      string
+	Provider  ProviderType
+	APIBase   string
+	ModelName string
+	// EmbedAPIBase / EmbedModelName 是向量模型的独立配置（Phase 9 §9.1.3）：
+	// 为空时按约定回退（embed_api_base → api_base；embed_model_name → DEFAULT_EMBED_MODEL）。
+	EmbedAPIBase   string
+	EmbedModelName string
+	Purpose        ProviderPurpose
+	Temperature    float64
+	MaxTokens      int
+	TimeoutSec     int
+	Enabled        bool
+	IsDefault      bool
+	Notes          string
 	// HasAPIKey 表示库里是否已存密钥（API 只暴露这个布尔值）
 	HasAPIKey bool
 	CreatedAt time.Time
@@ -83,6 +87,8 @@ func (m *ModelProvider) Normalize() {
 	m.Name = strings.TrimSpace(m.Name)
 	m.APIBase = strings.TrimRight(strings.TrimSpace(m.APIBase), "/")
 	m.ModelName = strings.TrimSpace(m.ModelName)
+	m.EmbedAPIBase = strings.TrimRight(strings.TrimSpace(m.EmbedAPIBase), "/")
+	m.EmbedModelName = strings.TrimSpace(m.EmbedModelName)
 	m.Notes = strings.TrimSpace(m.Notes)
 	if m.Provider == "" {
 		m.Provider = ProviderOpenAICompatible

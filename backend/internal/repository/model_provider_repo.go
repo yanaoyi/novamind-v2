@@ -13,22 +13,24 @@ import (
 )
 
 type modelProviderModel struct {
-	ID           string         `gorm:"column:id;type:uuid;primaryKey"`
-	Name         string         `gorm:"column:name;size:120;not null"`
-	Provider     string         `gorm:"column:provider;size:40;not null"`
-	APIBase      string         `gorm:"column:api_base;size:300;not null"`
-	APIKeyCipher string         `gorm:"column:api_key_cipher;not null;default:''"`
-	ModelName    string         `gorm:"column:model_name;size:120;not null"`
-	Purpose      string         `gorm:"column:purpose;size:20;not null;default:chat"`
-	Temperature  float64        `gorm:"column:temperature;type:numeric(3,2);not null;default:0.70"`
-	MaxTokens    int            `gorm:"column:max_tokens;not null;default:4096"`
-	TimeoutSec   int            `gorm:"column:timeout_sec;not null;default:120"`
-	Enabled      bool           `gorm:"column:enabled;not null;default:true"`
-	IsDefault    bool           `gorm:"column:is_default;not null;default:false"`
-	Notes        string         `gorm:"column:notes;not null;default:''"`
-	CreatedAt    time.Time      `gorm:"column:created_at;not null"`
-	UpdatedAt    time.Time      `gorm:"column:updated_at;not null"`
-	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;index"`
+	ID             string         `gorm:"column:id;type:uuid;primaryKey"`
+	Name           string         `gorm:"column:name;size:120;not null"`
+	Provider       string         `gorm:"column:provider;size:40;not null"`
+	APIBase        string         `gorm:"column:api_base;size:300;not null"`
+	APIKeyCipher   string         `gorm:"column:api_key_cipher;not null;default:''"`
+	ModelName      string         `gorm:"column:model_name;size:120;not null"`
+	EmbedAPIBase   string         `gorm:"column:embed_api_base;not null;default:''"`
+	EmbedModelName string         `gorm:"column:embed_model_name;not null;default:''"`
+	Purpose        string         `gorm:"column:purpose;size:20;not null;default:chat"`
+	Temperature    float64        `gorm:"column:temperature;type:numeric(3,2);not null;default:0.70"`
+	MaxTokens      int            `gorm:"column:max_tokens;not null;default:4096"`
+	TimeoutSec     int            `gorm:"column:timeout_sec;not null;default:120"`
+	Enabled        bool           `gorm:"column:enabled;not null;default:true"`
+	IsDefault      bool           `gorm:"column:is_default;not null;default:false"`
+	Notes          string         `gorm:"column:notes;not null;default:''"`
+	CreatedAt      time.Time      `gorm:"column:created_at;not null"`
+	UpdatedAt      time.Time      `gorm:"column:updated_at;not null"`
+	DeletedAt      gorm.DeletedAt `gorm:"column:deleted_at;index"`
 }
 
 func (modelProviderModel) TableName() string { return "model_providers" }
@@ -56,7 +58,8 @@ func (r *ModelProviderRepo) Create(ctx context.Context, p *domain.ModelProvider,
 
 	m := modelProviderModel{
 		ID: p.ID, Name: p.Name, Provider: string(p.Provider), APIBase: p.APIBase,
-		APIKeyCipher: apiKeyCipher, ModelName: p.ModelName, Purpose: string(p.Purpose),
+		APIKeyCipher: apiKeyCipher, ModelName: p.ModelName,
+		EmbedAPIBase: p.EmbedAPIBase, EmbedModelName: p.EmbedModelName, Purpose: string(p.Purpose),
 		Temperature: p.Temperature, MaxTokens: p.MaxTokens, TimeoutSec: p.TimeoutSec,
 		Enabled: p.Enabled, IsDefault: p.IsDefault, Notes: p.Notes,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
@@ -139,18 +142,20 @@ func (r *ModelProviderRepo) FindChatProvider(ctx context.Context) (*domain.Model
 func (r *ModelProviderRepo) Update(ctx context.Context, p *domain.ModelProvider, apiKeyCipher *string) error {
 	now := time.Now().UTC()
 	updates := map[string]any{
-		"name":        p.Name,
-		"provider":    string(p.Provider),
-		"api_base":    p.APIBase,
-		"model_name":  p.ModelName,
-		"purpose":     string(p.Purpose),
-		"temperature": p.Temperature,
-		"max_tokens":  p.MaxTokens,
-		"timeout_sec": p.TimeoutSec,
-		"enabled":     p.Enabled,
-		"is_default":  p.IsDefault,
-		"notes":       p.Notes,
-		"updated_at":  now,
+		"name":             p.Name,
+		"provider":         string(p.Provider),
+		"api_base":         p.APIBase,
+		"model_name":       p.ModelName,
+		"embed_api_base":   p.EmbedAPIBase,
+		"embed_model_name": p.EmbedModelName,
+		"purpose":          string(p.Purpose),
+		"temperature":      p.Temperature,
+		"max_tokens":       p.MaxTokens,
+		"timeout_sec":      p.TimeoutSec,
+		"enabled":          p.Enabled,
+		"is_default":       p.IsDefault,
+		"notes":            p.Notes,
+		"updated_at":       now,
 	}
 	if apiKeyCipher != nil {
 		updates["api_key_cipher"] = *apiKeyCipher
@@ -224,7 +229,8 @@ func (r *ModelProviderRepo) Delete(ctx context.Context, id string) error {
 func toDomainProvider(m modelProviderModel) domain.ModelProvider {
 	p := domain.ModelProvider{
 		ID: m.ID, Name: m.Name, Provider: domain.ProviderType(m.Provider), APIBase: m.APIBase,
-		ModelName: m.ModelName, Purpose: domain.ProviderPurpose(m.Purpose),
+		ModelName: m.ModelName, EmbedAPIBase: m.EmbedAPIBase, EmbedModelName: m.EmbedModelName,
+		Purpose:     domain.ProviderPurpose(m.Purpose),
 		Temperature: m.Temperature, MaxTokens: m.MaxTokens, TimeoutSec: m.TimeoutSec,
 		Enabled: m.Enabled, IsDefault: m.IsDefault, Notes: m.Notes,
 		HasAPIKey: m.APIKeyCipher != "",

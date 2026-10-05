@@ -49,18 +49,21 @@ func NewModelProviderService(
 
 // ProviderInput 是模型配置入参。
 type ProviderInput struct {
-	Name        string
-	Provider    domain.ProviderType
-	APIBase     string
-	APIKey      string // 明文；为空表示不设置/不修改
-	ModelName   string
-	Purpose     domain.ProviderPurpose
-	Temperature float64
-	MaxTokens   int
-	TimeoutSec  int
-	Enabled     bool
-	IsDefault   bool
-	Notes       string
+	Name      string
+	Provider  domain.ProviderType
+	APIBase   string
+	APIKey    string // 明文；为空表示不设置/不修改
+	ModelName string
+	// 向量模型独立配置（可空，见 domain.ModelProvider 注释）
+	EmbedAPIBase   string
+	EmbedModelName string
+	Purpose        domain.ProviderPurpose
+	Temperature    float64
+	MaxTokens      int
+	TimeoutSec     int
+	Enabled        bool
+	IsDefault      bool
+	Notes          string
 }
 
 // Create 新增模型配置。
@@ -75,6 +78,7 @@ func (s *ModelProviderService) Create(ctx context.Context, in ProviderInput) (*d
 
 	p := &domain.ModelProvider{
 		Name: in.Name, Provider: in.Provider, APIBase: in.APIBase, ModelName: in.ModelName,
+		EmbedAPIBase: in.EmbedAPIBase, EmbedModelName: in.EmbedModelName,
 		Purpose: in.Purpose, Temperature: in.Temperature, MaxTokens: in.MaxTokens,
 		TimeoutSec: in.TimeoutSec, Enabled: in.Enabled, IsDefault: in.IsDefault, Notes: in.Notes,
 	}
@@ -85,6 +89,12 @@ func (s *ModelProviderService) Create(ctx context.Context, in ProviderInput) (*d
 	// SSRF 收敛：api_base 会被服务端拿着已入库的真实 Key 去请求，必须先过地址校验
 	if err := ai.ValidateAPIBase(p.APIBase, s.allowPrivateAPIBase); err != nil {
 		return nil, err
+	}
+	// 向量接口地址同样过 SSRF 校验（不许漏：它也是"服务端拿Key出站"的入口）
+	if strings.TrimSpace(p.EmbedAPIBase) != "" {
+		if err := ai.ValidateAPIBase(p.EmbedAPIBase, s.allowPrivateAPIBase); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.repo.Create(ctx, p, cipher); err != nil {
 		return nil, err
@@ -107,6 +117,8 @@ func (s *ModelProviderService) Update(ctx context.Context, id string, in Provide
 	p.Provider = in.Provider
 	p.APIBase = in.APIBase
 	p.ModelName = in.ModelName
+	p.EmbedAPIBase = in.EmbedAPIBase
+	p.EmbedModelName = in.EmbedModelName
 	p.Purpose = in.Purpose
 	p.Temperature = in.Temperature
 	p.MaxTokens = in.MaxTokens
@@ -120,6 +132,11 @@ func (s *ModelProviderService) Update(ctx context.Context, id string, in Provide
 	}
 	if err := ai.ValidateAPIBase(p.APIBase, s.allowPrivateAPIBase); err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(p.EmbedAPIBase) != "" {
+		if err := ai.ValidateAPIBase(p.EmbedAPIBase, s.allowPrivateAPIBase); err != nil {
+			return nil, err
+		}
 	}
 
 	var cipherPtr *string

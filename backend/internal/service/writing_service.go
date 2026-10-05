@@ -394,6 +394,11 @@ func (s *WritingService) GenerateChapterDraft(
 		"WorldContext":     chapterCtx.WorldContext,
 		"PreviousContext":  chapterCtx.PreviousContext,
 		"Instruction":      instruction,
+		// v2 模板新增的两段检索内容。模板引擎的 missingkey=error 要求这两段必须传，
+		// 否则渲染直接失败（引入 v2 时必须同步补上，别让"模板先行、调用方后补"变成静默故障）。
+		// 检索接线（§9.2）拿到真实命中后，把这两项换成 FormatRetrieval 的结果即可。
+		"RetrievedOriginal": "",
+		"RetrievedCreative": "",
 	})
 	if err != nil {
 		return "", err

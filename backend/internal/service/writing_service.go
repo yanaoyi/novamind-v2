@@ -59,6 +59,8 @@ type WritingService struct {
 	snapshots SnapshotRecorder
 	// retriever 是上下文组装时的检索来源（Phase 9 §9.2 接线）。未注入时检索段为空，写作照常。
 	retriever ContextRetriever
+	// indexer 是"正文变了就重建这部分索引"的触发点（Phase 9 §9.1.4）。未注入时不留索引。
+	indexer IndexTrigger
 }
 
 // SnapshotRecorder 是"记录一次 AI 调用前的上下文快照"的能力（由 SnapshotService 实现）。
@@ -79,6 +81,22 @@ type ContextRetriever interface {
 
 // SetRetriever 注入检索（Phase 9 §9.2 接线）。
 func (s *WritingService) SetRetriever(r ContextRetriever) { s.retriever = r }
+
+// SetIndexTrigger 注入索引入队能力（Phase 9 §9.1.4：正文保存/生成完成就重建该章索引）。
+func (s *WritingService) SetIndexTrigger(t IndexTrigger) { s.indexer = t }
+
+// triggerChapterIndex 入队重建本章索引；失败只记日志。
+//
+// 索引是"越写越懂"的供给端，但它绝不该成为写作链路的单点故障：
+// 多写一章而索引晚几秒追平，是可接受的；因为索引失败而不让作者保存，不可接受。
+func (s *WritingService) triggerChapterIndex(ctx context.Context, workID, chapterID string) {
+	if s.indexer == nil {
+		return
+	}
+	if err := s.indexer.EnqueueIndex(ctx, domain.WorkKindCreative, workID, domain.ChunkRefChapter, chapterID); err != nil {
+		fmt.Printf("[warn] 章节索引入队失败（不影响保存）: chapter=%s %v\n", chapterID, err)
+	}
+}
 
 // PromptMetaResolver 由 ModelInvoker 实现（可选）：在**调模型之前**报出
 // "这次要用哪个模型、哪个模板版本"，供快照如实记录。
@@ -167,6 +185,8 @@ func (s *WritingService) CreateChapter(ctx context.Context, workID string, in Cr
 		if err := s.snapshot(ctx, c, "创建章节"); err != nil {
 			return nil, err
 		}
+		// 正文一落库就把索引追平（§9.1.4 触发点）：作者手写的第 1 章马上可以被后续章节检索到
+		s.triggerChapterIndex(ctx, c.CreativeWorkID, c.ID)
 	}
 	return c, nil
 }
@@ -226,6 +246,7 @@ func (s *WritingService) UpdateChapter(ctx context.Context, id string, in Update
 		if err := s.snapshot(ctx, c, "编辑正文"); err != nil {
 			return nil, false, err
 		}
+		s.triggerChapterIndex(ctx, c.CreativeWorkID, c.ID)
 	}
 	return c, contentChanged, nil
 }
@@ -262,7 +283,17 @@ func (s *WritingService) ListChapters(ctx context.Context, workID string, withCo
 
 // DeleteChapter 删除章节。
 func (s *WritingService) DeleteChapter(ctx context.Context, id string) error {
-	return s.repo.DeleteChapter(ctx, id)
+	// 先取一次拿作品归属：删掉之后就查不到它属于哪部作品了
+	chapter, err := s.repo.GetChapter(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.DeleteChapter(ctx, id); err != nil {
+		return err
+	}
+	// 章节没了，它的索引块也必须消失（否则检索会召回已经不存在的正文）
+	s.triggerChapterIndex(ctx, chapter.CreativeWorkID, id)
+	return nil
 }
 
 // ListVersions 列出章节版本。

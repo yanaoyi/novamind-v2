@@ -44,6 +44,24 @@ func (r *stubWritingRepo) CreateIssues(_ context.Context, issues []domain.Consis
 	return len(issues), nil
 }
 
+func (r *stubWritingRepo) UpdateChapter(_ context.Context, c *domain.CreativeChapter) error {
+	r.chapter = c
+	return nil
+}
+
+func (r *stubWritingRepo) DeleteChapter(_ context.Context, id string) error {
+	if r.chapter != nil && r.chapter.ID == id {
+		r.chapter = nil
+	}
+	return nil
+}
+
+func (r *stubWritingRepo) NextVersionNo(_ context.Context, _ string) (int, error) { return 1, nil }
+
+func (r *stubWritingRepo) CreateVersion(_ context.Context, _ *domain.ChapterVersion) error {
+	return nil
+}
+
 type stubCreativeReader struct {
 	CreativeWorkReader
 	work *domain.CreativeWork

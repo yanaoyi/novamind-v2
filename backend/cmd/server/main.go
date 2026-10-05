@@ -181,6 +181,9 @@ func run() error {
 	writing.SetSnapshotRecorder(snapshots)
 	// 写作链路接入检索（Phase 9 §9.2 接线）：把 BM25/RRF 的命中送进上下文组装
 	writing.SetRetriever(retrievalSvc)
+	// 索引自动触发（Phase 9 §9.1.4）：原著导入完成、二创正文保存/生成/删除时重建对应索引
+	originals.SetIndexTrigger(tasks)
+	writing.SetIndexTrigger(tasks)
 
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)

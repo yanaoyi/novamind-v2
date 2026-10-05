@@ -27,11 +27,13 @@ type TaskService struct {
 	repo    TaskRepository
 	works   WorkLookup
 	hasType TaskTypeChecker
+	// indexDedup 折叠"同一来源被连续触发"的索引入队（见 index_trigger.go）。
+	indexDedup *indexDedup
 }
 
 // NewTaskService 构建服务。
 func NewTaskService(repo TaskRepository, works WorkLookup, hasType TaskTypeChecker) *TaskService {
-	return &TaskService{repo: repo, works: works, hasType: hasType}
+	return &TaskService{repo: repo, works: works, hasType: hasType, indexDedup: newIndexDedup(indexDedupWindow)}
 }
 
 // ErrTaskTypeUnknown 表示任务类型没有对应的处理函数。

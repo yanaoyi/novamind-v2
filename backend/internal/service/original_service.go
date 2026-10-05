@@ -100,6 +100,8 @@ func (s *OriginalService) Reparse(ctx context.Context, workID string, report fun
 	if err := s.repo.ReplaceChapters(ctx, workID, domainChapters, charCount); err != nil {
 		return nil, err
 	}
+	// §9.1.4 触发点：章节整体换过了，索引必须跟着重建
+	s.triggerIndex(ctx, workID)
 	if report != nil {
 		report("完成", 100)
 	}
@@ -115,11 +117,29 @@ type OriginalService struct {
 	projects  ProjectRepository
 	files     storage.Store
 	maxUpload int64
+	// indexer 是"原著内容落库后重建索引"的触发点（Phase 9 §9.1.4）。
+	indexer IndexTrigger
 }
 
 // NewOriginalService 构建服务。
 func NewOriginalService(repo OriginalRepository, projects ProjectRepository, files storage.Store, maxUploadBytes int64) *OriginalService {
 	return &OriginalService{repo: repo, projects: projects, files: files, maxUpload: maxUploadBytes}
+}
+
+// SetIndexTrigger 注入索引入队能力（Phase 9 §9.1.4：原著导入/重解析完成后重建索引）。
+func (s *OriginalService) SetIndexTrigger(t IndexTrigger) { s.indexer = t }
+
+// triggerIndex 入队全量重建原著索引；失败只记日志，不打断导入。
+//
+// 为什么原著走全量而不是按章：原文章节是整体替换的（导入/重解析），
+// 不存在"作者改了一章"这种高频增量场景；全量重建语义最简单，也不会漏章。
+func (s *OriginalService) triggerIndex(ctx context.Context, workID string) {
+	if s.indexer == nil {
+		return
+	}
+	if err := s.indexer.EnqueueIndex(ctx, domain.WorkKindOriginal, workID, "", ""); err != nil {
+		fmt.Printf("[warn] 原著索引入队失败（不影响导入结果）: work=%s %v\n", workID, err)
+	}
 }
 
 // CreateOriginalInput 是创建原著的入参。
@@ -275,6 +295,9 @@ func (s *OriginalService) Import(ctx context.Context, workID, fileName string, r
 	if err := s.repo.SetWorkSource(ctx, workID, sourceType, file.ID); err != nil {
 		return nil, err
 	}
+
+	// §9.1.4 触发点：导入完成后重建原著索引（异步，失败不阻塞导入）
+	s.triggerIndex(ctx, workID)
 
 	return &ImportResult{
 		FileID:       file.ID,

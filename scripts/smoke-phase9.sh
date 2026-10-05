@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Phase 9 §9.2 验收：上下文快照（Context Engine 接线）。
 #
-# 链路：原著导入 → 索引 → 二创建作品/卷/章 → 作者写第 1 章 → 索引二创
+# 链路：原著导入（索引自动触发）→ 检索召回 → 二创建作品/卷/章 → 作者写第 1 章（索引自动触发）
 #      → AI 写第 2 章 → 查第 2 章快照，断言"当时给了 AI 什么"可追溯：
 #      真实模型 / 真实模板版本 / 8 段上下文 / 检索来源（chunk id + 分数 + 作品归属）/ token 预算。
+#
+# 本脚本**不手工入队索引任务**：§9.1.4 要求索引由导入/保存自动触发，
+# 手工入队会把"自动触发坏了"这件事盖住 —— 那正是这一版要验的东西。
 #
 # 为什么必须真库真模型：快照写入失败只记日志、不打断写作（刻意的），
 # 所以"payload 组装正确"的单测不能替代"这一行真的落到库里"的验收。
@@ -72,6 +75,20 @@ wait_task() { # wait_task <task_id> [max_seconds]
   echo "${status:-TIMEOUT}"
 }
 
+# wait_index：等"系统自动触发"的 index_chunks 任务完成（本脚本不手工入队 —— 那正是要验的东西）。
+# 入参是过滤参数名与值：原著用 work_id，二创用 creative_work_id。
+wait_index() {
+  local param="$1" id="$2" limit="${3:-180}" status="" i=0
+  while [ "${i}" -lt "${limit}" ]; do
+    status="$(curl -s "${API}/tasks?${param}=${id}&type=index_chunks&page_size=1" \
+      | field "d['items'][0]['status'] if d['items'] else ''" 2>/dev/null || echo '')"
+    case "${status}" in COMPLETED|FAILED|CANCELLED) echo "${status}"; return ;; esac
+    sleep 1
+    i=$((i + 1))
+  done
+  echo "${status:-NO_TASK}"
+}
+
 PID=""; OID=""; CPID=""; CID=""
 cleanup() {
   # 工程级清理（含 chunks / tasks / 原著与二创从属表）—— 以前直接删 projects 会被外键拒绝
@@ -107,16 +124,17 @@ fi
 CH=$(curl -sf "${API}/original/${OID}/chapters?page=1&page_size=1" | field "d['total']")
 check "原著切分 8 章" "8" "${CH}"
 
-echo "== 2. 索引原著 + 检索召回（§9.1）"
-TASK=$(mk /tasks "{\"type\":\"index_chunks\",\"work_id\":\"${OID}\",\"input\":{\"work_kind\":\"original\",\"work_id\":\"${OID}\"}}" "d['id']")
-check "原著索引任务完成" "COMPLETED" "$(wait_task "${TASK}")"
+echo "== 2. 索引原著 + 检索召回（§9.1，索引由导入自动触发）"
+check "原著索引由导入自动触发并完成" "COMPLETED" "$(wait_index work_id "${OID}")"
+OCHUNKS=$(psqlq "select count(*) from chunks where work_id='${OID}'")
+check "原著分块已入库" "True" "$([ "${OCHUNKS:-0}" -gt 0 ] && echo True || echo False)"
 
 RESP=$(curl -sf -X POST "${API}/retrieval/search" -H 'Content-Type: application/json' \
   -d "{\"work_kind\":\"original\",\"work_id\":\"${OID}\",\"query\":\"青铜钥匙 断尾鹤\",\"top_k\":8}")
 HIT=$(echo "${RESP}" | field "d['items'][0]['content'] if d['items'] else ''")
 check "原著检索能召回第 1 章伏笔" "True" "$([[ "${HIT}" == *青铜钥匙* ]] && echo True || echo False)"
 
-echo "== 3. 建二创作品：作者先写第 1 章，再索引"
+echo "== 3. 建二创作品：作者写第 1 章（索引自动触发）"
 CPID=$(mk /projects '{"name":"Phase9上下文验收-二创","type":"CREATIVE"}' "d['id']")
 CID=$(mk "/original/${OID}/create-creative" "{\"project_id\":\"${CPID}\",\"title\":\"Phase9上下文验收同人\",\"description\":\"验收用\"}" "d['id']")
 VOL=$(mk "/creative/${CID}/volumes" '{"title":"第一卷","summary":"开局","sequence":1}' "d['id']")
@@ -127,12 +145,13 @@ CH2=$(mk "/creative/${CID}/chapters" \
   "{\"volume_id\":\"${VOL}\",\"chapter_no\":2,\"title\":\"账房里的灯\",\"summary\":\"他拿着钥匙去开夹墙\",\"purpose\":\"让沈砚用青铜钥匙打开夹墙，发现三十年前的军需账册\",\"conflict\":\"督军的人开始盯梢\",\"outcome\":\"夹墙打开\"}" \
   "d['id']")
 
-# 注意：二创作品在 tasks 表里要走 creative_work_id —— tasks.work_id 的外键指向 original_works，
+# 注意：二创作品在 tasks 表里走 creative_work_id —— tasks.work_id 的外键指向 original_works，
 # 把二创 id 塞进 work_id 会被外键拒绝（第一版脚本就是在这里静默失败的）。
-TASK=$(mk /tasks "{\"type\":\"index_chunks\",\"creative_work_id\":\"${CID}\",\"input\":{\"work_kind\":\"creative\",\"work_id\":\"${CID}\"}}" "d['id']")
-check "二创索引任务完成" "COMPLETED" "$(wait_task "${TASK}")"
+check "二创章节索引由保存自动触发并完成" "COMPLETED" "$(wait_index creative_work_id "${CID}")"
 CCHUNKS=$(psqlq "select count(*) from chunks where work_id='${CID}'")
-check "二创索引非空" "True" "$([ "${CCHUNKS:-0}" -gt 0 ] && echo True || echo False)"
+check "二创分块已入库（第 1 章正文）" "True" "$([ "${CCHUNKS:-0}" -gt 0 ] && echo True || echo False)"
+CH1REFS=$(psqlq "select count(*) from chunks where work_id='${CID}' and ref_id='${CH1}'")
+check "分块按章节 ref 归属（增量索引语义）" "True" "$([ "${CH1REFS:-0}" -gt 0 ] && echo True || echo False)"
 
 echo "== 4. AI 写第 2 章 → 落上下文快照（§9.2）"
 TASK=$(mk "/chapters/${CH2}/generate" '{"target_words":300,"instruction":"克制的短句，呼应第 1 章的伤口与钥匙"}' "d['id']")

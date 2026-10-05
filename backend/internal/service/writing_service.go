@@ -483,6 +483,9 @@ func (s *WritingService) RewriteText(ctx context.Context, runner PromptRunner, i
 	if !in.Action.Valid() {
 		return "", fmt.Errorf("%w：不支持的 AI 操作 %s", ErrBadRequest, in.Action)
 	}
+	// 改写/扩写/续写等编辑器内操作同样落快照（Phase 9 §9.2.3 要求覆盖这些链路）。
+	// 失败只记日志、不影响这次改写（与写本章一致）。
+	s.recordRewriteSnapshot(ctx, in)
 	if strings.TrimSpace(in.Text) == "" {
 		return "", fmt.Errorf("%w：请先选中要处理的文本", ErrBadRequest)
 	}
@@ -749,5 +752,39 @@ func (s *WritingService) recordGenerateSnapshot(
 	}
 	if _, err := s.snapshots.Record(ctx, &chapterID, domain.SnapshotGenerate, payload); err != nil {
 		fmt.Printf("[warn] 写本章快照失败（不影响本次生成）: %v\n", err)
+	}
+}
+
+// snapshotKindForAction 把编辑器动作映射到快照 kind（清单定义的类型有限，其余归入 rewrite）。
+func snapshotKindForAction(action RewriteAction) domain.SnapshotKind {
+	switch action {
+	case RewriteActionContinue:
+		return domain.SnapshotContinue
+	case RewriteActionExpand:
+		return domain.SnapshotExpand
+	default:
+		return domain.SnapshotRewrite
+	}
+}
+
+// recordRewriteSnapshot 记录一次编辑器内 AI 操作（改写/扩写/续写/缩写/润色…）的上下文快照。
+func (s *WritingService) recordRewriteSnapshot(ctx context.Context, in RewriteInput) {
+	if s.snapshots == nil || in.ChapterID == "" {
+		return
+	}
+	payload := map[string]any{
+		"model_provider":     "default",
+		"prompt_version":     "rewrite.v2",
+		"author_instruction": in.Instruction,
+		"action":             string(in.Action),
+		"input_chars":        len([]rune(in.Text)),
+		"retrieved_sources":  []any{},
+		"token_budget": map[string]any{
+			"limit": 8000,
+		},
+	}
+	chapterID := in.ChapterID
+	if _, err := s.snapshots.Record(ctx, &chapterID, snapshotKindForAction(in.Action), payload); err != nil {
+		fmt.Printf("[warn] 编辑器 AI 操作快照失败（不影响本次处理）: %v\n", err)
 	}
 }

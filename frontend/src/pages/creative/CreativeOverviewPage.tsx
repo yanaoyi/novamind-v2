@@ -34,7 +34,7 @@ import { useCreativeWorks } from './useCreativeWorks'
 /** 全部维度按 100% 继承：派生人物与原著一致，作者之后再改 */
 const FULL_WEIGHTS: Record<string, number> = Object.fromEntries(DNA_KEYS.map((k) => [k, 100]))
 
-const ACCEPT = '.txt,.text,.md,.docx,.pdf'
+const ACCEPT = '.txt,.text,.md,.docx,.pdf,.epub,.mobi'
 
 /** 向导的四步（界面上让作者知道系统到底做了什么） */
 const STEPS = ['建原著文章并导入原文', '建同人作品', '继承人物 DNA', '继承世界观']
@@ -67,7 +67,7 @@ export default function CreativeOverviewPage() {
     const values = await importForm.validateFields()
     const file = fileList[0]?.originFileObj as File | undefined
     if (!file) {
-      message.warning('请先选择原著文件（TXT / MD / DOCX / PDF）')
+      message.warning('请先选择原著文件（TXT / MD / DOCX / PDF / EPUB / MOBI）')
       return
     }
     setRunning(true)
@@ -169,7 +169,7 @@ export default function CreativeOverviewPage() {
             导入一本书，开一部同人
           </Space>
         }
-        extra={<Tag color="blue">支持 TXT / Markdown / DOCX / PDF</Tag>}
+        extra={<Tag color="blue">支持 TXT / Markdown / DOCX / PDF / EPUB / MOBI</Tag>}
       >
         <Alert
           type="info"
@@ -222,7 +222,7 @@ export default function CreativeOverviewPage() {
           </p>
           <p className="ant-upload-text">点击或把原著文件拖到这里</p>
           <p className="ant-upload-hint">
-            PDF 需要带文本层（扫描件请先做 OCR）；重复导入同一本书会整体替换章节，不会重复累积。
+            PDF 需要带文本层（扫描件请先做 OCR）；EPUB / MOBI 自动按阅读顺序取正文；重复导入同一本书会整体替换章节，不会重复累积。
           </p>
         </Upload.Dragger>
         <Space style={{ marginTop: 12 }}>

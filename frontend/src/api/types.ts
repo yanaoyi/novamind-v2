@@ -59,7 +59,7 @@ export interface UpdateProjectInput {
 
 // ---------- 原著（对应后端 /api/v1/original） ----------
 
-export type SourceType = 'MANUAL' | 'TXT' | 'DOCX' | 'PDF'
+export type SourceType = 'MANUAL' | 'TXT' | 'DOCX' | 'PDF' | 'EPUB' | 'MOBI'
 export type OriginalStatus = 'DRAFT' | 'PARSED' | 'ANALYZED'
 
 export interface Original {

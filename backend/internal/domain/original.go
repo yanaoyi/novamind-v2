@@ -14,12 +14,15 @@ const (
 	SourceTypeTXT    SourceType = "TXT"
 	SourceTypeDOCX   SourceType = "DOCX"
 	SourceTypePDF    SourceType = "PDF"
+	// 电子书格式（2026-10-05 新增）：EPUB 是 zip+XHTML，MOBI 是 PalmDOC/PDB。
+	SourceTypeEPUB SourceType = "EPUB"
+	SourceTypeMOBI SourceType = "MOBI"
 )
 
 // Valid 判断来源类型是否合法。
 func (t SourceType) Valid() bool {
 	switch t {
-	case SourceTypeManual, SourceTypeTXT, SourceTypeDOCX, SourceTypePDF:
+	case SourceTypeManual, SourceTypeTXT, SourceTypeDOCX, SourceTypePDF, SourceTypeEPUB, SourceTypeMOBI:
 		return true
 	default:
 		return false

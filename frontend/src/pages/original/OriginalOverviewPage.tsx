@@ -113,7 +113,7 @@ export default function OriginalOverviewPage() {
 
   const onImport = async () => {
     if (!file) {
-      message.warning('请先选择原著文件（.txt 或 .docx）')
+      message.warning('请先选择原著文件（.txt / .docx / .pdf / .epub / .mobi）')
       return
     }
     setImporting(true)
@@ -225,16 +225,17 @@ export default function OriginalOverviewPage() {
           <Alert
             type="info"
             showIcon
-            message="支持 .txt 与 .docx"
+            message="支持 .txt / Markdown / .docx / .pdf / .epub / .mobi"
             description={
               <span>
                 文本编码自动识别（UTF-8 / GB18030 / Big5 等）；章节按「第X章」「Chapter N」「序章/楔子/尾声」等标题自动切分，
-                识别不到标题会按长度兜底切分。<b>重复导入会整体替换章节，不会重复累积。</b>
+                识别不到标题会按长度兜底切分。PDF 需要带文本层（扫描件请先做 OCR）；EPUB / MOBI 自动按阅读顺序取正文。
+                <b>重复导入会整体替换章节，不会重复累积。</b>
               </span>
             }
           />
           <Upload.Dragger
-            accept=".txt,.docx"
+            accept=".txt,.text,.md,.docx,.pdf,.epub,.mobi"
             maxCount={1}
             fileList={fileList}
             beforeUpload={(f) => {
@@ -258,7 +259,7 @@ export default function OriginalOverviewPage() {
               <InboxOutlined />
             </p>
             <p className="ant-upload-text">点击或拖拽原著文件到这里</p>
-            <p className="ant-upload-hint">.txt / .docx，单文件上限 50 MB</p>
+            <p className="ant-upload-hint">.txt / .md / .docx / .pdf / .epub / .mobi，单文件上限 50 MB</p>
           </Upload.Dragger>
           <Button type="primary" loading={importing} onClick={onImport} disabled={!file}>
             开始导入

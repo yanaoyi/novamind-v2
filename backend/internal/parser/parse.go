@@ -38,6 +38,20 @@ func ParseByFilename(filename string, data []byte) (text string, encoding string
 			return "", "", ErrEmptyText
 		}
 		return raw, "PDF(文本层)", nil
+	case ".epub":
+		raw, err := ParseEPUB(data)
+		if err != nil {
+			return "", "", err
+		}
+		return raw, "UTF-8(EPUB)", nil
+	case ".mobi":
+		raw, err := ParseMOBI(data)
+		if err != nil {
+			return "", "", err
+		}
+		return raw, "MOBI(文本层)", nil
+	case ".azw3", ".azw":
+		return "", "", fmt.Errorf("%w：%s 是 Kindle 专有封装，请先转成 EPUB 或 TXT 再导入", ErrUnsupportedFormat, ext)
 	case ".doc":
 		return "", "", fmt.Errorf("%w：.doc 旧格式请先另存为 .docx", ErrUnsupportedFormat)
 	default:

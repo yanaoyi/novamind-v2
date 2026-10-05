@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## [2026-10-05] 新增 EPUB / MOBI 导入（真实书库对照：双格式召回 100%，EPUB 抽样 60/60）
+
+原著导入此前只支持 TXT / MD / DOCX / PDF。实际书库（`/lzcapp/document/懒猫读书`，4355 本 EPUB + 977 本 MOBI）
+里绝大多数是电子书格式，本轮补齐。
+
+**1. 解析器（backend/internal/parser，仍是零第三方依赖）**
+
+| 文件 | 做法 |
+|---|---|
+| `epub.go` | 解开 zip → `META-INF/container.xml` → OPF 的 manifest/spine → 按**阅读顺序**读 XHTML/HTML → 剥标签取正文；路径解析容忍 `%XX` 转义、大小写不一致、锚点；复用既有 zip 炸弹防护与解压上限 |
+| `mobi.go` | PDB 头 → 记录索引 → PalmDOC 头（压缩方式/文本长度/记录数/记录大小）→ 逐条解压并按 `text_length` 截断 |
+| `htmltext.go` | 两者共用的 (X)HTML → 纯文本：块级标签换行、script/style/title 丢弃、注释与 CDATA 正确处理、命名/数字实体还原、空白折叠 |
+
+**2. MOBI 只支持 99.8% 的常见形态，剩下的明确报错**
+
+按 MobileRead 的 PalmDOC 规范实现 `compression=1`（未压缩）与 `=2`（PalmDOC LZ77 + 字节对），
+实测书库分布：**PalmDOC 958 本 / 未压缩 15 本 / HUFF-CDIC 2 本**。
+HUFF/CDIC 那 2 本给的是可操作的错误（"请用 Calibre 转成 EPUB，EPUB 已支持"），不静默出乱码。
+
+> 教训（值得记下）：第一版我按印象写了 PalmDOC 的两条规则（把 `0x01-0x08` 当成回指、
+> 把 `0x80-0xBF` 当成两个字面量），结果**真实书库 40/40 本解压失败**。
+> 查 MobileRead 规范后修正为：`0x01-0x08` 是从输入流原样复制 N 个字面量，
+> `0x80-0xBF` 是"长度-距离"回指对（14 位：11 位距离 + 3 位长度，复制 length+3 字节）。
+> 修正后同一本书的 mobi 与 epub 抽出结果**逐字一致**。
+
+**3. 打通导入链路（不只是解析器）**
+
+- 迁移 `0024`：放开 `original_works.source_type` 的 CHECK 约束（新增 `EPUB`/`MOBI`）——
+  不放开的话导入会在写来源类型时报约束错误；回滚脚本会把电子书记录收敛成 TXT。
+- `domain.SourceType` 新增两类；`ParseByFilename` 支持 `.epub`/`.mobi`（`.azw3`/`.azw` 明确提示先转换）。
+- 前端：原著上传与「导入一本书 → 一键开同人」都放开 `.epub`/`.mobi`，提示文案同步。
+
+**4. 验收（真实文件，非合成）**
+
+新增 `cmd/booktext`（抽取调试工具）与 `scripts/check-book-extract.sh`（**用同一本书的两种格式互相当基准**，
+与 `check-pdf-extract.sh` 用 PyMuPDF 当基准同理）：
+
+| 项 | 结果 |
+|---|---|
+| 同名双格式对照（12 本随机） | **平均召回 100.0%，12/12 ≥95%**（例：《基本上无害》epub 115643 字 / mobi 115644 字） |
+| 纯 EPUB 抽样 | **60/60 成功** |
+| 走完整导入接口（建工程 → 上传 → 解析 → 落库） | 《基本上无害》.epub 与 .mobi 均成功：**各 26 章 / 118325 字**（两格式结果一致），库里 `source_type` 分别为 EPUB / MOBI |
+| 单测 | 新增 6 例：EPUB spine 顺序与 script/style 丢弃、非 zip/缺 container 报错、MOBI 未压缩与 PalmDOC 超长文本、PalmDOC 回指、HUFF 明确报错、HTML 剥标签边界（含实体、CDATA、属性里的 `>`） |
+
 ## [2026-10-05] Phase 9 §9.6 总验收通过（剧本 11/11 + 冒烟 28/28 + 检索 6/6 + e2e 37/37 + 性能 P95 0.024s）
 
 Phase 9（Context Engine + Retrieval + Memory）收官验收，完整记录见 `docs/PHASE9-ACCEPTANCE.md`。

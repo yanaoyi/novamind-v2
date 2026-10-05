@@ -156,7 +156,7 @@ func (s *Server) getOriginal(c *gin.Context) {
 //	@Accept			multipart/form-data
 //	@Produce		json
 //	@Param			id		path		string	true	"原著 ID"
-//	@Param			file	formData	file	true	"原著文件（txt/docx）"
+//	@Param			file	formData	file	true	"原著文件（txt / md / docx / pdf / epub / mobi）"
 //	@Success		200		{object}	Envelope
 //	@Failure		400		{object}	Envelope
 //	@Failure		404		{object}	Envelope

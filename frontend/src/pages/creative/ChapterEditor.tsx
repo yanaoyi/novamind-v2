@@ -151,11 +151,23 @@ export default function ChapterEditor({ chapter, volumes, onChanged, onDeleted }
   // 保存「上一章的未落库改动」：切章时调用，失败只提示不阻塞切换
   const flushChapter = useCallback(
     async (chapterId: string, draftToSave: Draft) => {
+      // 与自动/手动保存共用同一把锁（v3 复审指出的窄缝：这里原本直调接口，绕过了在途锁，
+      // 可能和正在进行的保存互相覆盖）。等锁释放后再写，最多等 3 秒，超时就照常写并告警。
+      const deadline = Date.now() + 3000
+      while (savingRef.current && Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 100))
+      }
+      if (savingRef.current) {
+        message.warning('上一次保存还在进行，已直接保存上一章的修改，请留意内容')
+      }
+      savingRef.current = true
       try {
         await writingApi.updateChapter(chapterId, bodyOf(draftToSave))
         message.info('已先保存上一章的修改')
       } catch (err) {
         message.error(`上一章的修改没能保存：${errorMessage(err)}`)
+      } finally {
+        savingRef.current = false
       }
     },
     [],

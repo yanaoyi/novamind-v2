@@ -90,6 +90,13 @@
 
 为什么卡住：**DeepSeek 没有 `/embeddings` 端点**，当前挂着的验证账号跑不了向量。需要 BOSS 提供一个支持 embeddings 的 Key（OpenAI / 智谱 / 硅基流动 / 本地 BGE 任一）；拿到后我会：配置到 provider → 跑验收 → 把结果记进本文件与 CHANGELOG → 交付前照例 `purge`。
 
+**2026-10-05 补充：本地自建向量服务的尝试结果（BOSS 指示先不调试模型）**
+
+* 方案：用本机已装的 `sentence-transformers 5.6.0` + `torch 2.12.1`（CPU，16 核 / 15G 可用）自建 OpenAI 兼容的 `/v1/embeddings`，模型用 `BAAI/bge-small-zh-v1.5`；脚本已留档 `scripts/dev-embed-server.sh`（零额外依赖，标准库 http.server + sentence-transformers）。
+* 结果：**模型权重拉不下来** —— `hf-mirror.com` 连不上（OSError 无法连接），官方 `huggingface.co` 请求长时间卡住（只有"未认证请求"的限速提示后无进展）。
+* 结论：本地路线**只差模型文件**，不是代码问题；等网络条件允许（走代理 / 设 `HF_TOKEN` / 手动放入模型目录）即可直接用该脚本起服务，无需改任何代码。
+* 当前向量路状态：代码与单测就绪，**①②（索引写向量、检索向量路）与 ③（真实召回验收）都仍待 Key 或可用的本地模型**。
+
 在此之前，第 1、2 项我会先实现并用**假上游**做单测（验证分批、限速、向量路与 BM25 的融合、以及"没有向量时自动跳过向量路"），确保代码路径可信；只有第 3 项标记为待 Key。
 
 1. 先读：`Phase9-任务书.md` → 本文件 → `docs/CHANGELOG.md`（2026-10-05 几条）→ `AGENTS.md`（Git 规则）

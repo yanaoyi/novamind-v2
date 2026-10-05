@@ -50,7 +50,18 @@ type WritingService struct {
 	repo      WritingRepository
 	creative  CreativeWorkReader
 	ctxReader ChapterContextReader
+	// snapshots 是上下文快照记录器（Phase 9 §9.2.3）。用窄接口注入而不是直接依赖 SnapshotService，
+	// 避免"SnapshotService 依赖 WritingService、WritingService 又依赖 SnapshotService"的循环。
+	snapshots SnapshotRecorder
 }
+
+// SnapshotRecorder 是"记录一次 AI 调用前的上下文快照"的能力（由 SnapshotService 实现）。
+type SnapshotRecorder interface {
+	Record(ctx context.Context, chapterID *string, kind domain.SnapshotKind, snapshot map[string]any) (*domain.ContextSnapshot, error)
+}
+
+// SetSnapshotRecorder 注入快照记录器（可选：未注入时写作照常，只是不留快照）。
+func (s *WritingService) SetSnapshotRecorder(r SnapshotRecorder) { s.snapshots = r }
 
 // CreativeWorkReader 只需要"确认二创作品存在并拿到它"。
 type CreativeWorkReader interface {
@@ -385,6 +396,9 @@ func (s *WritingService) GenerateChapterDraft(
 	if report != nil {
 		report("组装上下文", 20)
 	}
+	// 调模型之前先落快照（Phase 9 §9.2.3）：回答"AI 当时为什么这么写"。
+	// 失败只记日志、不打断写作 —— 快照是审计能力，不该成为写作链路的单点故障。
+	s.recordGenerateSnapshot(ctx, chapterID, chapterCtx, targetWords, instruction)
 	// 写本章要的是小说正文，走文本模式（JSON 模式会让上游返回空内容，见 ModelInvoker.RunTextPrompt）
 	reply, err := runner.RunTextPrompt(ctx, "chapter_generate", map[string]any{
 		"TargetWords":      targetWords,
@@ -698,5 +712,42 @@ func (s *WritingService) Export(ctx context.Context, workID, format string) ([]b
 
 	default:
 		return nil, "", "", domain.ErrExportFormatInvalid
+	}
+}
+
+// recordGenerateSnapshot 组装并写入一次"写本章"的上下文快照。
+//
+// payload 字段对齐修订清单 P0-3：模型 / Prompt 版本 / 作者指令 / 各段上下文 / 检索来源 /
+// token 预算（created_at 由仓储写入，作品归属由 SnapshotService 从 chapter_id 反查）。
+func (s *WritingService) recordGenerateSnapshot(
+	ctx context.Context,
+	chapterID string,
+	chapterCtx *ChapterContext,
+	targetWords int,
+	instruction string,
+) {
+	if s.snapshots == nil || chapterCtx == nil {
+		return
+	}
+	payload := map[string]any{
+		"model_provider":     "default",
+		"prompt_version":     "chapter_generate.v2",
+		"author_instruction": instruction,
+		"target_words":       targetWords,
+		"outline_context": map[string]any{
+			"chapter_goal": chapterCtx.ChapterGoal,
+			"scene":        chapterCtx.Scene,
+		},
+		"character_context": chapterCtx.CharacterContext,
+		"world_context":     chapterCtx.WorldContext,
+		"prev_summary":      chapterCtx.PreviousContext,
+		// 检索来源在 §9.1 接线完成后填充；当前空数组，不放假数据
+		"retrieved_sources": []any{},
+		"token_budget": map[string]any{
+			"limit": 8000,
+		},
+	}
+	if _, err := s.snapshots.Record(ctx, &chapterID, domain.SnapshotGenerate, payload); err != nil {
+		fmt.Printf("[warn] 写本章快照失败（不影响本次生成）: %v\n", err)
 	}
 }

@@ -177,6 +177,9 @@ func run() error {
 	// 上下文快照（Phase 9 §9.2）：只增不改，用于追溯"当时给了 AI 什么"
 	snapshots := service.NewSnapshotService(repository.NewContextSnapshotRepo(pg.DB), repository.NewCreativeRepo(pg.DB), writing, userRepo)
 
+	// 写作链路接入快照（Phase 9 §9.2.3）：调模型前留一份"当时给了 AI 什么"
+	writing.SetSnapshotRecorder(snapshots)
+
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)
 	versions.SetOutlineTreeVersioner(outlines)

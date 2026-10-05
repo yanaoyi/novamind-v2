@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yanaoyi/novamindv2/backend/internal/ai"
 )
@@ -73,6 +74,27 @@ func (m *ModelInvoker) run(ctx context.Context, promptName string, data any, jso
 		return "", fmt.Errorf("模型返回了空内容（prompt=%s）", prompt.Name)
 	}
 	return resp.Content, nil
+}
+
+// DescribePrompt 报出"下一次调用 promptName 会用的模型与模板版本"。
+//
+// 存在的理由（Phase 9 §9.2 P0-3）：快照必须在**调模型之前**落库，但快照里要写
+// "这次用的是哪个模型、哪个模板版本"。此前那两项是硬编码占位常量，等于事后追溯
+// 时最关键的元信息是假的。这里把解析提前，且不发起任何模型调用。
+func (m *ModelInvoker) DescribePrompt(ctx context.Context, promptName string) (string, string) {
+	version := ""
+	if m.prompts != nil {
+		if p, err := m.prompts.Get(promptName, ""); err == nil {
+			version = p.Version
+		}
+	}
+	model := ""
+	if m.providers != nil {
+		if cfg, _, err := m.providers.ResolveRuntime(ctx, ""); err == nil {
+			model = strings.TrimSpace(cfg.ModelName)
+		}
+	}
+	return model, version
 }
 
 // systemPrompt 按输出形态选择系统提示：结构化 vs 正文。

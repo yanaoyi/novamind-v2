@@ -5,9 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
+	// 内部上下文组装包与标准库 context 同名，这里按别名引入（ctxengine）。
+	ctxengine "github.com/yanaoyi/novamindv2/backend/internal/context"
 	"github.com/yanaoyi/novamindv2/backend/internal/domain"
+	"github.com/yanaoyi/novamindv2/backend/internal/retrieval"
 )
 
 // WritingRepository 是写作系统需要的仓储能力。
@@ -53,6 +57,8 @@ type WritingService struct {
 	// snapshots 是上下文快照记录器（Phase 9 §9.2.3）。用窄接口注入而不是直接依赖 SnapshotService，
 	// 避免"SnapshotService 依赖 WritingService、WritingService 又依赖 SnapshotService"的循环。
 	snapshots SnapshotRecorder
+	// retriever 是上下文组装时的检索来源（Phase 9 §9.2 接线）。未注入时检索段为空，写作照常。
+	retriever ContextRetriever
 }
 
 // SnapshotRecorder 是"记录一次 AI 调用前的上下文快照"的能力（由 SnapshotService 实现）。
@@ -62,6 +68,26 @@ type SnapshotRecorder interface {
 
 // SetSnapshotRecorder 注入快照记录器（可选：未注入时写作照常，只是不留快照）。
 func (s *WritingService) SetSnapshotRecorder(r SnapshotRecorder) { s.snapshots = r }
+
+// ContextRetriever 是"组装上下文时要用的检索"能力（由 RetrievalService 实现）。
+//
+// 同样用窄接口 + 可选注入：检索是增强能力，没接线时写作必须照常跑通
+// （这与"快照失败不打断写作"是同一条纪律）。
+type ContextRetriever interface {
+	Search(ctx context.Context, workKind, workID, query string, topK int) ([]retrieval.ScoredChunk, error)
+}
+
+// SetRetriever 注入检索（Phase 9 §9.2 接线）。
+func (s *WritingService) SetRetriever(r ContextRetriever) { s.retriever = r }
+
+// PromptMetaResolver 由 ModelInvoker 实现（可选）：在**调模型之前**报出
+// "这次要用哪个模型、哪个模板版本"，供快照如实记录。
+//
+// 之前快照里写的是占位常量（"default" / 硬编码版本号），那是真信息缺口：
+// 事后追溯"当时给了 AI 什么"时，模型与模板版本恰恰是回答"为什么这么写"的关键。
+type PromptMetaResolver interface {
+	DescribePrompt(ctx context.Context, promptName string) (model, promptVersion string)
+}
 
 // CreativeWorkReader 只需要"确认二创作品存在并拿到它"。
 type CreativeWorkReader interface {
@@ -316,13 +342,37 @@ type ChapterContext struct {
 	WorkTitle        string
 	ChapterGoal      string
 	Scene            string
+	TimelineContext  string
 	PreviousContext  string
 	CharacterContext string
 	WorldContext     string
 }
 
-// BuildContext 组装写作上下文：人物 DNA + 世界规则 + 前几章摘要。
+// contextSources 是一次上下文取数的结果：组装出来的上下文 + 作品归属。
+//
+// 为什么要带归属：Phase 9 §9.2 的检索要按 work_id 查（原著一部、二创一部），
+// 快照也要能标出"这条命中来自哪部作品"，光有 ChapterContext 是不够的。
+type contextSources struct {
+	Chapter        *domain.CreativeChapter
+	Context        *ChapterContext
+	CreativeWorkID string
+	OriginalWorkID string
+}
+
+// maxTimelineEvents 限制进上下文的时间线条数（其余交给预算截断，别先做无用的字符串拼接）。
+const maxTimelineEvents = 40
+
+// BuildContext 组装写作上下文：人物 DNA + 世界规则 + 时间线 + 前几章摘要。
 func (s *WritingService) BuildContext(ctx context.Context, chapterID string) (*ChapterContext, error) {
+	src, err := s.loadContext(ctx, chapterID)
+	if err != nil {
+		return nil, err
+	}
+	return src.Context, nil
+}
+
+// loadContext 是取数入口：把"组装一次上下文需要的全部事实"一次取齐。
+func (s *WritingService) loadContext(ctx context.Context, chapterID string) (*contextSources, error) {
 	chapter, err := s.repo.GetChapter(ctx, chapterID)
 	if err != nil {
 		return nil, err
@@ -331,11 +381,17 @@ func (s *WritingService) BuildContext(ctx context.Context, chapterID string) (*C
 	if err != nil {
 		return nil, err
 	}
-	out := &ChapterContext{
-		WorkTitle:   work.Title,
-		ChapterGoal: strings.TrimSpace(chapter.Purpose + " " + chapter.Summary),
-		Scene:       chapter.Title,
+	src := &contextSources{
+		Chapter: chapter,
+		Context: &ChapterContext{
+			WorkTitle:   work.Title,
+			ChapterGoal: strings.TrimSpace(chapter.Purpose + " " + chapter.Summary),
+			Scene:       chapter.Title,
+		},
+		CreativeWorkID: chapter.CreativeWorkID,
+		OriginalWorkID: work.OriginalWorkID,
 	}
+	out := src.Context
 
 	if s.ctxReader != nil {
 		if characters, err := s.ctxReader.ListCharacters(ctx, chapter.CreativeWorkID); err == nil {
@@ -362,6 +418,10 @@ func (s *WritingService) BuildContext(ctx context.Context, chapterID string) (*C
 			}
 			out.WorldContext = sb.String()
 		}
+		// 时间线（§9.2.1 第 4 段）：按 sequence 排序，去掉已删除的事件。
+		if events, err := s.ctxReader.GetTimeline(ctx, chapter.CreativeWorkID); err == nil {
+			out.TimelineContext = formatTimeline(events)
+		}
 	}
 
 	// 前情：本章之前最近 3 章的摘要
@@ -374,7 +434,105 @@ func (s *WritingService) BuildContext(ctx context.Context, chapterID string) (*C
 		}
 		out.PreviousContext = strings.Join(previous, "\n")
 	}
-	return out, nil
+	return src, nil
+}
+
+// formatTimeline 把二创时间线压成提示词用的一段文本。
+func formatTimeline(events []domain.CreativeTimelineEvent) string {
+	if len(events) == 0 {
+		return ""
+	}
+	ordered := make([]domain.CreativeTimelineEvent, len(events))
+	copy(ordered, events)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Sequence < ordered[j].Sequence })
+
+	var sb strings.Builder
+	kept := 0
+	for _, e := range ordered {
+		if kept >= maxTimelineEvents {
+			break
+		}
+		if e.Status == domain.TimelineRemoved {
+			continue
+		}
+		label := strings.TrimSpace(e.TimeLabel)
+		if label == "" {
+			label = fmt.Sprintf("第 %d 位", e.Sequence)
+		}
+		fmt.Fprintf(&sb, "- [%s] %s：%s %s\n", e.Status, label, e.Title, e.Description)
+		kept++
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+// retrievalQuery 由"本章要写什么 + 作者指令"派生检索词。
+//
+// 用章节目标而不是整段提示词：BM25 是词面匹配，塞太多无关词只会稀释权重；
+// 截到 200 字也是同一个理由（过长的 query 每个 char-bigram 都会被算进去）。
+func retrievalQuery(goal, scene, extra string) string {
+	q := strings.TrimSpace(strings.Join([]string{goal, scene, extra}, " "))
+	return trimChars(q, 200)
+}
+
+// gatherHits 按作品检索并转成上下文用的命中。
+//
+// 检索失败只记日志、返回空：检索是增强能力，不该成为写作链路的单点故障。
+func (s *WritingService) gatherHits(
+	ctx context.Context,
+	src *contextSources,
+	query string,
+	topK int,
+) (original, creative []ctxengine.RetrievalHit) {
+	if s.retriever == nil || src == nil || strings.TrimSpace(query) == "" {
+		return nil, nil
+	}
+	if src.OriginalWorkID != "" {
+		original = s.searchHits(ctx, domain.WorkKindOriginal, src.OriginalWorkID, query, topK)
+	}
+	if src.CreativeWorkID != "" {
+		creative = s.searchHits(ctx, domain.WorkKindCreative, src.CreativeWorkID, query, topK)
+	}
+	return original, creative
+}
+
+// searchHits 走一路检索并把结果转成组装层能用的结构。
+func (s *WritingService) searchHits(ctx context.Context, workKind, workID, query string, topK int) []ctxengine.RetrievalHit {
+	scored, err := s.retriever.Search(ctx, workKind, workID, query, topK)
+	if err != nil {
+		fmt.Printf("[warn] 检索失败（不影响本次写作）: %s/%s %v\n", workKind, workID, err)
+		return nil
+	}
+	hits := make([]ctxengine.RetrievalHit, 0, len(scored))
+	for _, c := range scored {
+		hits = append(hits, ctxengine.RetrievalHit{
+			ChunkID: c.ID, RefKind: c.RefKind, RefID: c.RefID, Seq: c.Seq,
+			Content: c.Content, Score: c.Score,
+		})
+	}
+	return hits
+}
+
+// chapterFacts 把已取到的事实装进组装层的入参。
+func chapterFacts(chapterID string, c *ChapterContext) ctxengine.ChapterFacts {
+	return ctxengine.ChapterFacts{
+		ChapterID:        chapterID,
+		ChapterGoal:      c.ChapterGoal,
+		CharacterContext: c.CharacterContext,
+		WorldContext:     c.WorldContext,
+		TimelineContext:  c.TimelineContext,
+		PreviousContext:  c.PreviousContext,
+	}
+}
+
+// promptMeta 取"这次调用将使用的模型与模板版本"；解析不出来时如实写 unknown，不编造。
+func promptMeta(ctx context.Context, runner PromptRunner, name string) (model, promptVersion string) {
+	if r, ok := runner.(PromptMetaResolver); ok {
+		m, v := r.DescribePrompt(ctx, name)
+		if strings.TrimSpace(m) != "" && strings.TrimSpace(v) != "" {
+			return m, name + "." + v
+		}
+	}
+	return "unknown", "unknown"
 }
 
 // GenerateChapterDraft 用 AI 生成本章正文草稿（供写作任务调用）。
@@ -386,34 +544,29 @@ func (s *WritingService) GenerateChapterDraft(
 	instruction string,
 	report func(stage string, percent int),
 ) (string, error) {
-	chapterCtx, err := s.BuildContext(ctx, chapterID)
+	src, err := s.loadContext(ctx, chapterID)
 	if err != nil {
 		return "", err
 	}
+	chapterCtx := src.Context
 	if targetWords <= 0 {
 		targetWords = 2000
 	}
 	if report != nil {
 		report("组装上下文", 20)
 	}
+	// Phase 9 §9.2 接线：检索 → 8 段组装（预算内）→ 提示词。提示词里给模型看的东西
+	// 与快照里记下的东西必须是同一份（下面 Snapshot 直接用 asm 的内容），否则
+	// "追溯当时给了 AI 什么"就会退化成"猜当时大概给了什么"。
+	originalHits, creativeHits := s.gatherHits(ctx, src,
+		retrievalQuery(chapterCtx.ChapterGoal, chapterCtx.Scene, instruction), retrieval.DefaultTopK)
+	asm := ctxengine.AssembleForChapter(
+		chapterFacts(chapterID, chapterCtx), originalHits, creativeHits, instruction)
 	// 调模型之前先落快照（Phase 9 §9.2.3）：回答"AI 当时为什么这么写"。
 	// 失败只记日志、不打断写作 —— 快照是审计能力，不该成为写作链路的单点故障。
-	s.recordGenerateSnapshot(ctx, chapterID, chapterCtx, targetWords, instruction)
+	s.recordGenerateSnapshot(ctx, chapterID, src, asm, originalHits, creativeHits, targetWords, runner)
 	// 写本章要的是小说正文，走文本模式（JSON 模式会让上游返回空内容，见 ModelInvoker.RunTextPrompt）
-	reply, err := runner.RunTextPrompt(ctx, "chapter_generate", map[string]any{
-		"TargetWords":      targetWords,
-		"ChapterGoal":      chapterCtx.ChapterGoal,
-		"Scene":            chapterCtx.Scene,
-		"CharacterContext": chapterCtx.CharacterContext,
-		"WorldContext":     chapterCtx.WorldContext,
-		"PreviousContext":  chapterCtx.PreviousContext,
-		"Instruction":      instruction,
-		// v2 模板新增的两段检索内容。模板引擎的 missingkey=error 要求这两段必须传，
-		// 否则渲染直接失败（引入 v2 时必须同步补上，别让"模板先行、调用方后补"变成静默故障）。
-		// 检索接线（§9.2）拿到真实命中后，把这两项换成 FormatRetrieval 的结果即可。
-		"RetrievedOriginal": "",
-		"RetrievedCreative": "",
-	})
+	reply, err := runner.RunTextPrompt(ctx, "chapter_generate", chapterGenerateVars(asm, chapterCtx.Scene, targetWords))
 	if err != nil {
 		return "", err
 	}
@@ -483,24 +636,25 @@ func (s *WritingService) RewriteText(ctx context.Context, runner PromptRunner, i
 	if !in.Action.Valid() {
 		return "", fmt.Errorf("%w：不支持的 AI 操作 %s", ErrBadRequest, in.Action)
 	}
-	// 改写/扩写/续写等编辑器内操作同样落快照（Phase 9 §9.2.3 要求覆盖这些链路）。
-	// 失败只记日志、不影响这次改写（与写本章一致）。
-	s.recordRewriteSnapshot(ctx, in)
 	if strings.TrimSpace(in.Text) == "" {
 		return "", fmt.Errorf("%w：请先选中要处理的文本", ErrBadRequest)
 	}
-	chapterCtx, err := s.BuildContext(ctx, in.ChapterID)
+	src, err := s.loadContext(ctx, in.ChapterID)
 	if err != nil {
 		return "", err
 	}
+	chapterCtx := src.Context
+	// §9.2 接线：编辑器内操作同样走"检索 → 8 段组装 → 提示词"（修订清单要求改写/扩写也覆盖）。
+	// 检索词用"选中文本 + 作者补充要求"：改写要呼应的是与这段文字相关的既有内容。
+	originalHits, creativeHits := s.gatherHits(ctx, src,
+		retrievalQuery(chapterCtx.ChapterGoal, in.Text, in.Instruction), retrieval.DefaultTopK)
+	asm := ctxengine.AssembleForChapter(
+		chapterFacts(in.ChapterID, chapterCtx), originalHits, creativeHits, in.Instruction)
+	// 改写/扩写/续写等编辑器内操作同样落快照（Phase 9 §9.2.3 要求覆盖这些链路）。
+	// 失败只记日志、不影响这次改写（与写本章一致）。
+	s.recordRewriteSnapshot(ctx, in, asm, originalHits, creativeHits, runner)
 	// 改写/扩写/缩写等返回的也是正文
-	return runner.RunTextPrompt(ctx, "rewrite", map[string]any{
-		"Action":           string(in.Action),
-		"Text":             in.Text,
-		"Instruction":      in.Instruction,
-		"CharacterContext": chapterCtx.CharacterContext,
-		"WorldContext":     chapterCtx.WorldContext,
-	})
+	return runner.RunTextPrompt(ctx, "rewrite", rewriteVars(asm, string(in.Action), in.Text))
 }
 
 // CheckConsistency 对指定章节做一致性检查，结果写入问题列表（规格书 §39）。
@@ -511,12 +665,10 @@ func (s *WritingService) CheckConsistency(
 	runner PromptRunner,
 	report func(stage string, percent int),
 ) (ConsistencyResult, error) {
-	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
+	work, err := s.creative.GetWorkByID(ctx, workID)
+	if err != nil {
 		return ConsistencyResult{}, err
 	}
-	// 一致性检查同样落快照（Phase 9 §9.2.3）：整本/多章检查按"作品级"记录一次，
-	// 记录检查了哪些章节，便于回溯"这次检查看到的上下文是什么"。
-	s.recordConsistencySnapshot(ctx, workID, chapterIDs)
 	chapters := make([]domain.CreativeChapter, 0)
 	if len(chapterIDs) > 0 {
 		for _, id := range chapterIDs {
@@ -545,6 +697,7 @@ func (s *WritingService) CheckConsistency(
 	}
 
 	cctx := s.BuildConsistencyContext(ctx, workID)
+	src := &contextSources{CreativeWorkID: work.ID, OriginalWorkID: work.OriginalWorkID}
 
 	result := ConsistencyResult{}
 	for i, chapter := range chapters {
@@ -553,9 +706,24 @@ func (s *WritingService) CheckConsistency(
 		}
 		result.Checked++
 
+		// §9.4：一致性检查也走 Context Engine（kind=consistency，同样落快照）。
+		// 检索词用被检查的正文本身 —— 要查的就是"这段文字与既有内容有没有冲突"。
+		originalHits, creativeHits := s.gatherHits(ctx, src,
+			retrievalQuery(chapter.Title, chapter.Content, cctx.Plot), retrieval.DefaultTopK)
+		asm := ctxengine.AssembleForChapter(ctxengine.ChapterFacts{
+			ChapterID:        chapter.ID,
+			CharacterContext: cctx.Characters,
+			WorldContext:     cctx.World,
+			TimelineContext:  cctx.Timeline,
+			PreviousContext:  cctx.Plot,
+		}, originalHits, creativeHits, "")
+		// 快照按"每一次 AI 调用"落一条（这里是每章一条，chapter_id 直接锚到该章），
+		// 这样事后能精确回答"审这一章时给了模型什么"。
+		s.recordConsistencySnapshot(ctx, workID, cctx, asm, originalHits, creativeHits, chapter, runner)
+
 		// 规格书 §57/§58：模型输出必须结构化；失败要重试，重试仍失败要如实记录。
 		// 以前是直接 continue —— 跳过等于"这章没问题"，是假阴性。
-		obj, err := runConsistencyPrompt(ctx, runner, cctx, chapter.Content)
+		obj, err := runConsistencyPrompt(ctx, runner, consistencyVars(asm, cctx.Inheritance, chapter.Content))
 		if err != nil {
 			result.FailedChapters = append(result.FailedChapters,
 				fmt.Sprintf("第%d章 %s", chapter.ChapterNo, chapter.Title))
@@ -594,23 +762,13 @@ type ConsistencyResult struct {
 	FailedChapters []string `json:"failed_chapters"`
 }
 
-// runConsistencyPrompt 送审单章；模型输出不是合法 JSON 时重试一次，
-// 两次都不行就返回错误，由调用方记为「本章检查失败」。
+// runConsistencyPrompt 送审单章（vars 由 consistencyVars 从组装结果构造）；
+// 模型输出不是合法 JSON 时重试一次，两次都不行就返回错误，由调用方记为「本章检查失败」。
 func runConsistencyPrompt(
 	ctx context.Context,
 	runner PromptRunner,
-	cctx ConsistencyContext,
-	chapterContent string,
+	vars map[string]any,
 ) (map[string]any, error) {
-	vars := map[string]any{
-		"CharacterContext":   cctx.Characters,
-		"WorldContext":       cctx.World,
-		"TimelineContext":    cctx.Timeline,
-		"PlotContext":        cctx.Plot,
-		"InheritanceContext": cctx.Inheritance,
-		"ChapterText":        trimChars(chapterContent, maxAnalysisChars),
-	}
-
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		reply, err := runner.RunPrompt(ctx, "consistency_check", vars)
@@ -728,30 +886,37 @@ func (s *WritingService) Export(ctx context.Context, workID, format string) ([]b
 func (s *WritingService) recordGenerateSnapshot(
 	ctx context.Context,
 	chapterID string,
-	chapterCtx *ChapterContext,
+	src *contextSources,
+	asm *ctxengine.Assembly,
+	originalHits, creativeHits []ctxengine.RetrievalHit,
 	targetWords int,
-	instruction string,
+	runner PromptRunner,
 ) {
-	if s.snapshots == nil || chapterCtx == nil {
+	if s.snapshots == nil || src == nil || src.Context == nil || asm == nil {
 		return
 	}
+	model, promptVersion := promptMeta(ctx, runner, "chapter_generate")
 	payload := map[string]any{
-		"model_provider":     "default",
-		"prompt_version":     "chapter_generate.v2",
-		"author_instruction": instruction,
+		"creative_work_id":   src.CreativeWorkID,
+		"model":              model,
+		"prompt_version":     promptVersion,
+		"author_instruction": asm.Sections.AuthorInstruction,
 		"target_words":       targetWords,
 		"outline_context": map[string]any{
-			"chapter_goal": chapterCtx.ChapterGoal,
-			"scene":        chapterCtx.Scene,
+			"chapter_goal": asm.Sections.ChapterGoal,
+			"scene":        src.Context.Scene,
 		},
-		"character_context": chapterCtx.CharacterContext,
-		"world_context":     chapterCtx.WorldContext,
-		"prev_summary":      chapterCtx.PreviousContext,
-		// 检索来源在 §9.1 接线完成后填充；当前空数组，不放假数据
-		"retrieved_sources": []any{},
-		"token_budget": map[string]any{
-			"limit": 8000,
-		},
+		"character_context":  asm.Sections.Characters,
+		"world_context":      asm.Sections.World,
+		"timeline_context":   asm.Sections.Timeline,
+		"prev_summary":       asm.Sections.PrevSummary,
+		"retrieved_original": asm.Sections.RetrievedOriginal,
+		"retrieved_creative": asm.Sections.RetrievedCreative,
+		"retrieved_sources":  snapshotSources(originalHits, creativeHits),
+		"token_budget":       snapshotBudget(asm),
+	}
+	if src.OriginalWorkID != "" {
+		payload["original_work_id"] = src.OriginalWorkID
 	}
 	if _, err := s.snapshots.Record(ctx, &chapterID, domain.SnapshotGenerate, payload); err != nil {
 		fmt.Printf("[warn] 写本章快照失败（不影响本次生成）: %v\n", err)
@@ -771,20 +936,28 @@ func snapshotKindForAction(action RewriteAction) domain.SnapshotKind {
 }
 
 // recordRewriteSnapshot 记录一次编辑器内 AI 操作（改写/扩写/续写/缩写/润色…）的上下文快照。
-func (s *WritingService) recordRewriteSnapshot(ctx context.Context, in RewriteInput) {
-	if s.snapshots == nil || in.ChapterID == "" {
+func (s *WritingService) recordRewriteSnapshot(
+	ctx context.Context,
+	in RewriteInput,
+	asm *ctxengine.Assembly,
+	originalHits, creativeHits []ctxengine.RetrievalHit,
+	runner PromptRunner,
+) {
+	if s.snapshots == nil || in.ChapterID == "" || asm == nil {
 		return
 	}
+	model, promptVersion := promptMeta(ctx, runner, "rewrite")
 	payload := map[string]any{
-		"model_provider":     "default",
-		"prompt_version":     "rewrite.v2",
-		"author_instruction": in.Instruction,
+		"model":              model,
+		"prompt_version":     promptVersion,
+		"author_instruction": asm.Sections.AuthorInstruction,
 		"action":             string(in.Action),
 		"input_chars":        len([]rune(in.Text)),
-		"retrieved_sources":  []any{},
-		"token_budget": map[string]any{
-			"limit": 8000,
-		},
+		"character_context":  asm.Sections.Characters,
+		"world_context":      asm.Sections.World,
+		"retrieved_creative": asm.Sections.RetrievedCreative,
+		"retrieved_sources":  snapshotSources(originalHits, creativeHits),
+		"token_budget":       snapshotBudget(asm),
 	}
 	chapterID := in.ChapterID
 	if _, err := s.snapshots.Record(ctx, &chapterID, snapshotKindForAction(in.Action), payload); err != nil {
@@ -792,24 +965,61 @@ func (s *WritingService) recordRewriteSnapshot(ctx context.Context, in RewriteIn
 	}
 }
 
-// recordConsistencySnapshot 记录一次一致性检查的上下文快照（作品级，chapter_id 为空）。
-func (s *WritingService) recordConsistencySnapshot(ctx context.Context, workID string, chapterIDs []string) {
-	if s.snapshots == nil || workID == "" {
+// recordConsistencySnapshot 记录一次一致性检查的上下文快照。
+//
+// 粒度是"每次 AI 调用"（即每章一条，chapter_id 锚到该章），而不是整批一条：
+// 只有锚到章节，事后才能回答"审这一章时到底给了模型什么"。
+func (s *WritingService) recordConsistencySnapshot(
+	ctx context.Context,
+	workID string,
+	cctx ConsistencyContext,
+	asm *ctxengine.Assembly,
+	originalHits, creativeHits []ctxengine.RetrievalHit,
+	chapter domain.CreativeChapter,
+	runner PromptRunner,
+) {
+	if s.snapshots == nil || workID == "" || asm == nil {
 		return
 	}
-	checked := chapterIDs
-	if checked == nil {
-		checked = []string{}
-	}
+	model, promptVersion := promptMeta(ctx, runner, "consistency_check")
 	payload := map[string]any{
-		"creative_work_id":  workID,
-		"model_provider":    "default",
-		"prompt_version":    "consistency_check.v2",
-		"checked_chapters":  checked,
-		"retrieved_sources": []any{},
-		"token_budget":      map[string]any{"limit": 8000},
+		"creative_work_id":    workID,
+		"chapter_no":          chapter.ChapterNo,
+		"chapter_chars":       len([]rune(chapter.Content)),
+		"model":               model,
+		"prompt_version":      promptVersion,
+		"character_context":   asm.Sections.Characters,
+		"world_context":       asm.Sections.World,
+		"timeline_context":    asm.Sections.Timeline,
+		"plot_context":        asm.Sections.PrevSummary,
+		"inheritance_context": cctx.Inheritance,
+		"retrieved_original":  asm.Sections.RetrievedOriginal,
+		"retrieved_creative":  asm.Sections.RetrievedCreative,
+		"retrieved_sources":   snapshotSources(originalHits, creativeHits),
+		"token_budget":        snapshotBudget(asm),
 	}
-	if _, err := s.snapshots.Record(ctx, nil, domain.SnapshotConsistency, payload); err != nil {
+	chapterID := chapter.ID
+	if _, err := s.snapshots.Record(ctx, &chapterID, domain.SnapshotConsistency, payload); err != nil {
 		fmt.Printf("[warn] 一致性检查快照失败（不影响本次检查）: %v\n", err)
 	}
+}
+
+// snapshotBudget 把"预算 / 用量 / 每段 token / 被截断的段"整理进快照。
+func snapshotBudget(asm *ctxengine.Assembly) map[string]any {
+	truncated := asm.Truncated
+	if truncated == nil {
+		truncated = []string{}
+	}
+	return map[string]any{
+		"limit":      ctxengine.TotalBudget,
+		"used":       asm.Total,
+		"by_section": asm.Tokens,
+		"truncated":  truncated,
+	}
+}
+
+// snapshotSources 合并两条检索路的来源清单（原著 + 二创），每条都带 work_kind 以便区分。
+func snapshotSources(originalHits, creativeHits []ctxengine.RetrievalHit) []map[string]any {
+	out := ctxengine.RetrievalSources(domain.WorkKindOriginal, originalHits)
+	return append(out, ctxengine.RetrievalSources(domain.WorkKindCreative, creativeHits)...)
 }

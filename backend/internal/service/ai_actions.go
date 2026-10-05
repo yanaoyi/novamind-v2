@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	ctxengine "github.com/yanaoyi/novamindv2/backend/internal/context"
 	"github.com/yanaoyi/novamindv2/backend/internal/domain"
+	"github.com/yanaoyi/novamindv2/backend/internal/retrieval"
 )
 
 // 规格书 §38 §49 要求的 AI 能力：续写 / 扩写 / 生成 / 问答 / 就地分析。
@@ -86,29 +88,42 @@ type AnalyzeTextInput struct {
 func (s *WritingService) AnalyzeText(ctx context.Context, runner PromptRunner, in AnalyzeTextInput) (map[string]any, error) {
 	text := strings.TrimSpace(in.Text)
 	cctx := ConsistencyContext{}
+	var (
+		src *contextSources
+		asm *ctxengine.Assembly
+	)
 
 	if in.ChapterID != "" {
-		chapter, err := s.repo.GetChapter(ctx, in.ChapterID)
+		loaded, err := s.loadContext(ctx, in.ChapterID)
 		if err != nil {
 			return nil, err
 		}
+		src = loaded
 		if text == "" {
-			text = chapter.Content
+			text = strings.TrimSpace(loaded.Chapter.Content)
 		}
-		cctx = s.BuildConsistencyContext(ctx, chapter.CreativeWorkID)
+		cctx = s.BuildConsistencyContext(ctx, loaded.CreativeWorkID)
 	}
 	if strings.TrimSpace(text) == "" {
 		return nil, fmt.Errorf("%w：没有可分析的文本", ErrBadRequest)
 	}
-	// 就地分析也落快照（Phase 9 §9.2.3）；失败只记日志、不影响本次分析。
-	s.recordAnalyzeSnapshot(ctx, in.ChapterID, in.Focus, len([]rune(text)))
 
-	reply, err := runner.RunPrompt(ctx, "text_analyze", map[string]any{
-		"Focus":            in.Focus,
-		"Text":             trimChars(text, maxAnalysisChars),
-		"CharacterContext": cctx.Characters,
-		"WorldContext":     cctx.World,
-	})
+	// §9.2 接线：就地分析同样走"检索 → 8 段组装 → 提示词"，并落快照。
+	if src != nil {
+		originalHits, creativeHits := s.gatherHits(ctx, src,
+			retrievalQuery(in.Focus, text, cctx.Plot), retrieval.DefaultTopK)
+		asm = ctxengine.AssembleForChapter(ctxengine.ChapterFacts{
+			ChapterID:        src.Chapter.ID,
+			CharacterContext: cctx.Characters,
+			WorldContext:     cctx.World,
+			TimelineContext:  cctx.Timeline,
+			PreviousContext:  cctx.Plot,
+		}, originalHits, creativeHits, in.Focus)
+		// 就地分析也落快照（Phase 9 §9.2.3）；失败只记日志、不影响本次分析。
+		s.recordAnalyzeSnapshot(ctx, src, asm, originalHits, creativeHits, len([]rune(text)), runner)
+	}
+
+	reply, err := runner.RunPrompt(ctx, "text_analyze", analyzeVars(asm, cctx, in.Focus, text))
 	if err != nil {
 		return nil, err
 	}
@@ -232,18 +247,34 @@ func tailRunes(s string, n int) string {
 }
 
 // recordAnalyzeSnapshot 记录一次就地分析的上下文快照。
-func (s *WritingService) recordAnalyzeSnapshot(ctx context.Context, chapterID, focus string, textRunes int) {
-	if s.snapshots == nil || chapterID == "" {
+func (s *WritingService) recordAnalyzeSnapshot(
+	ctx context.Context,
+	src *contextSources,
+	asm *ctxengine.Assembly,
+	originalHits, creativeHits []ctxengine.RetrievalHit,
+	textRunes int,
+	runner PromptRunner,
+) {
+	if s.snapshots == nil || src == nil || src.Chapter == nil || asm == nil {
 		return
 	}
+	model, promptVersion := promptMeta(ctx, runner, "text_analyze")
 	payload := map[string]any{
-		"model_provider":    "default",
-		"prompt_version":    "text_analyze.v1",
-		"focus":             focus,
-		"analyzed_chars":    textRunes,
-		"retrieved_sources": []any{},
-		"token_budget":      map[string]any{"limit": 8000},
+		"creative_work_id":   src.CreativeWorkID,
+		"model":              model,
+		"prompt_version":     promptVersion,
+		"focus":              asm.Sections.AuthorInstruction,
+		"analyzed_chars":     textRunes,
+		"character_context":  asm.Sections.Characters,
+		"world_context":      asm.Sections.World,
+		"timeline_context":   asm.Sections.Timeline,
+		"plot_context":       asm.Sections.PrevSummary,
+		"retrieved_original": asm.Sections.RetrievedOriginal,
+		"retrieved_creative": asm.Sections.RetrievedCreative,
+		"retrieved_sources":  snapshotSources(originalHits, creativeHits),
+		"token_budget":       snapshotBudget(asm),
 	}
+	chapterID := src.Chapter.ID
 	if _, err := s.snapshots.Record(ctx, &chapterID, domain.SnapshotAnalyze, payload); err != nil {
 		fmt.Printf("[warn] 就地分析快照失败（不影响本次分析）: %v\n", err)
 	}

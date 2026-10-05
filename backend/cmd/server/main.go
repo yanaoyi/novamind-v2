@@ -179,6 +179,8 @@ func run() error {
 
 	// 写作链路接入快照（Phase 9 §9.2.3）：调模型前留一份"当时给了 AI 什么"
 	writing.SetSnapshotRecorder(snapshots)
+	// 写作链路接入检索（Phase 9 §9.2 接线）：把 BM25/RRF 的命中送进上下文组装
+	writing.SetRetriever(retrievalSvc)
 
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)

@@ -64,3 +64,55 @@ func TestAssembleForChapterRespectsBudget(t *testing.T) {
 		t.Error("固定段不该被清空")
 	}
 }
+
+// 检索段必须"整条纳入"：预算不够时丢整条并说明，而不是把某条截成半句话
+// （半句话会被模型当成完整设定，这比少给一条更危险）。
+func TestFormatRetrievalWithinDropsWholeHits(t *testing.T) {
+	hits := make([]RetrievalHit, 0, 8)
+	markers := []string{}
+	for i := 0; i < 8; i++ {
+		marker := strings.Repeat(string(rune('甲'+i)), 500)
+		markers = append(markers, marker)
+		hits = append(hits, RetrievalHit{
+			ChunkID: "c", RefKind: "chapter", Seq: i + 1, Content: marker, Score: 0.5,
+		})
+	}
+	got := FormatRetrievalWithin(hits, BudgetRetrievalOriginal)
+
+	included := strings.Count(got, "【")
+	if included == 0 || included >= len(hits) {
+		t.Fatalf("应丢弃后面的整条命中，实际纳入 %d 条", included)
+	}
+	if !strings.Contains(got, "因预算未纳入") {
+		t.Errorf("丢弃命中时应如实标注，实际: %s", got)
+	}
+	if EstimateTokens(got) > BudgetRetrievalOriginal {
+		t.Errorf("含说明行也不该撑出预算，实际 %d", EstimateTokens(got))
+	}
+	full := 0
+	for _, m := range markers {
+		if strings.Contains(got, m) {
+			full++
+		}
+	}
+	if full != included {
+		t.Errorf("纳入 %d 条但只有 %d 条正文完整（存在被切断的残句）", included, full)
+	}
+}
+
+func TestRetrievalSourcesCarryWorkKindAndRef(t *testing.T) {
+	refID := "ch-9"
+	sources := RetrievalSources("creative", []RetrievalHit{
+		{ChunkID: "c1", RefKind: "chapter", RefID: &refID, Seq: 2, Score: 0.31},
+	})
+	if len(sources) != 1 {
+		t.Fatalf("应产出 1 条来源，实际 %d", len(sources))
+	}
+	item := sources[0]
+	if item["work_kind"] != "creative" || item["ref_kind"] != "chapter" || item["ref_id"] != "ch-9" {
+		t.Errorf("来源标注不完整: %#v", item)
+	}
+	if _, ok := item["score"].(float64); !ok {
+		t.Errorf("score 应为数值以便快照检索: %#v", item["score"])
+	}
+}

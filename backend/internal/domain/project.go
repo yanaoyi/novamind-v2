@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// ProjectType 区分原著工程与二创工程（规格书 §7）。
+// ProjectType 区分原著文章与二创文章（规格书 §7）。
 type ProjectType string
 
 const (
-	// ProjectTypeOriginal 原著工程：承载 Original Model。
+	// ProjectTypeOriginal 原著文章：承载 Original Model。
 	ProjectTypeOriginal ProjectType = "ORIGINAL"
-	// ProjectTypeCreative 二创工程：承载 Creative Model。
+	// ProjectTypeCreative 二创文章：承载 Creative Model。
 	ProjectTypeCreative ProjectType = "CREATIVE"
 )
 
@@ -23,7 +23,7 @@ func (t ProjectType) Valid() bool {
 	return t == ProjectTypeOriginal || t == ProjectTypeCreative
 }
 
-// ProjectStatus 是工程状态。
+// ProjectStatus 是文章状态。
 type ProjectStatus string
 
 const (
@@ -52,7 +52,7 @@ var (
 	ErrProjectNotFound = errors.New("项目不存在")
 )
 
-// Project 是工程实体。
+// Project 是文章实体。
 // 说明：ID 使用 UUID 字符串；DeletedAt 非空表示已软删除（规格书 §51）。
 type Project struct {
 	ID          string
@@ -65,7 +65,7 @@ type Project struct {
 	DeletedAt   *time.Time
 }
 
-// Validate 校验工程实体的业务约束。
+// Validate 校验文章实体的业务约束。
 func (p *Project) Validate() error {
 	name := strings.TrimSpace(p.Name)
 	if name == "" {

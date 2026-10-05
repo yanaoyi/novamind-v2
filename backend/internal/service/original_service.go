@@ -130,8 +130,8 @@ type CreateOriginalInput struct {
 	Description string
 }
 
-// Create 为指定工程创建原著。
-// 约束：工程必须是 ORIGINAL 类型；一个工程只能有一部原著。
+// Create 为指定文章创建原著。
+// 约束：文章必须是 ORIGINAL 类型；一个文章只能有一部原著。
 func (s *OriginalService) Create(ctx context.Context, in CreateOriginalInput) (*domain.OriginalWork, error) {
 	project, err := s.projects.GetByID(ctx, in.ProjectID)
 	if err != nil {

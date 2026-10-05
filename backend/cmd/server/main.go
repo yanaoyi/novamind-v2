@@ -52,7 +52,7 @@ func run() error {
 	}
 
 	// PostgreSQL：配置了就必须可用，没配置直接拒绝启动。
-	// 说明：早期版本在缺 DATABASE_URL 时"降级启动"，结果工程路由不会注册、
+	// 说明：早期版本在缺 DATABASE_URL 时"降级启动"，结果文章路由不会注册、
 	// 接口静默返回 404 —— 这种"残废服务"比启动失败更难排查，故改为 fail fast。
 	if cfg.DatabaseURL == "" {
 		return errors.New("DATABASE_URL 未配置：请在 backend/.env 中配置，" +

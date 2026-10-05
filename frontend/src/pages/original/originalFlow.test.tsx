@@ -8,7 +8,7 @@ import App from '../../App'
 import { useOriginalStore } from '../../stores/originalStore'
 import { useProjectStore } from '../../stores/projectStore'
 
-// ---------- 假后端：把"工程 → 原著 → 章节"的关系存在内存里 ----------
+// ---------- 假后端：把"文章 → 原著 → 章节"的关系存在内存里 ----------
 
 interface FakeProject {
   id: string
@@ -179,7 +179,7 @@ beforeEach(() => {
   projects = [
     {
       id: 'p1',
-      name: '暗涌工程',
+      name: '暗涌文章',
       description: '',
       type: 'ORIGINAL',
       status: 'ACTIVE',
@@ -212,16 +212,16 @@ beforeEach(() => {
 })
 
 describe('原著工作流', () => {
-  it('从工程进入 → 创建原著 → 上传导入 → 看目录 → 读章节', async () => {
+  it('从文章进入 → 创建原著 → 上传导入 → 看目录 → 读章节', async () => {
     renderAtOriginal()
 
-    // 1) 自动定位到传入的工程，因为没有原著，出现创建表单
-    const createCard = await screen.findByText('该工程还没有原著，创建一个')
+    // 1) 自动定位到传入的文章，因为没有原著，出现创建表单
+    const createCard = await screen.findByText('该文章还没有原著，创建一个')
     expect(createCard).toBeInTheDocument()
 
-    // 标题应预填工程名
+    // 标题应预填文章名
     const titleInput = screen.getByLabelText('原著标题')
-    expect(titleInput).toHaveValue('暗涌工程')
+    expect(titleInput).toHaveValue('暗涌文章')
 
     fireEvent.click(screen.getByRole('button', { name: /创\s*建\s*原\s*著/ }))
 

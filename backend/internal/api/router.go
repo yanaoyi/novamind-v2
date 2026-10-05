@@ -86,7 +86,7 @@ func (s *Server) Router() *gin.Engine {
 		v1.GET("/health", s.handleHealth)
 		v1.GET("/openapi.yaml", s.handleOpenAPISpec)
 
-		// 工程管理（规格书 §49 Projects）
+		// 文章管理（规格书 §49 Projects）
 		projects := v1.Group("/projects")
 		{
 			projects.GET("", s.listProjects)

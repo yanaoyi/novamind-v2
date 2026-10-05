@@ -30,7 +30,7 @@ type updateProjectRequest struct {
 
 // ---------- 响应 DTO ----------
 
-// ProjectResponse 是工程的对外表示。
+// ProjectResponse 是文章的对外表示。
 type ProjectResponse struct {
 	ID          string    `json:"id" example:"01923456-789a-7bcd-ef01-23456789abcd"`
 	Name        string    `json:"name" example:"人间真相"`
@@ -63,14 +63,14 @@ func toProjectResponse(p domain.Project) ProjectResponse {
 
 // ---------- Handlers ----------
 
-// createProject 创建工程。
+// createProject 创建文章。
 //
-//	@Summary		创建工程
-//	@Description	创建一个原著（ORIGINAL）或二创（CREATIVE）工程
+//	@Summary		创建文章
+//	@Description	创建一个原著（ORIGINAL）或二创（CREATIVE）文章
 //	@Tags			projects
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		createProjectRequest	true	"工程信息"
+//	@Param			body	body		createProjectRequest	true	"文章信息"
 //	@Success		201		{object}	Envelope
 //	@Failure		400		{object}	Envelope
 //	@Failure		500		{object}	Envelope
@@ -97,16 +97,16 @@ func (s *Server) createProject(c *gin.Context) {
 	Created(c, toProjectResponse(*p))
 }
 
-// listProjects 分页查询工程。
+// listProjects 分页查询文章。
 //
-//	@Summary		工程列表
-//	@Description	分页查询工程，可按类型、状态过滤，按名称模糊搜索
+//	@Summary		文章列表
+//	@Description	分页查询文章，可按类型、状态过滤，按名称模糊搜索
 //	@Tags			projects
 //	@Produce		json
 //	@Param			page		query		int		false	"页码，默认 1"
 //	@Param			page_size	query		int		false	"每页条数，默认 20，最大 100"
-//	@Param			type		query		string	false	"工程类型"	Enums(ORIGINAL, CREATIVE)
-//	@Param			status		query		string	false	"工程状态"	Enums(DRAFT, ACTIVE, ARCHIVED)
+//	@Param			type		query		string	false	"文章类型"	Enums(ORIGINAL, CREATIVE)
+//	@Param			status		query		string	false	"文章状态"	Enums(DRAFT, ACTIVE, ARCHIVED)
 //	@Param			keyword		query		string	false	"名称关键字"
 //	@Success		200			{object}	Envelope
 //	@Failure		400			{object}	Envelope
@@ -154,12 +154,12 @@ func (s *Server) listProjects(c *gin.Context) {
 	OK(c, resp)
 }
 
-// getProject 查询单个工程。
+// getProject 查询单个文章。
 //
-//	@Summary		工程详情
+//	@Summary		文章详情
 //	@Tags			projects
 //	@Produce		json
-//	@Param			id	path		string	true	"工程 ID（UUID）"
+//	@Param			id	path		string	true	"文章 ID（UUID）"
 //	@Success		200	{object}	Envelope
 //	@Failure		404	{object}	Envelope
 //	@Router			/projects/{id} [get]
@@ -175,14 +175,14 @@ func (s *Server) getProject(c *gin.Context) {
 	OK(c, toProjectResponse(*p))
 }
 
-// updateProject 更新工程。
+// updateProject 更新文章。
 //
-//	@Summary		更新工程
-//	@Description	更新名称/简介/状态；工程类型不可变更
+//	@Summary		更新文章
+//	@Description	更新名称/简介/状态；文章类型不可变更
 //	@Tags			projects
 //	@Accept			json
 //	@Produce		json
-//	@Param			id		path		string					true	"工程 ID（UUID）"
+//	@Param			id		path		string					true	"文章 ID（UUID）"
 //	@Param			body	body		updateProjectRequest	true	"待更新字段（缺省字段不变）"
 //	@Success		200		{object}	Envelope
 //	@Failure		400		{object}	Envelope
@@ -212,13 +212,13 @@ func (s *Server) updateProject(c *gin.Context) {
 	OK(c, toProjectResponse(*p))
 }
 
-// deleteProject 软删除工程。
+// deleteProject 软删除文章。
 //
-//	@Summary		删除工程
+//	@Summary		删除文章
 //	@Description	软删除（写 deleted_at），不物理删除数据
 //	@Tags			projects
 //	@Produce		json
-//	@Param			id	path		string	true	"工程 ID（UUID）"
+//	@Param			id	path		string	true	"文章 ID（UUID）"
 //	@Success		200	{object}	Envelope
 //	@Failure		404	{object}	Envelope
 //	@Router			/projects/{id} [delete]

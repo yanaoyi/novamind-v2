@@ -59,13 +59,13 @@ export default function OriginalOverviewPage() {
   const location = useLocation()
   const presetProjectId = (location.state as { projectId?: string } | null)?.projectId
 
-  // 未选中原著时，列出所有 ORIGINAL 工程供选择
+  // 未选中原著时，列出所有 ORIGINAL 文章供选择
   useEffect(() => {
     if (workId) return
     projectApi
       .list({ type: 'ORIGINAL', page_size: 100 })
       .then((data) => setProjects(data.items))
-      .catch((err: Error) => message.error(`加载工程失败：${err.message}`))
+      .catch((err: Error) => message.error(`加载文章失败：${err.message}`))
   }, [workId])
 
   // 有 workId 但还没加载详情时补一次
@@ -91,7 +91,7 @@ export default function OriginalOverviewPage() {
     }
   }
 
-  // 从工程列表点「原著」进来时，自动定位到该工程
+  // 从文章列表点「原著」进来时，自动定位到该文章
   useEffect(() => {
     if (workId || !presetProjectId || projects.length === 0) return
     if (selectedProject === presetProjectId) return
@@ -135,28 +135,28 @@ export default function OriginalOverviewPage() {
     return <Alert type="error" showIcon message={error} />
   }
 
-  // ---------- 尚未选中原著：先选工程，必要时创建 ----------
+  // ---------- 尚未选中原著：先选文章，必要时创建 ----------
   if (!workId) {
     return (
       <Space direction="vertical" size="middle" style={{ display: 'flex' }}>
-        <Card title="选择原著工程">
+        <Card title="选择原著文章">
           <Space direction="vertical" size="small" style={{ display: 'flex' }}>
             <Typography.Text type="secondary">
-              原著绑定在「原著类型」的工程上。先选一个工程，再导入原文。
+              原著绑定在「原著类型」的文章上。先选一个文章，再导入原文。
             </Typography.Text>
             <Select
               style={{ width: 420 }}
-              placeholder={projects.length ? '请选择原著工程' : '还没有原著工程，请先到「文章管理」创建'}
+              placeholder={projects.length ? '请选择原著文章' : '还没有原著文章，请先到「文章管理」创建'}
               value={selectedProject}
               onChange={onSelectProject}
               options={projects.map((p) => ({ value: p.id, label: p.name }))}
-              notFoundContent={<Link to="/projects">去创建工程</Link>}
+              notFoundContent={<Link to="/projects">去创建文章</Link>}
             />
           </Space>
         </Card>
 
         {needsCreate && (
-          <Card title="该工程还没有原著，创建一个">
+          <Card title="该文章还没有原著，创建一个">
             <Form form={createForm} layout="vertical" style={{ maxWidth: 520 }}>
               <Form.Item
                 name="title"

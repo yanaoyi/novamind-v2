@@ -120,10 +120,10 @@ func TestProjectServiceUpdateKeepsTypeImmutable(t *testing.T) {
 		t.Fatalf("非法状态应被拒绝，实际 %v", err)
 	}
 
-	// 更新不存在的工程
+	// 更新不存在的文章
 	ghost := "不存在"
 	if _, err := svc.Update(ctx, uuid.NewString(), UpdateProjectInput{Name: &ghost}); !errors.Is(err, domain.ErrProjectNotFound) {
-		t.Fatalf("不存在的工程应返回 ErrProjectNotFound，实际 %v", err)
+		t.Fatalf("不存在的文章应返回 ErrProjectNotFound，实际 %v", err)
 	}
 }
 
@@ -131,7 +131,7 @@ func TestProjectServiceGetAndDelete(t *testing.T) {
 	svc := NewProjectService(newFakeRepo())
 	ctx := context.Background()
 
-	created, err := svc.Create(ctx, CreateProjectInput{Name: "待删工程", Type: domain.ProjectTypeOriginal})
+	created, err := svc.Create(ctx, CreateProjectInput{Name: "待删文章", Type: domain.ProjectTypeOriginal})
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
 	}

@@ -72,7 +72,7 @@ func (r *TaskRepo) Create(ctx context.Context, t *domain.Task) error {
 	}
 	if err := r.db.WithContext(ctx).Create(&m).Error; err != nil {
 		if isForeignKeyViolation(err) {
-			return errors.New("任务关联的工程或原著不存在")
+			return errors.New("任务关联的文章或原著不存在")
 		}
 		return fmt.Errorf("创建任务失败: %w", err)
 	}

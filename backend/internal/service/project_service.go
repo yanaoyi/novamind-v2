@@ -20,22 +20,22 @@ type ProjectRepository interface {
 	SoftDelete(ctx context.Context, id string) error
 }
 
-// CreateProjectInput 是创建工程的入参。
+// CreateProjectInput 是创建文章的入参。
 type CreateProjectInput struct {
 	Name        string
 	Description string
 	Type        domain.ProjectType
 }
 
-// UpdateProjectInput 是更新工程的入参（nil 表示该字段不变）。
-// 注意：Type 不在其中——工程类型创建后不可变更（原著/二创不可互转）。
+// UpdateProjectInput 是更新文章的入参（nil 表示该字段不变）。
+// 注意：Type 不在其中——文章类型创建后不可变更（原著/二创不可互转）。
 type UpdateProjectInput struct {
 	Name        *string
 	Description *string
 	Status      *domain.ProjectStatus
 }
 
-// ProjectService 是工程业务服务。
+// ProjectService 是文章业务服务。
 type ProjectService struct {
 	repo ProjectRepository
 }
@@ -45,7 +45,7 @@ func NewProjectService(repo ProjectRepository) *ProjectService {
 	return &ProjectService{repo: repo}
 }
 
-// Create 创建工程：清洗 → 校验 → 落库。
+// Create 创建文章：清洗 → 校验 → 落库。
 func (s *ProjectService) Create(ctx context.Context, in CreateProjectInput) (*domain.Project, error) {
 	p := &domain.Project{
 		Name:        in.Name,
@@ -62,7 +62,7 @@ func (s *ProjectService) Create(ctx context.Context, in CreateProjectInput) (*do
 	return p, nil
 }
 
-// Get 按 ID 获取工程。
+// Get 按 ID 获取文章。
 func (s *ProjectService) Get(ctx context.Context, id string) (*domain.Project, error) {
 	if strings.TrimSpace(id) == "" {
 		return nil, domain.ErrProjectNotFound
@@ -70,11 +70,11 @@ func (s *ProjectService) Get(ctx context.Context, id string) (*domain.Project, e
 	return s.repo.GetByID(ctx, id)
 }
 
-// List 分页查询工程。
+// List 分页查询文章。
 func (s *ProjectService) List(ctx context.Context, f repository.ProjectFilter) ([]domain.Project, int64, error) {
 	items, total, err := s.repo.List(ctx, f)
 	if err != nil {
-		return nil, 0, fmt.Errorf("查询工程列表失败: %w", err)
+		return nil, 0, fmt.Errorf("查询文章列表失败: %w", err)
 	}
 	if items == nil {
 		items = []domain.Project{}
@@ -82,7 +82,7 @@ func (s *ProjectService) List(ctx context.Context, f repository.ProjectFilter) (
 	return items, total, nil
 }
 
-// Update 更新工程的可变字段。
+// Update 更新文章的可变字段。
 func (s *ProjectService) Update(ctx context.Context, id string, in UpdateProjectInput) (*domain.Project, error) {
 	p, err := s.Get(ctx, id)
 	if err != nil {
@@ -107,7 +107,7 @@ func (s *ProjectService) Update(ctx context.Context, id string, in UpdateProject
 	return p, nil
 }
 
-// Delete 软删除工程。
+// Delete 软删除文章。
 func (s *ProjectService) Delete(ctx context.Context, id string) error {
 	if strings.TrimSpace(id) == "" {
 		return domain.ErrProjectNotFound

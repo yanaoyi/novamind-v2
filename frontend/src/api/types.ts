@@ -14,7 +14,7 @@ export interface ApiErrorBody {
   details?: Record<string, unknown> | null
 }
 
-/** ORIGINAL=原著工程，CREATIVE=二创工程；创建后不可变更 */
+/** ORIGINAL=原著文章，CREATIVE=二创文章；创建后不可变更 */
 export type ProjectType = 'ORIGINAL' | 'CREATIVE'
 
 export type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED'

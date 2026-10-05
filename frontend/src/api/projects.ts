@@ -17,7 +17,7 @@ function toQueryString(query: ProjectListQuery): string {
   return params.toString()
 }
 
-/** 工程管理接口（对应后端 /api/v1/projects） */
+/** 文章管理接口（对应后端 /api/v1/projects） */
 export const projectApi = {
   list(query: ProjectListQuery = {}): Promise<ProjectList> {
     const qs = toQueryString(query)

@@ -123,9 +123,9 @@ export default function ProjectsPage() {
     }
   }
 
-  /** 进入某工程的原著工作区（总览页会按需引导创建原著） */
+  /** 进入某文章的原著工作区（总览页会按需引导创建原著） */
   const enterOriginal = (record: Project) => {
-    setWorkId(null) // 清掉上一部原著，交给总览页按目标工程重新定位
+    setWorkId(null) // 清掉上一部原著，交给总览页按目标文章重新定位
     navigate('/original/overview', { state: { projectId: record.id } })
   }
 
@@ -176,7 +176,7 @@ export default function ProjectsPage() {
             编辑
           </Button>
           <Popconfirm
-            title="确认删除该工程？"
+            title="确认删除该文章？"
             description="为软删除，数据不会物理丢失"
             okText="确认删除"
             cancelText="取消"
@@ -223,7 +223,7 @@ export default function ProjectsPage() {
             刷新
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新建工程
+            新建文章
           </Button>
         </Space>
       }
@@ -238,7 +238,7 @@ export default function ProjectsPage() {
           pageSize,
           total,
           showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 个工程`,
+          showTotal: (t) => `共 ${t} 个文章`,
           onChange: (nextPage, nextSize) =>
             void load({ page: nextPage, page_size: nextSize, keyword, type: typeFilter }),
         }}
@@ -246,7 +246,7 @@ export default function ProjectsPage() {
 
       <Modal
         open={open}
-        title={editing ? '编辑工程' : '新建工程'}
+        title={editing ? '编辑文章' : '新建文章'}
         okText={editing ? '保存' : '创建'}
         cancelText="取消"
         onOk={submit}
@@ -257,7 +257,7 @@ export default function ProjectsPage() {
           <Form.Item
             name="name"
             label="名称"
-            rules={[{ required: true, message: '请输入工程名称' }]}
+            rules={[{ required: true, message: '请输入文章名称' }]}
           >
             <Input placeholder="例如：人间真相" maxLength={200} />
           </Form.Item>

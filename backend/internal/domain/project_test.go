@@ -13,11 +13,11 @@ func TestProjectValidate(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "合法：二创工程",
+			name:    "合法：二创文章",
 			project: Project{Name: "人间真相", Type: ProjectTypeCreative},
 		},
 		{
-			name:    "合法：原著工程 + 显式状态",
+			name:    "合法：原著文章 + 显式状态",
 			project: Project{Name: "原著", Type: ProjectTypeOriginal, Status: ProjectStatusDraft},
 		},
 		{

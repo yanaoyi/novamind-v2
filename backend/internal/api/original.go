@@ -91,14 +91,14 @@ func toOriginalResponse(w domain.OriginalWork) OriginalResponse {
 
 // ---------- Handlers ----------
 
-// createOriginal 为工程创建原著。
+// createOriginal 为文章创建原著。
 //
 //	@Summary		创建原著
-//	@Description	为指定工程创建原著；工程必须是 ORIGINAL 类型，且一个工程只能有一部原著
+//	@Description	为指定文章创建原著；文章必须是 ORIGINAL 类型，且一个文章只能有一部原著
 //	@Tags			original
 //	@Accept			json
 //	@Produce		json
-//	@Param			id		path		string					true	"工程 ID"
+//	@Param			id		path		string					true	"文章 ID"
 //	@Param			body	body		createOriginalRequest	true	"原著信息"
 //	@Success		201		{object}	Envelope
 //	@Failure		400		{object}	Envelope

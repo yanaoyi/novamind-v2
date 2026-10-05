@@ -57,7 +57,7 @@ func (f *ProjectFilter) Normalize() (offset, limit int) {
 	return (f.Page - 1) * f.PageSize, f.PageSize
 }
 
-// ProjectRepo 是工程仓储。
+// ProjectRepo 是文章仓储。
 type ProjectRepo struct {
 	db *gorm.DB
 }
@@ -65,7 +65,7 @@ type ProjectRepo struct {
 // NewProjectRepo 构建仓储。
 func NewProjectRepo(db *gorm.DB) *ProjectRepo { return &ProjectRepo{db: db} }
 
-// Create 写入新工程；ID 为空时自动生成 UUIDv7。
+// Create 写入新文章；ID 为空时自动生成 UUIDv7。
 func (r *ProjectRepo) Create(ctx context.Context, p *domain.Project) error {
 	if p.ID == "" {
 		id, err := uuid.NewV7()
@@ -88,7 +88,7 @@ func (r *ProjectRepo) Create(ctx context.Context, p *domain.Project) error {
 	return nil
 }
 
-// GetByID 按 ID 查询未删除的工程。
+// GetByID 按 ID 查询未删除的文章。
 func (r *ProjectRepo) GetByID(ctx context.Context, id string) (*domain.Project, error) {
 	if _, err := uuid.Parse(id); err != nil {
 		// 非法 UUID 直接视作不存在，避免把数据库语法错误暴露成 500
@@ -159,7 +159,7 @@ func (r *ProjectRepo) Update(ctx context.Context, p *domain.Project) error {
 	return nil
 }
 
-// SoftDelete 软删除工程（写 deleted_at，不物理删除）。
+// SoftDelete 软删除文章（写 deleted_at，不物理删除）。
 func (r *ProjectRepo) SoftDelete(ctx context.Context, id string) error {
 	if _, err := uuid.Parse(id); err != nil {
 		return domain.ErrProjectNotFound

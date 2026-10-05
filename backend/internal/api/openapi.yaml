@@ -14,7 +14,7 @@ tags:
   - name: system
     description: 系统与健康检查
   - name: projects
-    description: 工程管理（原著 / 二创）
+    description: 文章管理（原著 / 二创）
 paths:
   /openapi.yaml:
     get:
@@ -56,7 +56,7 @@ paths:
   /projects:
     get:
       tags: [projects]
-      summary: 工程列表
+      summary: 文章列表
       parameters:
         - name: page
           in: query
@@ -90,7 +90,7 @@ paths:
           $ref: "#/components/responses/BadRequest"
     post:
       tags: [projects]
-      summary: 创建工程
+      summary: 创建文章
       requestBody:
         required: true
         content:
@@ -122,7 +122,7 @@ paths:
         schema: { type: string, format: uuid }
     get:
       tags: [projects]
-      summary: 工程详情
+      summary: 文章详情
       responses:
         "200":
           description: 查询成功
@@ -139,8 +139,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       tags: [projects]
-      summary: 更新工程
-      description: 更新名称 / 简介 / 状态。工程类型（type）创建后不可变更。
+      summary: 更新文章
+      description: 更新名称 / 简介 / 状态。文章类型（type）创建后不可变更。
       requestBody:
         required: true
         content:
@@ -165,7 +165,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       tags: [projects]
-      summary: 删除工程
+      summary: 删除文章
       description: 软删除（写 deleted_at），不物理删除数据。
       responses:
         "200":
@@ -188,12 +188,12 @@ paths:
     post:
       tags: [original]
       summary: 创建原著
-      description: 为指定工程创建原著。工程必须是 ORIGINAL 类型，且一个工程只能有一部原著。
+      description: 为指定文章创建原著。文章必须是 ORIGINAL 类型，且一个文章只能有一部原著。
       parameters:
         - name: id
           in: path
           required: true
-          description: 工程 ID
+          description: 文章 ID
           schema: { type: string, format: uuid }
       requestBody:
         required: true
@@ -1735,7 +1735,7 @@ paths:
     post:
       tags: [creative]
       summary: 创建二创作品
-      description: 给一个 CREATIVE 类型工程绑定原著，创建二创作品。
+      description: 给一个 CREATIVE 类型文章绑定原著，创建二创作品。
       parameters:
         - name: id
           in: path
@@ -3585,7 +3585,7 @@ components:
           schema:
             $ref: "#/components/schemas/Envelope"
     Conflict:
-      description: 资源冲突（例如该工程已存在原著）
+      description: 资源冲突（例如该文章已存在原著）
       content:
         application/json:
           schema:
@@ -3629,7 +3629,7 @@ components:
         type:
           type: string
           enum: [ORIGINAL, CREATIVE]
-          description: ORIGINAL=原著工程，CREATIVE=二创工程；创建后不可变更
+          description: ORIGINAL=原著文章，CREATIVE=二创文章；创建后不可变更
         status:
           type: string
           enum: [DRAFT, ACTIVE, ARCHIVED]
@@ -4199,7 +4199,7 @@ components:
       type: object
       required: [project_id, title]
       properties:
-        project_id: { type: string, format: uuid, description: 必须是 CREATIVE 类型工程 }
+        project_id: { type: string, format: uuid, description: 必须是 CREATIVE 类型文章 }
         title: { type: string, maxLength: 200, example: 暗涌·另一个结局 }
         description: { type: string }
     CreativeWork:

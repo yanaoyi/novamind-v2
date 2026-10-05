@@ -116,7 +116,7 @@ func (r *CreativeRepo) CreateWork(ctx context.Context, w *domain.CreativeWork) e
 			return domain.ErrCreativeAlreadyExists
 		}
 		if isForeignKeyViolation(err) {
-			return errors.New("工程或原著不存在")
+			return errors.New("文章或原著不存在")
 		}
 		return fmt.Errorf("创建二创作品失败: %w", err)
 	}
@@ -139,7 +139,7 @@ func (r *CreativeRepo) GetWorkByID(ctx context.Context, id string) (*domain.Crea
 	return &w, nil
 }
 
-// GetWorkByProject 按工程取二创作品。
+// GetWorkByProject 按文章取二创作品。
 func (r *CreativeRepo) GetWorkByProject(ctx context.Context, projectID string) (*domain.CreativeWork, error) {
 	if _, err := uuid.Parse(projectID); err != nil {
 		return nil, domain.ErrCreativeNotFound

@@ -37,14 +37,14 @@ const FULL_WEIGHTS: Record<string, number> = Object.fromEntries(DNA_KEYS.map((k)
 const ACCEPT = '.txt,.text,.md,.docx,.pdf'
 
 /** 向导的四步（界面上让作者知道系统到底做了什么） */
-const STEPS = ['建原著工程并导入原文', '建同人作品', '继承人物 DNA', '继承世界观']
+const STEPS = ['建原著文章并导入原文', '建同人作品', '继承人物 DNA', '继承世界观']
 
 /**
  * 二创 · 总览：同人坊的首页。
  *
- * 这里解决一个真实的别扭：想写同人，得先绕到「原著」那边导入书、配工程，再回二创派生作品。
+ * 这里解决一个真实的别扭：想写同人，得先绕到「原著」那边导入书、配文章，再回二创派生作品。
  * 现在二创侧直接提供「导入一本书 → 一键开同人」：上传原文（TXT/MD/DOCX/PDF），
- * 系统在后台完成 原著工程 → 导入 → 同人作品 → 继承人物与世界观，
+ * 系统在后台完成 原著文章 → 导入 → 同人作品 → 继承人物与世界观，
  * 作者落地就是「可写」状态。数据模型没变：原著仍是只读事实，同人作品归作者。
  */
 export default function CreativeOverviewPage() {
@@ -73,7 +73,7 @@ export default function CreativeOverviewPage() {
     setRunning(true)
     setStepIndex(0)
     try {
-      // 1) 原著工程 + 导原文
+      // 1) 原著文章 + 导原文
       const originalProject = await projectApi.create({
         name: `${values.title}·原著`,
         type: 'ORIGINAL',
@@ -86,7 +86,7 @@ export default function CreativeOverviewPage() {
       const result = await originalApi.importFile(original.id, file)
       setStepIndex(1)
 
-      // 2) 同人作品（挂在 CREATIVE 工程下，从原著派生）
+      // 2) 同人作品（挂在 CREATIVE 文章下，从原著派生）
       const creativeProject = await projectApi.create({
         name: `${values.title}·同人`,
         type: 'CREATIVE',

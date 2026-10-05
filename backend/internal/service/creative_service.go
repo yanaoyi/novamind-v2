@@ -141,7 +141,7 @@ func (s *CreativeService) GetWork(ctx context.Context, id string) (*domain.Creat
 	return s.repo.GetWorkByID(ctx, id)
 }
 
-// GetWorkByProject 按工程取二创作品。
+// GetWorkByProject 按文章取二创作品。
 func (s *CreativeService) GetWorkByProject(ctx context.Context, projectID string) (*domain.CreativeWork, error) {
 	return s.repo.GetWorkByProject(ctx, projectID)
 }

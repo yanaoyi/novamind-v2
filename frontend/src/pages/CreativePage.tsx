@@ -476,7 +476,7 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
             <Statistic title="分叉点" value={divergence ? '已设' : '未设'} />
           </Space>
         ) : (
-          <Empty description="还没有二创作品：选一个 CREATIVE 工程，从当前原著创建一部二创" />
+          <Empty description="还没有二创作品：选一个 CREATIVE 文章，从当前原著创建一部二创" />
         )}
       </Card>
 
@@ -670,9 +670,9 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
         <Form form={createForm} name="createCreative" layout="vertical" preserve={false}>
           <Form.Item
             name="project_id"
-            label="二创工程"
-            rules={[{ required: true, message: '请选择二创工程' }]}
-            extra="必须是 CREATIVE 类型的工程；到「文章管理」新建"
+            label="二创文章"
+            rules={[{ required: true, message: '请选择二创文章' }]}
+            extra="必须是 CREATIVE 类型的文章；到「文章管理」新建"
           >
             <Select
               options={creativeProjects.map((p) => ({ value: p.id, label: p.name }))}

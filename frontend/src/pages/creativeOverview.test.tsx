@@ -30,7 +30,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit) {
   const body = !hasFile && typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
   calls.push({ method, path, body, hasFile })
 
-  // 建工程
+  // 建文章
   if (path.endsWith('/projects') && method === 'POST') {
     const type = (body as { type: string }).type
     const id = type === 'ORIGINAL' ? 'proj-orig' : 'proj-creative'
@@ -122,7 +122,7 @@ describe('二创 · 总览（同人坊首页）', () => {
     expect(screen.getByText('点击或把原著文件拖到这里')).toBeInTheDocument()
   })
 
-  it('上传一本书后按顺序完成：建原著工程 → 导原文 → 建同人作品 → 继承人物与世界观', async () => {
+  it('上传一本书后按顺序完成：建原著文章 → 导原文 → 建同人作品 → 继承人物与世界观', async () => {
     renderPage()
     await screen.findByText('还没有选中的原著')
 

@@ -24,7 +24,7 @@ interface OriginalState {
 
   setWorkId: (id: string | null) => void
   loadWork: (workId?: string) => Promise<Original | null>
-  /** 按工程找原著；找不到返回 null（由调用方决定要不要创建） */
+  /** 按文章找原著；找不到返回 null（由调用方决定要不要创建） */
   selectByProject: (projectId: string) => Promise<Original | null>
   createForProject: (projectId: string, input: CreateOriginalInput) => Promise<Original>
   importFile: (file: File) => Promise<OriginalImportResult>

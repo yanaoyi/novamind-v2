@@ -68,7 +68,7 @@ func toTaskResponse(t domainTask) TaskResponse {
 //	@Summary	任务列表
 //	@Tags		tasks
 //	@Produce	json
-//	@Param		project_id	query		string	false	"按工程过滤"
+//	@Param		project_id	query		string	false	"按文章过滤"
 //	@Param		work_id		query		string	false	"按原著过滤"
 //	@Param		creative_work_id	query		string	false	"按二创作品过滤"
 //	@Param		status		query		string	false	"按状态过滤"	Enums(PENDING, RUNNING, PAUSED, COMPLETED, FAILED, CANCELLED)

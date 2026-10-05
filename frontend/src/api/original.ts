@@ -9,7 +9,7 @@ import type {
 
 /** 原著接口（对应后端 /api/v1/original 与 /projects/{id}/original） */
 export const originalApi = {
-  /** 按工程取原著；该工程还没有原著时返回 null（而不是抛错） */
+  /** 按文章取原著；该文章还没有原著时返回 null（而不是抛错） */
   async getByProject(projectId: string): Promise<Original | null> {
     try {
       return await request<Original>(`/projects/${projectId}/original`)

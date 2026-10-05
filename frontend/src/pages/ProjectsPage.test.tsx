@@ -123,23 +123,23 @@ beforeEach(() => {
 })
 
 describe('ProjectsPage', () => {
-  it('加载并渲染工程列表', async () => {
+  it('加载并渲染文章列表', async () => {
     renderPage()
 
     expect(await screen.findByText('人间真相')).toBeInTheDocument()
     expect(screen.getByText('二创')).toBeInTheDocument()
     expect(screen.getByText('进行中')).toBeInTheDocument()
-    expect(screen.getByText('共 1 个工程')).toBeInTheDocument()
+    expect(screen.getByText('共 1 个文章')).toBeInTheDocument()
   })
 
-  it('新建工程：提交表单后调用 POST 并刷新列表', async () => {
+  it('新建文章：提交表单后调用 POST 并刷新列表', async () => {
     renderPage()
     await screen.findByText('人间真相')
 
-    fireEvent.click(screen.getByRole('button', { name: /新建工程/ }))
+    fireEvent.click(screen.getByRole('button', { name: /新建文章/ }))
     const dialog = await screen.findByRole('dialog')
 
-    fireEvent.change(within(dialog).getByLabelText('名称'), { target: { value: '新增的测试工程' } })
+    fireEvent.change(within(dialog).getByLabelText('名称'), { target: { value: '新增的测试文章' } })
     fireEvent.change(within(dialog).getByLabelText('简介'), { target: { value: '来自组件测试' } })
     // 注意：antd 会在两字中文按钮里插入空格（"创 建"），因此用宽松匹配
     fireEvent.click(within(dialog).getByRole('button', { name: /创\s*建/ }))
@@ -147,12 +147,12 @@ describe('ProjectsPage', () => {
     await waitFor(() => {
       const post = calls.find((c) => c.method === 'POST' && c.url.includes('/projects'))
       expect(post).toBeDefined()
-      expect(post?.body).toMatchObject({ name: '新增的测试工程', type: 'CREATIVE' })
+      expect(post?.body).toMatchObject({ name: '新增的测试文章', type: 'CREATIVE' })
     })
-    expect(await screen.findByText('新增的测试工程')).toBeInTheDocument()
+    expect(await screen.findByText('新增的测试文章')).toBeInTheDocument()
   })
 
-  it('编辑工程：调用 PUT，且不提交不可变的 type 字段', async () => {
+  it('编辑文章：调用 PUT，且不提交不可变的 type 字段', async () => {
     renderPage()
     await screen.findByText('人间真相')
 
@@ -172,7 +172,7 @@ describe('ProjectsPage', () => {
     expect(await screen.findByText('人间真相（修订）')).toBeInTheDocument()
   })
 
-  it('删除工程：二次确认后调用 DELETE，并从列表移除', async () => {
+  it('删除文章：二次确认后调用 DELETE，并从列表移除', async () => {
     renderPage()
     await screen.findByText('人间真相')
 

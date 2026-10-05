@@ -13,7 +13,7 @@ import (
 // ---------- 请求 DTO ----------
 
 type createCreativeRequest struct {
-	ProjectID   string `json:"project_id" binding:"required" example:"CREATIVE 类型工程的 ID"`
+	ProjectID   string `json:"project_id" binding:"required" example:"CREATIVE 类型文章的 ID"`
 	Title       string `json:"title" binding:"required" example:"暗涌·另一个结局"`
 	Description string `json:"description"`
 }
@@ -183,7 +183,7 @@ func toMappingResponse(m domain.OriginalCreativeMapping) MappingResponse {
 // createCreativeWork 从原著创建二创作品。
 //
 //	@Summary		创建二创作品
-//	@Description	给一个 CREATIVE 类型工程绑定一部原著，并建立二创作品。
+//	@Description	给一个 CREATIVE 类型文章绑定一部原著，并建立二创作品。
 //	@Tags			creative
 //	@Accept			json
 //	@Produce		json

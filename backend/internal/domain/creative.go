@@ -11,8 +11,8 @@ import (
 var (
 	ErrCreativeTitleEmpty        = errors.New("二创作品标题不能为空")
 	ErrCreativeNotFound          = errors.New("二创作品不存在")
-	ErrCreativeAlreadyExists     = errors.New("该工程已存在二创作品")
-	ErrCreativeNotCreativeProj   = errors.New("只有 CREATIVE 类型的工程可以创建二创作品")
+	ErrCreativeAlreadyExists     = errors.New("该文章已存在二创作品")
+	ErrCreativeNotCreativeProj   = errors.New("只有 CREATIVE 类型的文章可以创建二创作品")
 	ErrCreativeCharacterNotFound = errors.New("二创人物不存在")
 	ErrCreativeCharacterName     = errors.New("二创人物姓名不能为空")
 	ErrCreativeCharacterDup      = errors.New("同名二创人物已存在")
@@ -250,7 +250,7 @@ type OriginalCreativeMapping struct {
 // Validate 校验映射。
 func (m *OriginalCreativeMapping) Validate() error {
 	if m.CreativeWorkID == "" || m.OriginalID == "" || m.CreativeID == "" {
-		return errors.New("映射的工程/原著/二创 ID 不能为空")
+		return errors.New("映射的文章/原著/二创 ID 不能为空")
 	}
 	if !m.MappingType.Valid() {
 		return fmt.Errorf("映射类型非法: %s", m.MappingType)

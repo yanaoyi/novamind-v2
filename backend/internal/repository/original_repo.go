@@ -197,7 +197,7 @@ func (r *OriginalRepo) GetWorkByID(ctx context.Context, id string) (*domain.Orig
 	return &w, nil
 }
 
-// GetWorkByProject 按工程查原著。
+// GetWorkByProject 按文章查原著。
 func (r *OriginalRepo) GetWorkByProject(ctx context.Context, projectID string) (*domain.OriginalWork, error) {
 	if _, err := uuid.Parse(projectID); err != nil {
 		return nil, domain.ErrOriginalNotFound

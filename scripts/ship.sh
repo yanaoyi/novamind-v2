@@ -22,9 +22,11 @@ MESSAGE=""
 WITH_SMOKE=0
 FAST=0
 DRY_RUN=0
+PATHS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -m|--message) MESSAGE="${2:-}"; shift 2 ;;
+    --paths) PATHS="${2:-}"; shift 2 ;;
     --with-smoke) WITH_SMOKE=1; shift ;;
     --fast) FAST=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -108,7 +110,16 @@ fi
 if [ "${CHANGES}" -eq 0 ]; then
   echo "    -（没有未提交改动，跳过提交）"
 else
-  git add -A
+  if [ -n "${PATHS}" ]; then
+    # 只暂存点名的路径：一个提交一个主题（Git 规则第 2 条）
+    # shellcheck disable=SC2086
+    git add ${PATHS//,/ }
+    ok "只暂存指定路径：${PATHS}"
+  else
+    git add -A
+    echo "    提示：本次提交涉及 ${CHANGES} 个文件。若它们不属于同一个问题，"
+    echo "          请改用 --paths <路径,路径> 分开提交（仓库规则：一个 commit 只解决一个主要问题）。"
+  fi
   git commit -q -m "${MESSAGE}"
   ok "已提交：$(git log --oneline -1)"
 fi

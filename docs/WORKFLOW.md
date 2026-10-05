@@ -20,11 +20,27 @@ git push 到 GitHub main
 
 ## 一条命令跑完后半段
 
+### 仓库的 Git 规则（BOSS 2026-10-05 定，见根目录 `AGENTS.md`）
+
+1. 每完成一个独立任务，必须创建一个 commit；
+2. 一个 commit 只解决一个主要问题；
+3. commit 前必须运行测试；
+4. 测试失败不得 commit；
+5. commit message 必须说明实际修改内容；
+6. 不得使用 `git reset --hard` 丢弃用户已有修改；
+7. 不得修改或删除 `.git` 目录；
+8. 不得执行 `git push --force`。
+
+`scripts/ship.sh` 对 1–5 是**机械执行**的：检查不通过直接退出（不提交、不推送、不打 tag）；
+提交说明由 `-m` 显式给出；脚本全程不使用 `reset`、不碰 `.git`、只做普通 `push`。
+第 2 条靠 `--paths` 收敛范围：只暂存你点名的文件，避免一次提交混进多个问题。
+
 ```bash
 bash scripts/ship.sh -m "修：AI 写本章偶发空正文"            # 标准检查
 bash scripts/ship.sh -m "修：xxx" --with-smoke                # 额外跑端到端冒烟
 bash scripts/ship.sh -m "修：xxx" --fast                      # 只跑编译与单测
 bash scripts/ship.sh -m "修：xxx" --dry-run                   # 只跑检查，不提交
+bash scripts/ship.sh -m "修：xxx" --paths backend/internal/ai # 只提交点名的路径（推荐，天然满足"一个提交一个主题"）
 ```
 
 脚本会：检查（后端正则、`go build`/`vet`/`test`、前端 `tsc`/`vitest`、可选冒烟）→ 全部通过才 `git add -A && commit` → `push` → 打附注 tag `v0.1.N`（N 自增）→ 推送 tag。

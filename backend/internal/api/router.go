@@ -33,6 +33,7 @@ type Server struct {
 	outlines   *service.OutlineService
 	versions   *service.VersionService
 	retrieval  *service.RetrievalService
+	snapshots  *service.SnapshotService
 	invoker    *service.ModelInvoker
 }
 
@@ -56,6 +57,7 @@ func NewServer(
 	outlines *service.OutlineService,
 	versions *service.VersionService,
 	retrieval *service.RetrievalService,
+	snapshots *service.SnapshotService,
 	invoker *service.ModelInvoker,
 ) *Server {
 	return &Server{
@@ -64,7 +66,7 @@ func NewServer(
 		events: events, providers: providers, prompts: promptEngine,
 		tasks: tasks, taskTypes: taskTypes, analysis: analysis, creative: creative,
 		writing: writing, outlines: outlines, invoker: invoker,
-		versions: versions, retrieval: retrieval,
+		versions: versions, retrieval: retrieval, snapshots: snapshots,
 	}
 }
 
@@ -191,6 +193,8 @@ func (s *Server) Router() *gin.Engine {
 			outlineNodes.PUT("/:id", s.updateOutlineNode)
 			outlineNodes.DELETE("/:id", s.deleteOutlineNode)
 		}
+		// 上下文快照（Phase 9 §9.2）：追溯"当时给了 AI 什么"
+		v1.GET("/snapshots/:id", s.getContextSnapshot)
 		chapters := v1.Group("/chapters")
 		{
 			chapters.GET("/:id", s.getCreativeChapter)
@@ -202,6 +206,7 @@ func (s *Server) Router() *gin.Engine {
 			chapters.POST("/:id/versions/:no/restore", s.restoreChapterVersion)
 			chapters.POST("/:id/scenes", s.createChapterScene)
 			chapters.GET("/:id/scenes", s.listChapterScenes)
+			chapters.GET("/:id/snapshots", s.listChapterSnapshots)
 		}
 		// 检索（Phase 9 §9.1）：调试接口，看"AI 能翻到哪些旧账"
 		retrievalGroup := v1.Group("/retrieval")

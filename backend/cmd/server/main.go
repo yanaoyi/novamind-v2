@@ -174,6 +174,9 @@ func run() error {
 	// 检索（Phase 9 §9.1）：分块仓储既当数据源又当写入端（变量在任务注册前已声明）
 	retrievalSvc := service.NewRetrievalService(chunkRepo, userRepo)
 
+	// 上下文快照（Phase 9 §9.2）：只增不改，用于追溯"当时给了 AI 什么"
+	snapshots := service.NewSnapshotService(repository.NewContextSnapshotRepo(pg.DB), repository.NewCreativeRepo(pg.DB), writing, userRepo)
+
 	// 版本历史：人物 / 世界观 / 大纲的状态快照（规格书 §59）
 	versions := service.NewVersionService(repository.NewEntityVersionRepo(pg.DB), creative, writing)
 	versions.SetOutlineTreeVersioner(outlines)
@@ -202,6 +205,7 @@ func run() error {
 		outlines,
 		versions,
 		retrievalSvc,
+		snapshots,
 		invoker,
 	)
 

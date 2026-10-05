@@ -14,7 +14,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATABASE_URL="${DATABASE_URL:-$(grep -E '^DATABASE_URL=' "${REPO_ROOT}/backend/.env" | head -1 | cut -d= -f2-)}"
 [[ -n "${DATABASE_URL}" ]] || { echo "错误：拿不到 DATABASE_URL" >&2; exit 1; }
 
-KEEP="('schema_migrations','users')"
+# 保护名单：迁移记录、账号、模型配置（**配置类，不是测试数据**）
+#
+# 2026-10-05 第二次踩坑记录：只排除 schema_migrations 与 users 时，这里把 model_providers
+# 也清了 —— 结果验证账号消失、真实模型 e2e 直接报"没有可用的模型配置"。
+# 模型配置的删除有专门入口：scripts/validation-account.sh purge（会同时清密文与 .env）。
+KEEP="('schema_migrations','users','model_providers')"
 
 echo "== 将被清空的表 =="
 psql "$DATABASE_URL" -tAc "select tablename from pg_tables where schemaname='public' and tablename not in ${KEEP} order by tablename" | sed 's/^/  /'

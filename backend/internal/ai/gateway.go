@@ -45,6 +45,12 @@ type ProviderConfig struct {
 	APIBase   string
 	APIKey    string
 	ModelName string
+	// EmbedAPIBase / EmbedModelName 是向量模型的独立配置（Phase 9 §9.1.3）：
+	// 为空时 EmbedAPIBase 回退 APIBase；EmbedModelName 必须显式给（不同模型维度不同，不能猜）。
+	EmbedAPIBase   string
+	EmbedModelName string
+	// TimeoutSec 复用 chat 的超时配置
+	TimeoutSec int
 }
 
 // APIError 是上游返回的错误，便于上层区分鉴权/限流/服务端错误。

@@ -99,6 +99,9 @@ func (s *Server) Router() *gin.Engine {
 			projects.PUT("/:id", s.updateProject)
 			projects.DELETE("/:id", s.deleteProject)
 			projects.POST("/:id/original", s.createOriginal)
+			// 前端「原著 → 总览」选完文章要按 project 反查原著（此前只有 POST，导致选文章后
+			// 永远被当成"没有原著"，workId 设不上、后续页面不可用）
+			projects.GET("/:id/original", s.getOriginalByProject)
 		}
 
 		// 原著（规格书 §49 Original）

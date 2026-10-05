@@ -185,6 +185,30 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /projects/{id}/original:
+    get:
+      tags: [original]
+      summary: 按文章取原著
+      description: 返回该文章绑定的原著；文章下还没有原著时返回 404（前端据此提示"先导入原文"）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 文章 ID
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Original"
+        "404":
+          $ref: "#/components/responses/NotFound"
     post:
       tags: [original]
       summary: 创建原著

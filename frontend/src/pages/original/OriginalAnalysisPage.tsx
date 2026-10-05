@@ -86,7 +86,12 @@ export default function OriginalAnalysisPage() {
   }, [reload])
 
   const trigger = async (stage: AnalysisStage) => {
-    if (!workId) return
+    // 没选书时给出明确提示，不要静默 return ——
+    // 页面在这个状态下连阶段按钮都不渲染，用户会以为"点了没反应"（2026-10-05 实际发生过）
+    if (!workId) {
+      message.warning('还没有选择原著：请先到「原著 → 总览」选一篇文章')
+      return
+    }
     setRunning(stage)
     try {
       const task = await analysisApi.enqueue(workId, stage)
@@ -144,7 +149,15 @@ export default function OriginalAnalysisPage() {
   if (!workId) {
     return (
       <Card title="AI 分析">
-        <Empty description={<span>还没有选择原著，<Link to="/original/overview">去选择</Link></span>} />
+        <Empty
+          description={
+            <span>
+              还没有选择原著：到「原著 → 总览」的
+              <Link to="/original/overview">下拉里选一篇文章</Link>
+              （那篇文章下要先导入过原文）
+            </span>
+          }
+        />
       </Card>
     )
   }

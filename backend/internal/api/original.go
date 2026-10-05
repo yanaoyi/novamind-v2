@@ -148,6 +148,28 @@ func (s *Server) getOriginal(c *gin.Context) {
 	OK(c, toOriginalResponse(*work))
 }
 
+// getOriginalByProject 按文章取原著（没有则 404）。
+//
+//	@Summary		按文章取原著
+//	@Description	前端在「原著 → 总览」选中一篇文章后，需要反查它绑定的原著；没有原著时返回 404。
+//	@Tags			original
+//	@Produce		json
+//	@Param			id	path		string	true	"文章 ID"
+//	@Success		200	{object}	Envelope
+//	@Failure		404	{object}	Envelope
+//	@Router			/projects/{id}/original [get]
+func (s *Server) getOriginalByProject(c *gin.Context) {
+	if !s.requireServices(c) {
+		return
+	}
+	work, err := s.originals.GetByProject(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		s.failFromError(c, err)
+		return
+	}
+	OK(c, toOriginalResponse(*work))
+}
+
 // importOriginal 上传原文并解析导入。
 //
 //	@Summary		导入原著正文

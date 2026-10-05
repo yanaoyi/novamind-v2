@@ -192,6 +192,19 @@ func (s *OriginalService) Get(ctx context.Context, id string) (*domain.OriginalW
 	return s.repo.GetWorkByID(ctx, id)
 }
 
+// GetByProject 按"文章"取原著；该文章下没有原著时返回 domain.ErrOriginalNotFound。
+//
+// 为什么要单独一条：前端「原著 → 总览」选完文章后是按 project 反查原著的
+// （GET /projects/:id/original）。这条接口此前**只有 POST 创建、没有 GET 查询**，
+// 于是前端拿到的永远是 404 → 被当成"这篇文章还没有原著" → workId 设不上 →
+// 后续「AI 分析」页连阶段按钮都不渲染（用户看到的正是"点了没反应"）。
+func (s *OriginalService) GetByProject(ctx context.Context, projectID string) (*domain.OriginalWork, error) {
+	if strings.TrimSpace(projectID) == "" {
+		return nil, domain.ErrOriginalNotFound
+	}
+	return s.repo.GetWorkByProject(ctx, projectID)
+}
+
 // ImportResult 是导入结果摘要。
 type ImportResult struct {
 	FileID       string

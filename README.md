@@ -14,6 +14,7 @@
 | 每一轮改了什么、怎么验证的 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) |
 | 当前开发状态与下一步 | [`docs/CODEX_STATE.md`](docs/CODEX_STATE.md) |
 | 开发工作流（一次「小版本修订」怎么走） | [`docs/WORKFLOW.md`](docs/WORKFLOW.md) |
+| Phase 9 进度与交接（Context Engine / Retrieval / Memory） | [`docs/PHASE9-STATUS.md`](docs/PHASE9-STATUS.md) |
 
 验证方式（都可复跑）：
 

@@ -11,8 +11,8 @@
 |---|---|
 | P0-1 至少 **20 条固定检索测试样例** | ✅ 已补：`internal/retrieval/search_cases_test.go`（12 块固定语料、20 条 query，含跨章伏笔串联与多词复合；另有"样例数不得少于 20"的守卫用例） |
 | P0-1 **Embedding + pgvector + 向量检索** | ⛔ 阻塞（本机 PG15 装不了 pgvector）→ 当前 BM25-only + RRF 框架已就位，向量路接入点留好 |
-| P0-2 Context Engine 覆盖 **generate/continue/rewrite/expand/analyze/consistency 六条链路** | ⏳ 只做了预算与组装模块；**接线未做**（注意清单要求**改写/扩写**也走 Context Engine，比 Phase 9 任务书写得更宽） |
-| P0-3 快照字段要含 `model` / `prompt_version` / `retrieved_sources` / `token_budget` / `author_instruction` | ⏳ 表与服务已就绪，**接线时按这份字段清单组装 payload**（当前 JSONB 结构自由，接线时必须对齐） |
+| P0-2 Context Engine 覆盖 **generate/continue/rewrite/expand/analyze/consistency 六条链路** | ✅ **六条全部接线**（含清单额外要求的改写/扩写）：全部走"检索 → 预算组装 → 提示词 → 快照"，见下方"本轮完成" |
+| P0-3 快照字段要含 `model` / `prompt_version` / `retrieved_sources` / `token_budget` / `author_instruction` | ✅ 五项全部真实写入（`model`/`prompt_version` 由 `DescribePrompt` 在调模型前解析；`retrieved_sources` 带 chunk_id/ref_kind/ref_id/score/work_kind；`token_budget` 带 limit/used/by_section/truncated） |
 | P1 **PostgreSQL 版本统一（16 + pgvector）** | ❌ 未做：本机 15.19 vs docker pg16 不一致；**与 pgvector 阻塞是同一件事**，需 BOSS 决策（给 sudo / 上 Docker / 维持 BM25-only） |
 | P1 任务系统文档统一（PG queue，非 Redis/Asynq） | ⏳ 需检查并修正 `ARCHITECTURE.md` 里可能残留的 Redis/Asynq 描述 |
 | P1 Docker 真正部署验证 | ⏳ 未做（本机无 Docker） |
@@ -52,10 +52,11 @@
 | §9.1 验收（100 章、top8 命中 ≥4/5） | ✅ **5/5** | `scripts/smoke-phase9-retrieval.sh`（造 100 章/17 万字 → 300 块 → 5 个 query 全命中） |
 | §9.1.3 Embedding | ⛔ 阻塞 | 依赖 pgvector；接入点已留（`FuseRRF` 支持多路，向量路上线时调用方不必改） |
 | §9.2.1 预算与截断顺序 | ✅ | 8 段预算（总 8000；章节目标/人物/世界为固定段不截）；4 例单测锁定截断顺序 |
-| §9.2.1 组装 | ✅ | `BuildSections` / `FormatRetrieval`（带来源标注与相关度）/ `AssembleForChapter`；3 例单测 |
+| §9.2.1 组装 | ✅ | `BuildSections` / `FormatRetrievalWithin`（**整条纳入预算，不切半句**）/ `AssembleForChapter`；单测覆盖预算与"纳入条数 = 正文完整条数" |
 | §9.2.2 快照表 + 仓储 + 服务 | ✅ | 迁移 `0020`（只增不改、六种 kind 落 CHECK）；`ContextSnapshotRepo`；`SnapshotService.Record/ListByChapter/Get` |
-| §9.2 接线（写作主链路 + 落快照） | 🟡 **生成链路已通** | `GenerateChapterDraft` 调模型前写 `kind=generate` 快照（窄接口 `SnapshotRecorder` 注入，避免循环依赖）；真实验收：**e2e 37/37 + 库中 1 行 kind=generate**。**剩余**：continue/rewrite/expand/analyze/consistency 五条链路同样落快照；`retrieved_sources` 目前是空数组，待把 BM25 检索结果接进上下文；`model`/`prompt_version` 目前是占位常量，需从实际调用路径回传 |
-| §9.2 查询接口 + 前端查看页 | ⏳ | `GET /chapters/:id/snapshots`、`GET /snapshots/:id` + JSON 查看页 |
+| §9.2 接线（六条 AI 链路 + 落快照） | ✅ **本轮打通** | 六条链路（generate / continue / rewrite / expand / analyze / consistency）统一走 `检索 → AssembleForChapter → 提示词 → 快照`；检索分原著 + 二创两路；`retrieved_sources` 记 chunk_id/ref_kind/ref_id/score/work_kind；`model`/`prompt_version` 由 `ModelInvoker.DescribePrompt` 在调模型前如实解析（不再是占位常量）；一致性检查快照改为**每章一条**（chapter_id 锚到章节）。验收：**smoke-phase9.sh 17/17 + e2e 37/37** |
+| §9.2 查询接口 | ✅ | `GET /chapters/:id/snapshots`（列表，不带 payload）、`GET /snapshots/:id`（详情，带 8 段 + 来源 + 模型/版本 + 预算）；后端已完成并有单测 |
+| §9.2 前端查看页 | ⏳ | 前端目前只有 JSON 可读接口，尚未做专门的查看页（Phase 9 任务书说 v1 只要求 JSON 查看页） |
 | §9.3 Memory / §9.4 接线 / §9.5 Schema / §9.6 总验收 | ⏳ 未开始 | §9.3/§9.6 需要真实模型（Key 已就位，见下） |
 
 ## 本期抓到的两个真缺陷（都写进 CHANGELOG）
@@ -100,10 +101,37 @@
 在此之前，第 1、2 项我会先实现并用**假上游**做单测（验证分批、限速、向量路与 BM25 的融合、以及"没有向量时自动跳过向量路"），确保代码路径可信；只有第 3 项标记为待 Key。
 
 1. 先读：`Phase9-任务书.md` → 本文件 → `docs/CHANGELOG.md`（2026-10-05 几条）→ `AGENTS.md`（Git 规则）
-2. 做 §9.2 接线：`context.AssembleForChapter` 接进 `GenerateChapterDraft` 与一致性检查，prompt 模板 version+1，**跑 e2e 37/37** 再提交
-3. 补 §9.1 剩余来源（大纲节点/世界规则/人物/事件）与**增量索引**（按 ref 重建）
+2. ~~做 §9.2 接线~~ ✅ **已于 2026-10-05 晚完成**（六条链路全部走 Context Engine，见下节）
+3. 补 §9.1 剩余来源（大纲节点/世界规则/人物/事件）与**增量索引**（按 ref 重建）——**这是下一步**
 4. §9.3 Memory：`memory_facts` / `chapter_summaries` 表 + 事实抽取任务（prompt + §9.5 JSON Schema 校验）+ supersede 语义 + 自动回灌一致性检查
 5. §9.6 总验收：3 章剧本 → 第 4 章 snapshot 含第 1 章伏笔 → 一致性检查指出预设矛盾；性能基线（检索 P95 < 2s）记录在案
+6. §9.1 向量路①②（索引写向量、检索向量路）——代码 + 假上游单测可先做，真实召回验收仍需 embeddings Key
+
+## 本轮（2026-10-05 晚·第二次会话）完成：§9.2 接线
+
+上一轮的遗留是"检索没接进提示词、快照里的检索来源是空数组、模型与模板版本是占位常量"——
+也就是"越写越懂"断在最后一公里。本轮接通：
+
+| 改动 | 说明 |
+|---|---|
+| 六条链路统一走 Context Engine | `GenerateChapterDraft` / `RewriteText`（含续写、扩写）/ `CheckConsistency` / `AnalyzeText` 全部：**检索（原著 + 二创两路）→ `AssembleForChapter` → 提示词 → 快照**。提示词与快照用的是同一个 `Assembly` 对象 |
+| 检索失败不打断写作 | 新增窄接口 `ContextRetriever`（由 `RetrievalService` 实现）+ `SetRetriever`；检索报错只记日志、检索段留空（与"快照失败不打断写作"同一条纪律），单测锁定 |
+| 检索段整条进预算 | 新增 `context.FormatRetrievalWithin`：命中一条条累加、放不下整条丢弃并注明条数。此前"拼完按字符截断"会把命中切成半句话（单测锁定：纳入条数 = 正文完整出现条数） |
+| 快照记真实模型与版本 | 新增 `ModelInvoker.DescribePrompt`：调模型**之前**解析模型名与模板版本（不发起调用）；解析不出来写 `unknown`，不编造 |
+| 一致性快照改为每章一条 | 原先是整批一条（`chapter_id` 为空），无法回答"审这一章时给了模型什么" |
+| 模板 version+1 | `chapter_generate.v3`（补 §9.2.1 的时间线段）、`rewrite.v3`（前作片段）、`review/consistency_check.v3`（原著片段 + 既有内容检索，审查维度加"记忆一致性"）、`review/text_analyze.v2`（既有内容检索）；v1/v2 原样保留作为回退点 |
+| 模板契约测试 | `internal/service/prompt_contract_test.go`：拿服务真正会传的变量集渲染真正会被选中的模板（`missingkey=error` 下的那次事故的产物） |
+| §9.2 验收脚本 | `scripts/smoke-phase9.sh`（新增）：8 章原著索引 → 召回第 1 章伏笔 → 作者写二创第 1 章 → 索引 → AI 写第 2 章 → 断言快照（模型非占位 / 模板版本 / 来源带 chunk_id+score+作品归属 / 含二创来源 / 上下文真的带回"青铜钥匙" / 预算 8000 / 8 段用量） |
+
+**验收证据（真库 + 真模型）**：`smoke-phase9.sh` **17/17**、`validate-e2e-deepseek.sh` **37/37**、
+后端 `go test ./...` 全绿、前端 `tsc -b` + `vitest` 11 文件 50 例全绿。
+库内快照抽查：`kind=generate` 行 `model=deepseek-chat`、`prompt_version=chapter_generate.v3`、
+`token_budget.limit=8000`，`retrieved_sources` 非空 —— 占位常量已彻底消失。
+
+**本轮踩到并修掉的真缺陷（写脚本时暴露）**：二创作品进 `index_chunks` 任务必须走
+`creative_work_id`；`tasks.work_id` 的外键指向 `original_works`，把二创 id 塞进 `work_id`
+会被外键拒绝。第一版脚本用 `curl -sf` 把错误响应吞掉了，只表现成"任务超时"，
+排障时完全看不出原因 —— 新版脚本改成 `post_json`：非 2xx 时打印 HTTP 状态与响应正文。
 
 ## 分支健康度复验（2026-10-05，phase9 最新提交）
 
@@ -112,15 +140,20 @@
 | 后端 `gofmt` / `go test ./...` | 干净；**10 个包全绿** |
 | 前端 `tsc -b` / `vitest` | 通过；**11 文件 50 例全绿** |
 | Phase 9 §9.1 验收 `scripts/smoke-phase9-retrieval.sh` | **5/5 召回**（100 章测试书 → 300 块 → 5 个 query 全部命中） |
+| Phase 9 §9.2 验收 `scripts/smoke-phase9.sh` | **17/17**（索引 → 检索 → 写本章 → 快照字段全断言；真库真模型） |
 | 真实模型端到端 `scripts/validate-e2e-deepseek.sh` | **37/37 通过**（导入→分析→二创→大纲→落成章节→写本章→续写→分析→问答→一致性→导出） |
 
-结论：`phase9` 分支当前状态**可用于继续开发**——已完成的 15 个提交各自带测试、全量回归与既有 MVP 验收均通过，未引入回归。
+结论：`v2.1.0-dev` 分支当前状态**可用于继续开发**——已完成的提交各自带测试、全量回归与既有 MVP 验收均通过，未引入回归。
+下一步按上面「接手建议」第 3 条：§9.1 剩余来源（大纲节点/世界规则/人物/事件）+ 增量索引。
 
-## §9.2 接线的准备（已完成的安全步骤）
-+
-+* `backend/prompts/writing/chapter_generate.v2.md` 已就位：在 v1 基础上增加两段检索内容
-+  （**原著片段** / **前作片段**，并注明"不是作者指令"），另加一条写作要求"呼应伏笔、不凭空发明设定"。
-+* **v1 仍是当前生效版本**：模板引擎按 `<name>` 取最新版——`chapter_generate` 会自动选 v2，
-+  所以接线时不会再改模板文件，只需让调用方把 `RetrievedOriginal` / `RetrievedCreative` 传进来；
-+  接完必须跑 e2e 37/37（若回归，回退方式是删除 v2 文件即可，v1 完好）。
-+
+## 附：当前生效的模板版本（按 `<name>` 取最新版）
+
+| 模板 | 生效版本 | 备注 |
+|---|---|---|
+| `chapter_generate` | **v3** | v2 加了检索两段；v3 再加时间线段。回退：删掉 v3 即退回 v2（v1 完好） |
+| `rewrite` | **v3** | v2 补齐 11 种操作语义；v3 加"前作片段" |
+| `consistency_check` | **v3** | v2 是五类上下文；v3 加检索两段 + 第 6 类"记忆一致性" |
+| `text_analyze` | **v2** | v1 只有人物/世界；v2 加"本作品既有内容" |
+
+模板引擎是 `missingkey=error`：**改模板必须同一提交补齐调用方变量**，
+`internal/service/prompt_contract_test.go` 会拿服务的真实变量集渲染真实模板来守这条线。

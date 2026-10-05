@@ -16,6 +16,10 @@ import (
 // EmbedBatchSize 是单次 /embeddings 调用的最大输入条数（任务书要求 ≤32）。
 const EmbedBatchSize = 32
 
+// DefaultEmbedModel 是未配置 embed_model_name 时使用的默认向量模型（任务书给定）。
+// 换模型必须全量重建索引（维度不同），因此这里只作为兜底，不鼓励长期依赖默认值。
+const DefaultEmbedModel = "BAAI/bge-large-zh-v1.5"
+
 type openAIEmbedRequest struct {
 	Model string   `json:"model"`
 	Input []string `json:"input"`

@@ -297,3 +297,36 @@ func (s *ModelProviderService) ResolveRuntime(ctx context.Context, id string) (a
 	}
 	return cfg, *provider, nil
 }
+
+// ResolveEmbedConfig 解析向量调用配置（Phase 9 §9.1.3）。
+//
+// 与 ResolveConfig 的关系：chat 的那套（地址/模型/密钥）照旧解析，然后按约定覆盖两项：
+//   - embed_api_base 为空 → 沿用 chat 的 api_base；
+//   - embed_model_name 为空 → ai.DefaultEmbedModel。
+//
+// 这样"只用 chat Key 的服务商"也能配置向量（只要它的 /embeddings 兼容）。
+func (s *ModelProviderService) ResolveEmbedConfig(ctx context.Context, id string) (ai.ProviderConfig, error) {
+	cfg, err := s.ResolveConfig(ctx, id)
+	if err != nil {
+		return ai.ProviderConfig{}, err
+	}
+	var provider *domain.ModelProvider
+	if strings.TrimSpace(id) == "" {
+		provider, err = s.repo.FindChatProvider(ctx)
+	} else {
+		provider, err = s.repo.GetByID(ctx, id)
+	}
+	if err != nil {
+		return ai.ProviderConfig{}, err
+	}
+	cfg.EmbedAPIBase = provider.EmbedAPIBase
+	if cfg.EmbedAPIBase == "" {
+		cfg.EmbedAPIBase = cfg.APIBase
+	}
+	cfg.EmbedModelName = provider.EmbedModelName
+	if cfg.EmbedModelName == "" {
+		cfg.EmbedModelName = ai.DefaultEmbedModel
+	}
+	cfg.TimeoutSec = provider.TimeoutSec
+	return cfg, nil
+}

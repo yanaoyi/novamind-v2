@@ -95,17 +95,19 @@ func DecodeText(data []byte) (string, string, error) {
 func SplitChapters(text string) []Chapter {
 	lines := scanLines(text)
 
-	type mark struct {
-		lineIdx int
-		title   string
-	}
-	var marks []mark
+	var marks []chapterMark
 	for i, ln := range lines {
 		if title, ok := matchChapterTitle(ln.text); ok {
-			marks = append(marks, mark{lineIdx: i, title: title})
+			marks = append(marks, chapterMark{lineIdx: i, title: title})
 		}
 	}
 
+	if len(marks) == 0 {
+		return chunkByLength(text, DefaultChunkRunes)
+	}
+	// 电子书（EPUB/MOBI）正文前常有一页目录，逐行列出所有章标题 ——
+	// 这些行与真章节标题长得一样，不排除就会切出几百个"空章"（详见 dropTableOfContents）。
+	marks = dropTableOfContents(text, lines, marks)
 	if len(marks) == 0 {
 		return chunkByLength(text, DefaultChunkRunes)
 	}
@@ -143,6 +145,117 @@ type textLine struct {
 	text  string
 	start int
 	end   int
+}
+
+// chapterMark 是一个候选章节标题（行号 + 标题）。
+type chapterMark struct {
+	lineIdx int
+	title   string
+}
+
+// 目录页识别的阈值。
+const (
+	// tocMinBodyRunes：标题行之后到下一个标题之间的正文短于这个数，视为"几乎没有正文"。
+	tocMinBodyRunes = 12
+	// tocHintRun：出现「目录 / Contents」字样时，连续这么多空章就判定为目录页。
+	tocHintRun = 3
+	// tocBlindRun：没有目录提示时更保守，连续这么多空章才判定。
+	tocBlindRun = 8
+)
+
+// dropTableOfContents 从候选标题里剔除"目录页"造成的空章。
+//
+// 背景（2026-10-05 实测）：电子书正文前通常有一页目录，把所有章标题逐行列出，
+// 例如《王朔文集》——395 个候选标题里 253 个正文为 0 字（就是目录行本身），
+// 结果切出几百个"每章 3 个字"的空章，而真正的正文全挤进少数几个巨型章节
+// （单章最大 64 万字），作者在章节列表里只能看到几个字节。
+//
+// 判据：正文短于 tocMinBodyRunes 的标题算"空章"；连续出现足够多个空章才整体丢弃。
+// 没有目录提示时要求更多（tocBlindRun）——宁可少删，也不要把本来就短的章节
+// （诗集、语录体）误判成目录。
+func dropTableOfContents(text string, lines []textLine, marks []chapterMark) []chapterMark {
+	if len(marks) < tocHintRun {
+		return marks
+	}
+	thin := make([]bool, len(marks))
+	empty := make([]bool, len(marks))
+	for i, m := range marks {
+		start := lines[m.lineIdx].end
+		end := len(text)
+		if i+1 < len(marks) {
+			end = lines[marks[i+1].lineIdx].start
+		}
+		if start >= end {
+			thin[i] = true
+			empty[i] = true
+			continue
+		}
+		body := utf8.RuneCountInString(strings.TrimSpace(text[start:end]))
+		thin[i] = body < tocMinBodyRunes
+		empty[i] = body == 0
+	}
+
+	minRun := tocBlindRun
+	if hasTableOfContentsHint(lines, marks[0].lineIdx) {
+		minRun = tocHintRun
+	}
+
+	// 连续的空章段：够长就当目录页整段丢弃（避免误删"本来就短"的章节）
+	drop := make([]bool, len(marks))
+	for i := 0; i < len(marks); {
+		if !thin[i] {
+			i++
+			continue
+		}
+		j := i
+		for j < len(marks) && thin[j] {
+			j++
+		}
+		if j-i >= minRun {
+			for k := i; k < j; k++ {
+				drop[k] = true
+			}
+		}
+		i = j
+	}
+	// 正文为 0 的标题（整章内容就是它自己的标题）单独也丢：它不含任何信息
+	for i := range marks {
+		if empty[i] {
+			drop[i] = true
+		}
+	}
+
+	out := make([]chapterMark, 0, len(marks))
+	for i, m := range marks {
+		if !drop[i] {
+			out = append(out, m)
+		}
+	}
+	if len(out) == 0 {
+		// 全被判成目录说明判据不适用（例如整本都是短章），保持原样更安全
+		return marks
+	}
+	return out
+}
+
+// hasTableOfContentsHint 看"目录"提示字样是否出现在第一个候选标题之前。
+//
+// 只扫前 300 行：目录页一定在正文之前，没有必要为它扫全本。
+func hasTableOfContentsHint(lines []textLine, before int) bool {
+	limit := before
+	if limit > 300 {
+		limit = 300
+	}
+	for i := 0; i < limit && i < len(lines); i++ {
+		t := strings.ToLower(strings.TrimSpace(lines[i].text))
+		t = strings.ReplaceAll(t, " ", "")
+		t = strings.ReplaceAll(t, "\u3000", "")
+		switch t {
+		case "目录", "目錄", "目次", "contents", "tableofcontents":
+			return true
+		}
+	}
+	return false
 }
 
 // scanLines 按行扫描并记录每行的字节区间。

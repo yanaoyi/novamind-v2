@@ -174,3 +174,69 @@ func firstRunes(s string, n int) string {
 	}
 	return string(r[:n]) + "…"
 }
+
+// 目录页不能变成"空章"（2026-10-05 实测《王朔文集》：
+// 395 个候选标题里 253 个是目录行，切出几百个 3 字空章、正文挤进巨型章节）。
+func TestSplitChaptersSkipsTableOfContents(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("目录\n")
+	sb.WriteString("卷一 纯情卷\n\n")
+	for i := 1; i <= 12; i++ {
+		sb.WriteString("第")
+		sb.WriteString(chineseNum(i))
+		sb.WriteString("章\n")
+	}
+	// 正文：两章各带实质内容
+	sb.WriteString("\n第一话 空中小姐\n")
+	sb.WriteString(strings.Repeat("沈砚推开老宅的门，雨还在下。", 40) + "\n")
+	sb.WriteString("第二话 永失我爱\n")
+	sb.WriteString(strings.Repeat("他坐上南下的火车，没有再回头。", 40) + "\n")
+
+	chapters := SplitChapters(sb.String())
+	if len(chapters) == 0 {
+		t.Fatal("应至少切出一章")
+	}
+	for _, c := range chapters {
+		if c.Title != "开篇" && len([]rune(c.Content)) < parserMinChapterRunes {
+			t.Errorf("目录行不该成为章节：%q（%d 字）", c.Title, len([]rune(c.Content)))
+		}
+	}
+	var hasBody bool
+	for _, c := range chapters {
+		if strings.Contains(c.Content, "沈砚推开老宅的门") {
+			hasBody = true
+		}
+	}
+	if !hasBody {
+		t.Error("正文不能被丢掉")
+	}
+}
+
+// 本来就短的章节（诗集 / 语录体）不能被误判成目录。
+func TestSplitChaptersKeepsLegitimatelyShortChapters(t *testing.T) {
+	var sb strings.Builder
+	for i := 1; i <= 6; i++ {
+		sb.WriteString("第" + chineseNum(i) + "章\n")
+		sb.WriteString(strings.Repeat("山路元无雨，空翠湿人衣。", 3) + "\n\n") // 每章 36 字，是真的正文
+	}
+	chapters := SplitChapters(sb.String())
+	if len(chapters) < 6 {
+		t.Fatalf("6 个短章应全部保留，实际只剩 %d 章", len(chapters))
+	}
+}
+
+// chineseNum 生成 1..20 的中文数字（够测试用）。
+func chineseNum(n int) string {
+	digits := []string{"零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"}
+	switch {
+	case n <= 10:
+		return digits[n]
+	case n < 20:
+		return "十" + digits[n-10]
+	default:
+		return "二十"
+	}
+}
+
+// parserMinChapterRunes 是测试里"明显是空章"的阈值（与实现的 tocMinBodyRunes 对齐）。
+const parserMinChapterRunes = tocMinBodyRunes

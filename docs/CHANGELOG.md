@@ -900,3 +900,14 @@ PUT|DELETE     /plot-arcs/{id}
 * 测试：`internal/ai/crypto_test.go` 2 例（v2 往返 + 两次加密不同 + 错密钥必失败；**用升级前的算法构造 v1 密文验证仍可解**）；后端 `go build`/`go vet`/`go test ./...` 全绿。
 
 **至此 muse 审查报告的全部 P0/P1/P2 项都已闭环**（逐条结论见 `docs/审查响应-20261004-muse.md`）。
+
+### 2026-10-05 · 本地开发免填访问令牌（vite 代理注入）
+
+* **现象**（BOSS 实测反馈）：点「原著 · 总览」弹出「需要访问令牌（ADMIN_TOKEN）」——后端要求 Bearer 令牌（安全基线），但浏览器里没有，请求被 401 拦下。
+* **改法**：`vite.config.ts` 用 `loadEnv` 读 `backend/.env` 的 `ADMIN_TOKEN`，在 `/api` 代理上用 `proxyReq` **覆盖** Authorization 头。
+  * 浏览器侧零配置，打开就能用；令牌不进前端产物、不进浏览器存储（比让使用者把令牌粘进 localStorage 更安全）；
+  * 即便浏览器里存着旧令牌，也会被代理的正确值顶掉；
+  * **后端仍然强制令牌**：直连 8080 无令牌依旧 401，局域网里其它人过不去；
+  * 生产走 nginx 反代、不做这个注入，使用者仍按原设计在界面填一次。
+* 实现中没有引入 `node:fs`（避免为它加 `@types/node`），而是用 vite 自带的 `loadEnv`；`configure` 回调里的 `on()` 因为 vite 内置 http-proxy 类型声明缺失，做了显式收窄。
+* **验证**：经代理无令牌 200、带错误令牌 200（被覆盖）、直连后端 401；`tsc -b` 通过。

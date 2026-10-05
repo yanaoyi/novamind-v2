@@ -941,3 +941,18 @@ PUT|DELETE     /plot-arcs/{id}
 **验证**：业务表总行数 0、各接口返回空列表（`/projects` total=0、`/model-providers` 0 条）、上传目录 0 文件、迁移版本仍为 17、健康检查 ok。
 
 **影响提示**：验证账号已按纪律移除，**AI 相关功能现在需要使用者自备 API Key**（在「模型设置」页配置）——这是刻意的产品原则（系统不内置任何模型账号）。若还需继续做真实模型验收，需要临时再挂一个账号并在验收后再次 purge。
+
+### 2026-10-05 · 响应 muse v3 复审：补掉 1 处死角 + 3 个缺口（v0.1.3）
+
+复审结论是「13/14 已修，1 项部分修复，无 P0 残留」，并列出 4 条跟进。按仓库 Git 规则**一项一个提交**处理：
+
+| 提交 | 内容 | 提交前跑的测试 |
+|---|---|---|
+| `af3d597` | P1-8 死角：PDF `inflate()` 的**裸 deflate 回退分支**原来还是 `LimitReader(r, 1<<30)` 且读满静默截断 → 改用统一的 `limitReader(..., 128MiB, "PDF 裸 deflate 流")`，超限报错 | `go test ./internal/parser/` |
+| `e35139c` | P1-11 窄缝：`flushChapter`（切章保存）绕过 `savingRef` 在途锁 → 改为等待锁释放（最多 3 秒）后再写，超时直接写并告警 | `vitest src/pages/writing.test.tsx` |
+| `f88dbd1` | P1-13 缺口：给 `EMPTY_RESPONSE` 分支补单测（2xx + 空 body 抛错，不返回 `null as T`） | `vitest src/api/client.test.ts` |
+| 本轮文档 | 新增 `docs/审查响应-20261005-muse-v3.md`（逐条处理 + 待确认项回答） | — |
+
+**回答复审的待确认项**：`NOVAMIND_SECRET` **已轮换**（64 字节随机值，只落在 gitignored 的 `backend/.env`）。该密钥此前并未进入仓库（`.env.example` 一直是空占位符），但既然复审提出、且当时库里模型配置为 0 条，轮换零代价——无需重填任何 Key；轮换后重启，`/health` 正常。
+
+**接受并记录的残留**：SSRF 的 DNS 重绑定 TOCTOU（校验与请求两次解析）。单用户自用 + 已有鉴权下可接受；若将来多用户部署，可在 `http.Client` 的 `Dialer` 层固定已校验 IP 根治。

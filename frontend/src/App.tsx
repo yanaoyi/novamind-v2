@@ -64,7 +64,7 @@ const SIMPLE_PAGES: Array<{ path: string; label: string; phase?: string }> = [
 function buildMenu() {
   return [
     { key: '/dashboard', label: <Link to="/dashboard">工作台</Link> },
-    { key: '/projects', label: <Link to="/projects">工程管理</Link> },
+    { key: '/projects', label: <Link to="/projects">文章管理</Link> },
     {
       key: 'original',
       label: '原著',

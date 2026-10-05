@@ -38,7 +38,7 @@ export default function Dashboard() {
       <Card title="NovaMind 工作台">
         <Typography.Paragraph type="secondary">
           面向「基于原著进行二次创作」的 AI 写作系统。当前处于 Phase 1（基础框架），
-          后端已具备工程管理 API 与数据库迁移能力；原著分析、二创设计、写作与一致性检查按
+          后端已具备文章管理 API 与数据库迁移能力；原著分析、二创设计、写作与一致性检查按
           Phase 2–6 逐步实现。
         </Typography.Paragraph>
       </Card>

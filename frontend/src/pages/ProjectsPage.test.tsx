@@ -207,6 +207,6 @@ describe('ProjectsPage', () => {
     renderPage()
 
     // 页面仍然渲染出标题与表格（不白屏）
-    expect(await screen.findByText('工程管理')).toBeInTheDocument()
+    expect(await screen.findByText('文章管理')).toBeInTheDocument()
   })
 })

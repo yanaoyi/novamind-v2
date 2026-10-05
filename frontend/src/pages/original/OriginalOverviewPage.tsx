@@ -146,7 +146,7 @@ export default function OriginalOverviewPage() {
             </Typography.Text>
             <Select
               style={{ width: 420 }}
-              placeholder={projects.length ? '请选择原著工程' : '还没有原著工程，请先到「工程管理」创建'}
+              placeholder={projects.length ? '请选择原著工程' : '还没有原著工程，请先到「文章管理」创建'}
               value={selectedProject}
               onChange={onSelectProject}
               options={projects.map((p) => ({ value: p.id, label: p.name }))}

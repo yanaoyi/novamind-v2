@@ -193,7 +193,7 @@ export default function ProjectsPage() {
 
   return (
     <Card
-      title="工程管理"
+      title="文章管理"
       extra={
         <Space>
           <Input.Search

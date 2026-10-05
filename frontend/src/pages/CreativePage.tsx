@@ -672,11 +672,11 @@ export default function CreativePage({ defaultTab = 'characters' }: Props) {
             name="project_id"
             label="二创工程"
             rules={[{ required: true, message: '请选择二创工程' }]}
-            extra="必须是 CREATIVE 类型的工程；到「工程管理」新建"
+            extra="必须是 CREATIVE 类型的工程；到「文章管理」新建"
           >
             <Select
               options={creativeProjects.map((p) => ({ value: p.id, label: p.name }))}
-              notFoundContent={<Link to="/projects">去工程管理创建</Link>}
+              notFoundContent={<Link to="/projects">去文章管理创建</Link>}
             />
           </Form.Item>
           <Form.Item name="title" label="作品标题" rules={[{ required: true, message: '请输入标题' }]}>

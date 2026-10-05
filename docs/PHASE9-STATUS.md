@@ -67,7 +67,10 @@
 ## 环境与纪律状态
 
 * 验证账号：**当前已挂载**（`验证用-DeepSeek`，Key 只在 gitignored 的 `backend/.env`）。**Phase 9 相关验收跑完必须 `scripts/validation-account.sh purge`** 并留输出作证。
-* 数据库：迁移版本 20；`chunks`/`context_snapshots`/`users` 均已建好；冒烟脚本自带 trap 清理，跑完不留测试数据。
+* 数据库：迁移版本 **22**（新增 `0021` chunks.embedding / `0022` provider embedding 配置）；`chunks`/`context_snapshots`/`users` 均已建好。
+* **脚本自清理（2026-10-05 修）**：此前各验收脚本的 `delete from projects` 被外键拒绝、错误又被 `|| true` 吞掉 ——
+  "自清理"是假的，实测堆了 15 个活工程。现改用 `scripts/lib/cleanup.sh` 的 `cleanup_project`（外键安全顺序 + 失败打印错误），
+  已清空历史残留并实测"跑完复核 0 残留"。
 * 主密钥 `NOVAMIND_SECRET` 已于 2026-10-05 轮换（当时库内 0 条模型 Key，零代价）。
 
 ## 给下一个会话的接手建议（按序）

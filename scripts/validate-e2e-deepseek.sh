@@ -17,6 +17,7 @@ set -uo pipefail
 # 接口访问令牌：curl 通过 $CURL_HOME/.curlrc 自动带上 Authorization 头（P0 安全修复配套）
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/cleanup.sh"
 
 API="${NOVAMIND_API_BASE:-http://127.0.0.1:8080/api/v1}"
 WORK_DIR="$(mktemp -d)"
@@ -26,11 +27,10 @@ HTTP=""
 BODY=""
 
 cleanup() {
-  for pid in "${PROJECT_ID:-}" "${CREATIVE_PROJECT_ID:-}"; do
-    [[ -n "$pid" ]] || continue
-    psql "$PSQL_URL" \
-      -tAc "delete from projects where id='${pid}'" >/dev/null 2>&1 || true
-  done
+  # 工程级清理：原著/二创/分块/tasks/快照都会一起删（以前直接删 projects 会被外键拒绝，
+  # 错误又被 `|| true` 吞掉 —— 于是每跑一次 e2e 就留两个活工程，实测堆了 10 个）
+  cleanup_project "${PROJECT_ID:-}"
+  cleanup_project "${CREATIVE_PROJECT_ID:-}"
   rm -rf "${WORK_DIR}"
 }
 trap cleanup EXIT

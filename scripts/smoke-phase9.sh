@@ -16,6 +16,7 @@ set -uo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/cleanup.sh"
 
 API="${API_BASE:-http://127.0.0.1:8080/api/v1}"
 WORK_DIR="$(mktemp -d)"
@@ -73,12 +74,9 @@ wait_task() { # wait_task <task_id> [max_seconds]
 
 PID=""; OID=""; CPID=""; CID=""
 cleanup() {
-  [ -n "${CID}" ] && psqlq "delete from chunks where work_id='${CID}'" >/dev/null 2>&1
-  [ -n "${OID}" ] && psqlq "delete from chunks where work_id='${OID}'" >/dev/null 2>&1
-  for pid in "${PID:-}" "${CPID:-}"; do
-    [ -n "${pid}" ] && psqlq "delete from files where project_id='${pid}'" >/dev/null 2>&1
-    [ -n "${pid}" ] && psqlq "delete from projects where id='${pid}'" >/dev/null 2>&1
-  done
+  # 工程级清理（含 chunks / tasks / 原著与二创从属表）—— 以前直接删 projects 会被外键拒绝
+  cleanup_project "${PID:-}"
+  cleanup_project "${CPID:-}"
   rm -rf "${WORK_DIR}"
 }
 trap cleanup EXIT

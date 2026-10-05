@@ -9,6 +9,7 @@ set -uo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-auth.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/db-url.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/cleanup.sh"
 
 API="${API_BASE:-http://127.0.0.1:8080/api/v1}"
 WORK_DIR="$(mktemp -d)"
@@ -27,13 +28,8 @@ psqlq() { psql "$PSQL_URL" -tAc "$1"; }
 
 PID=""; OID=""
 cleanup() {
-  if [ -n "${OID}" ]; then
-    psqlq "delete from chunks where work_kind='original' and work_id='${OID}'" >/dev/null 2>&1
-    psqlq "delete from original_chapters where original_work_id='${OID}'" >/dev/null 2>&1
-    psqlq "delete from original_works where id='${OID}'" >/dev/null 2>&1
-  fi
-  [ -n "${PID}" ] && psqlq "delete from files where project_id='${PID}'" >/dev/null 2>&1
-  [ -n "${PID}" ] && psqlq "delete from projects where id='${PID}'" >/dev/null 2>&1
+  # 工程级清理：原著/章节/分块/tasks 都会一起删掉（工程级外键是 NO ACTION，必须按序删）
+  cleanup_project "${PID:-}"
   rm -rf "${WORK_DIR}"
 }
 trap cleanup EXIT

@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## [2026-10-05] 修掉"冒烟脚本自清理是假的"：验收跑一次就留两个活工程（实测残留 15 个）
+
+跑完本轮验收后核对数据库，发现**所有验收脚本的清理都是无效的**：
+库里堆了 15 个 `deleted_at IS NULL` 的测试工程（端到端验证 ×10、Phase9 上下文验收 ×4、
+检索验收 ×1），每一个还会出现在界面的「文章」列表里。
+
+**根因**：脚本都写 `delete from projects where id=...`，而外键是 `NO ACTION` ——
+`original_works` / `creative_works` / `files` / `tasks` 都引用 projects，
+删除被数据库直接拒绝；脚本又用 `>/dev/null 2>&1 || true` 把错误吞掉。
+"脚本自带 trap 清理、跑完不留测试数据"因此是一句空话，而且连错误都看不到。
+
+**修法**：新增 `scripts/lib/cleanup.sh` 的 `cleanup_project <project_id>`，按外键安全顺序删：
+先算出目标集合（原著 / 二创 / 任务），再
+`chunks → analysis_proposals → tasks → creative_works → original_works → files → projects`。
+清理失败会**打印 psql 的错误正文**，不再静默。三个脚本（`validate-e2e-deepseek.sh`、
+`smoke-phase9.sh`、`smoke-phase9-retrieval.sh`）都改为调用它。
+
+过程中还撞出两个更深的坑（已写进脚本注释，避免下次重踩）：
+
+1. `creative_works.original_work_id` 也是 `NO ACTION` —— e2e 的二创是拿**另一个工程的**原著开出来的，
+   所以清原著工程前必须先清掉引用它的二创作品；
+2. `analysis_proposals.task_id` 引用 tasks（`NO ACTION`）—— 删任务前必须先删提案，
+   否则报 `analysis_proposals_task_id_fkey`；另外该表的原著外键列名是 `work_id`（不是 `original_work_id`）。
+
+**验证**：先用该函数清掉历史残留的 15 个工程（清完 `projects / original_works / creative_works /
+tasks / chunks / context_snapshots` 全为 0，`users=1`、`model_providers=1` 配置表未受影响），
+再重跑 `scripts/smoke-phase9.sh`：**17/17 通过，跑完复核仍是 0 残留**。
+
 ## [2026-10-05] Phase 9 §9.2 接线：检索真的进了提示词，快照记的是真话（验证 17/17 + e2e 37/37）
 
 Phase 9 上一轮做完了"预算与组装模块 + 快照表 + 六类快照写入"，但**检索结果没有接进提示词**：

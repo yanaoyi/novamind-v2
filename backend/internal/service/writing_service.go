@@ -514,6 +514,9 @@ func (s *WritingService) CheckConsistency(
 	if _, err := s.creative.GetWorkByID(ctx, workID); err != nil {
 		return ConsistencyResult{}, err
 	}
+	// 一致性检查同样落快照（Phase 9 §9.2.3）：整本/多章检查按"作品级"记录一次，
+	// 记录检查了哪些章节，便于回溯"这次检查看到的上下文是什么"。
+	s.recordConsistencySnapshot(ctx, workID, chapterIDs)
 	chapters := make([]domain.CreativeChapter, 0)
 	if len(chapterIDs) > 0 {
 		for _, id := range chapterIDs {
@@ -786,5 +789,27 @@ func (s *WritingService) recordRewriteSnapshot(ctx context.Context, in RewriteIn
 	chapterID := in.ChapterID
 	if _, err := s.snapshots.Record(ctx, &chapterID, snapshotKindForAction(in.Action), payload); err != nil {
 		fmt.Printf("[warn] 编辑器 AI 操作快照失败（不影响本次处理）: %v\n", err)
+	}
+}
+
+// recordConsistencySnapshot 记录一次一致性检查的上下文快照（作品级，chapter_id 为空）。
+func (s *WritingService) recordConsistencySnapshot(ctx context.Context, workID string, chapterIDs []string) {
+	if s.snapshots == nil || workID == "" {
+		return
+	}
+	checked := chapterIDs
+	if checked == nil {
+		checked = []string{}
+	}
+	payload := map[string]any{
+		"creative_work_id":  workID,
+		"model_provider":    "default",
+		"prompt_version":    "consistency_check.v2",
+		"checked_chapters":  checked,
+		"retrieved_sources": []any{},
+		"token_budget":      map[string]any{"limit": 8000},
+	}
+	if _, err := s.snapshots.Record(ctx, nil, domain.SnapshotConsistency, payload); err != nil {
+		fmt.Printf("[warn] 一致性检查快照失败（不影响本次检查）: %v\n", err)
 	}
 }

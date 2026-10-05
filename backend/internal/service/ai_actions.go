@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/yanaoyi/novamindv2/backend/internal/domain"
 )
 
 // 规格书 §38 §49 要求的 AI 能力：续写 / 扩写 / 生成 / 问答 / 就地分析。
@@ -98,6 +100,8 @@ func (s *WritingService) AnalyzeText(ctx context.Context, runner PromptRunner, i
 	if strings.TrimSpace(text) == "" {
 		return nil, fmt.Errorf("%w：没有可分析的文本", ErrBadRequest)
 	}
+	// 就地分析也落快照（Phase 9 §9.2.3）；失败只记日志、不影响本次分析。
+	s.recordAnalyzeSnapshot(ctx, in.ChapterID, in.Focus, len([]rune(text)))
 
 	reply, err := runner.RunPrompt(ctx, "text_analyze", map[string]any{
 		"Focus":            in.Focus,
@@ -225,4 +229,22 @@ func tailRunes(s string, n int) string {
 		return s
 	}
 	return string(r[len(r)-n:])
+}
+
+// recordAnalyzeSnapshot 记录一次就地分析的上下文快照。
+func (s *WritingService) recordAnalyzeSnapshot(ctx context.Context, chapterID, focus string, textRunes int) {
+	if s.snapshots == nil || chapterID == "" {
+		return
+	}
+	payload := map[string]any{
+		"model_provider":    "default",
+		"prompt_version":    "text_analyze.v1",
+		"focus":             focus,
+		"analyzed_chars":    textRunes,
+		"retrieved_sources": []any{},
+		"token_budget":      map[string]any{"limit": 8000},
+	}
+	if _, err := s.snapshots.Record(ctx, &chapterID, domain.SnapshotAnalyze, payload); err != nil {
+		fmt.Printf("[warn] 就地分析快照失败（不影响本次分析）: %v\n", err)
+	}
 }

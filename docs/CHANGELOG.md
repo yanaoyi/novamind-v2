@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## [2026-10-05] Phase 9 §9.3 存储层 + §9.5 JSON Schema 校验（P0-4 第一步）
+
+长篇记忆（Memory）分两步做，本轮完成**存储层与校验器**，下一轮接抽取器与回写链路。
+
+**1. 迁移 `0023`：`memory_facts` + `chapter_summaries`**
+
+- `memory_facts`：`kind`（六类，CHECK 约束）、`subject`、`fact`、`chapter_id`、
+  `superseded_by`（自引用，且加了"不得指向自己"的约束）、`embedding vector(1024)`；
+  另建"当前有效事实"的部分索引 `(creative_work_id, kind, subject) WHERE superseded_by IS NULL`。
+- `chapter_summaries`：以 `chapter_id` 为主键（一章一条，重复抽取按主键覆盖）。
+- 三层映射写进迁移注释：Canonical（原著结构化表，只读）/ Creative（`creative_*` + `memory_facts`）/ Episodic（`chapter_summaries` + `memory_facts(kind='event')`）。
+
+**2. supersede 语义（`domain.MemoryFact` + `repository.MemoryRepo`）**
+
+同一 `(kind, subject)` 出现新事实时，旧事实的 `superseded_by` 指向新行 —— **只标记不删**，
+于是"左臂受伤 → 后来痊愈"是可追溯的演变，而不是把历史抹掉。文本完全相同的重复抽取直接跳过
+（重复执行是常态，不该长出重复行）。整批写入在一个事务里：一条非法 → 整批不落库。
+
+**3. §9.5 JSON Schema 校验（`internal/ai/schema.go` + `prompts/schemas/fact_extract.json`）**
+
+手写轻量校验器（任务书 §9.5 允许），支持 `type/properties/required/additionalProperties/items/minItems/maxItems/enum/minLength/maxLength/minimum/maximum`。
+两个刻意的设计：
+
+- **不认识的关键字直接报错**（一般实现会忽略未知关键字，那等于写错的约束静默失效）；
+- **错误信息面向模型**：`$.facts[0].kind 只能是 character_state / world_state / … 之一，实际 mood`
+  —— §9.3.2 要求"校验失败把错误喂回 LLM 修一次"，错误必须能让模型照着改。
+- 另有防漂移测试：schema 里的 `kind` 枚举必须与 `domain.FactKinds()` 完全一致
+  （两处各写一份迟早漂移，那会让"新增事实类型却永远存不进去"静默发生）。
+
+**验证**：真库集成测试 4 例（supersede 保留历史、重复事实跳过、非法输入整批回滚、摘要 upsert/读取）；
+schema 单测 7 例（含枚举越界、多余字段、长度为 0、尾随解释文字、未知关键字）。
+迁移已应用到本机（版本 **23**）。
+
 ## [2026-10-05] Phase 9 §9.1.4：索引自动触发 + 按 ref 增量重建（冒烟 19/19 + e2e 37/37）
 
 上一轮把检索接进了提示词（§9.2），但索引只能靠人工调接口建立 —— 真实使用中 `chunks` 表恒为空，

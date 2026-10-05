@@ -59,7 +59,10 @@
 | §9.2 查询接口 | ✅ | `GET /chapters/:id/snapshots`（列表，不带 payload）、`GET /snapshots/:id`（详情，带 8 段 + 来源 + 模型/版本 + 预算）；后端已完成并有单测 |
 | §9.2 前端查看页 | ⏳ | 前端目前只有 JSON 可读接口，尚未做专门的查看页（Phase 9 任务书说 v1 只要求 JSON 查看页） |
 | §9.1 其余来源（大纲节点/世界规则/人物/事件） | ⏳ | 只有章节正文进了索引；其余来源的取数与触发点未做（见"接手建议"第 3 条） |
-| §9.3 Memory / §9.4 接线 / §9.5 Schema / §9.6 总验收 | ⏳ 未开始 | §9.3/§9.6 需要真实模型（Key 已就位，见下） |
+| §9.3.1 Memory 表 + supersede 语义 | 🟡 **存储层完成** | 迁移 `0023`（`memory_facts` 含六类 kind CHECK / `superseded_by` 自引用且禁止自指 / 部分索引；`chapter_summaries` 一章一条）；`MemoryRepo.CreateFacts` 事务内"同 kind+subject 旧事实标记被替代（只标记不删）+ 完全相同文本跳过"，另有 `ListFacts(onlyActive)` / `UpsertSummary` / `GetSummary`；真库测试 4 例 |
+| §9.5 JSON Schema 校验 | 🟡 **校验器完成** | `internal/ai/schema.go`（手写轻量子集）+ `prompts/schemas/fact_extract.json`；不支持的关键字**报错而非忽略**；错误信息带 JSON 路径与允许值（供 §9.3.2 "喂回模型修一次"）；防漂移测试锁定 schema 枚举 = `domain.FactKinds()` |
+| §9.3.2 事实抽取 / §9.4 回写与一致性接线 | ⏳ **下一步** | 抽取模板 + `extract_facts` 任务 + 章节保存触发 + facts/summary 增量索引 + 抽取后自动触发一致性检查 |
+| §9.6 总验收 | ⏳ 未开始 | 需要真实模型（Key 已就位，见下） |
 
 ## 本期抓到的两个真缺陷（都写进 CHANGELOG）
 

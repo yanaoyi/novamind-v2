@@ -105,6 +105,32 @@ for q in "${QUERIES[@]}"; do
 done
 check "召回命中数 ≥4/5（任务书验收线）" "True" "$([ "${HITS}" -ge 4 ] && echo True || echo False)"
 
+echo "== 5. 性能基线：100 章作品检索 P95（任务书要求 < 2s）"
+# 5 个 query × 6 轮 = 30 次采样（BM25 是 Go 内全量打分，这里量的就是它）
+LAT_FILE="${WORK_DIR}/latency.txt"
+: > "${LAT_FILE}"
+for _ in 1 2 3 4 5 6; do
+  for q in "${QUERIES[@]}"; do
+    curl -s -o /dev/null -w '%{time_total}\n' -X POST "${API}/retrieval/search" \
+      -H 'Content-Type: application/json' \
+      -d "{\"work_kind\":\"original\",\"work_id\":\"${OID}\",\"query\":\"${q}\",\"top_k\":8}" >> "${LAT_FILE}"
+  done
+done
+PERF=$(python3 - "${LAT_FILE}" <<'PY'
+import sys
+vals = sorted(float(x) for x in open(sys.argv[1]) if x.strip())
+if not vals:
+    print("0 0 0 0"); raise SystemExit
+# 最近秩法取 P95（30 个样本 → 第 29 个）
+idx = max(0, min(len(vals) - 1, int(0.95 * len(vals) + 0.5) - 1))
+print(f"{vals[len(vals)//2]:.3f} {vals[idx]:.3f} {vals[-1]:.3f} {len(vals)}")
+PY
+)
+set -- ${PERF}
+echo "     中位数 ${1}s / P95 ${2}s / 最大 ${3}s（采样 ${4} 次）"
+check "检索 P95 < 2s（记录在案，不达标要加 ivfflat）" "True" \
+  "$(python3 -c "print('True' if float('${2}') < 2.0 else 'False')")"
+
 echo
 echo "== 结果：通过 ${PASS} 项，失败 ${FAIL} 项（召回 ${HITS}/5）"
 [ "${FAIL}" -eq 0 ]

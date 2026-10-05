@@ -26,74 +26,7 @@ WORK_DIR="$(mktemp -d)"
 PASS=0
 FAIL=0
 
-check() { # check 描述 期望 实际
-  if [ "$2" = "$3" ]; then
-    echo "  ✓ $1 ($3)"; PASS=$((PASS + 1))
-  else
-    echo "  ✗ $1：期望 $2，实际 $3"; FAIL=$((FAIL + 1))
-  fi
-}
-
-field() { python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print($1)"; }
-psqlq() { psql "$PSQL_URL" -tAc "$1"; }
-
-# post_json：POST 并原样吐出响应体；非 2xx 时打印 HTTP 状态与响应正文再返回非零。
-# 为什么不用 curl -sf：它会把错误响应悄悄吞掉，脚本只会表现成"某个字段是空的"，
-# 排障时完全看不出发生了什么（本脚本第一版就踩了这个坑）。
-post_json() {
-  local path="$1" body="$2" tmp http
-  tmp="$(mktemp)"
-  http="$(curl -s -o "${tmp}" -w '%{http_code}' -X POST "${API}${path}" \
-    -H 'Content-Type: application/json' -d "${body}")"
-  if [[ ! "${http}" =~ ^2 ]]; then
-    echo "  ✗ POST ${path} → HTTP ${http}：$(head -c 400 "${tmp}")" >&2
-    rm -f "${tmp}"
-    return 1
-  fi
-  cat "${tmp}"
-  rm -f "${tmp}"
-}
-
-# mkv：POST 建对象并把某个字段写进变量；失败即终止。
-#
-# 为什么是"写进变量"而不是 `X=$(mk ...)`：命令替换里的函数跑在**子 shell**，
-# 里面的 exit 只结束子 shell，主脚本会带着空 ID 继续往下跑，
-# 表现成"后面一连串莫名其妙的失败"。这里用 printf -v 直接赋值，exit 才真的能终止脚本。
-mkv() { # mkv VAR_NAME LABEL PATH BODY FIELD_EXPR
-  local __var="$1" __label="$2" out
-  if ! out="$(post_json "$3" "$4")"; then
-    echo "== 中断（${__label} 失败，已清理）" >&2
-    exit 1
-  fi
-  printf -v "${__var}" '%s' "$(echo "${out}" | field "$5")"
-}
-
-wait_task() { # wait_task <task_id> [max_seconds]
-  local id="$1" limit="${2:-180}" status="" i=0
-  while [ "${i}" -lt "${limit}" ]; do
-    status="$(curl -sf "${API}/tasks/${id}" | field "d['status']" 2>/dev/null || echo '')"
-    case "${status}" in COMPLETED|FAILED|CANCELLED) echo "${status}"; return ;; esac
-    sleep 1
-    i=$((i + 1))
-  done
-  echo "${status:-TIMEOUT}"
-}
-
-# wait_auto_task：等"系统自动触发"的某类任务完成（本脚本不手工入队 —— 那正是要验的东西）。
-# 入参：过滤参数名（work_id / creative_work_id）、值、任务类型。
-wait_auto_task() {
-  local param="$1" id="$2" kind="$3" limit="${4:-180}" status="" i=0
-  while [ "${i}" -lt "${limit}" ]; do
-    status="$(curl -s "${API}/tasks?${param}=${id}&type=${kind}&page_size=1" \
-      | field "d['items'][0]['status'] if d['items'] else ''" 2>/dev/null || echo '')"
-    case "${status}" in COMPLETED|FAILED|CANCELLED) echo "${status}"; return ;; esac
-    sleep 1
-    i=$((i + 1))
-  done
-  echo "${status:-NO_TASK}"
-}
-
-wait_index() { wait_auto_task "$1" "$2" "index_chunks" "${3:-180}"; }
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/api-test.sh"
 
 PID=""; OID=""; CPID=""; CID=""
 cleanup() {

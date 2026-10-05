@@ -26,9 +26,9 @@
 | §27 | 大纲（Outline / OutlineNode） | ✅ | 2026-10-04：迁移 `0014` 建 `outlines` + `outline_nodes`（卷 → 节 → 章三层，parent_id 自引用）；14 个端点 + 前端「二创 · 大纲」页（手搭 / AI 候选采纳 / 一键落成章节 / 版本与比较）。此前只有「卷 + 章节大纲字段」近似，AI 生成大纲的产物无处落库 |
 | §28–§29 | Chapter / Scene | ✅ | 迁移 `0011` |
 | **§30** | **素材（Material）** | ❌ **未实现** | 无 `materials` 表与页面 |
-| §31 | Context Engine（优先级 10 段） | 🟡 **部分** | 写作上下文拼人物 DNA + 世界规则 + 前 3 章摘要；**一致性检查已扩到五类上下文**（人物/世界/时间线/剧情/原著继承）；仍缺原著检索片段（依赖 §55） |
-| **§32** | **ContextSnapshot** | ❌ **未实现** | 无快照表、无落库 |
-| **§33** | **Memory 三层** | ❌ **未实现** | `internal/memory` 为空目录 |
+| §31 | Context Engine（优先级 10 段） | ✅ **已闭环** | 2026-10-05：`internal/context` 把 §31 的 10 段收敛成 8 段 + 8000 token 预算（固定段：章节目标/人物/世界；可截段按"检索 → 前情 → 时间线 → 作者指令"顺序牺牲）；六条 AI 链路（生成/续写/改写/扩写/就地分析/一致性检查）全部走 `检索 → 组装 → 提示词 → 快照`，提示词与快照同源（同一个 Assembly） |
+| **§32** | **ContextSnapshot** | ✅ **已闭环** | 迁移 `0020` + `SnapshotService` + `GET /chapters/:id/snapshots` / `GET /snapshots/:id`；每次 AI 调用**先落快照再调模型**，含 8 段、检索来源（chunk id/ref_kind/ref_id/score/work_kind）、真实模型与模板版本、token 用量与截断；只增不改。前端暂用 JSON 可读接口（任务书 v1 只要求 JSON 查看） |
+| **§33** | **Memory 三层** | ✅ **已闭环** | 迁移 `0023`：`memory_facts` + `chapter_summaries`；三层映射 Canonical（原著结构化表，只读）/ Creative（`creative_*` + `memory_facts`）/ Episodic（`chapter_summaries` + `event` 类事实）。`extract_facts` 任务由正文变化自动触发，输出过 JSON Schema 校验，supersede 只标记不删；事实与摘要进检索索引（被替代的旧事实清空索引块），抽取完自动排一次一致性检查 |
 | **§34–§35** | **7 个 Agent + Agent Runtime（Agent → Tool → Service → DB）** | ❌ **未实现** | `internal/agent` 为空目录；任务是 handler 直接调 service |
 | §36 | Model Gateway | ✅ | OpenAI 兼容 + Anthropic，密钥 AES-GCM |
 | §37 | Prompt Engine（版本化模板） | ✅ | `prompts/<域>/<name>.<version>.md`，编译进二进制 |
@@ -41,9 +41,9 @@
 | §51 | 数据库设计原则 | ✅ | UUID / 时间戳 / 软删除 / 外键 / JSONB |
 | §52 | 数据权限边界（AI 不改原著） | ✅ | 提案表 + 审核事务 |
 | §53–§54 | 任务系统 / 分阶段分析 | ✅ | PostgreSQL 队列（`FOR UPDATE SKIP LOCKED`），非 Redis/Asynq；4 个分析阶段 |
-| **§55** | **检索系统（Chunk / Embedding / 向量 + 混合检索）** | ❌ **未实现** | `internal/retrieval` 为空目录，无 pgvector、无 Embedding |
-| §56 | 写作 Context Assembly | 🟡 **部分** | 见 §31 |
-| §57–§58 | 结构化输出 / 错误处理 | 🟡 **部分** | 只有 JSON 容错提取，无 Schema 校验、无自动修复重试接线（`IsJSONInvalid` 未被调用） |
+| **§55** | **检索系统（Chunk / Embedding / 向量 + 混合检索）** | 🟡 **BM25 已闭环，向量路待验收** | 已实现：`chunks` 表（迁移 `0019`）+ 切块（≤800 字/重叠 150）+ 索引任务与**自动触发**（导入/章节/人物/规则/大纲）+ BM25（char-bigram 零依赖）+ RRF 融合 + 检索调试接口。向量路：pgvector 0.8.0 已装、`embedding vector(1024)`（`0021`）与 embed 配置（`0022`）、`Gateway.Embed` 已就绪，**唯一缺"用真实向量模型跑一次召回验收"**（本机 DeepSeek 无 `/embeddings`）。性能基线：100 章 / 300 块，P95 **0.024s**（要求 <2s） |
+| §56 | 写作 Context Assembly | ✅ | 见 §31（统一走 `context.AssembleForChapter`） |
+| §57–§58 | 结构化输出 / 错误处理 | ✅ | 2026-10-05：`internal/ai/schema.go` 手写 JSON Schema 校验（不认识的关键字报错而非忽略）+ `prompts/schemas/fact_extract.json`；`RunJSONPromptValidated` 把校验问题喂回模型修一次；结构化输出截断自动收敛重试（§58） |
 | §59 | 版本管理（查看 / 恢复 / **比较**） | ✅ **已闭环** | 2026-10-04：`GET /versions/compare` 支持四类实体（人物/世界观/大纲字段级 diff、章节正文行级 LCS diff）+ 前端 `VersionDiff` 组件（版本抽屉里「比较」按钮） |
 | §60 | 自动保存 | ✅ | debounce 1.5s + 切章 flush |
 | §61 | 导出（TXT / Markdown / DOCX） | ✅ | 自建最小 OOXML |

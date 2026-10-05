@@ -13,6 +13,7 @@
 | 产品边界与技术架构 | [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | 每一轮改了什么、怎么验证的 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) |
 | 当前开发状态与下一步 | [`docs/CODEX_STATE.md`](docs/CODEX_STATE.md) |
+| 开发工作流（一次「小版本修订」怎么走） | [`docs/WORKFLOW.md`](docs/WORKFLOW.md) |
 
 验证方式（都可复跑）：
 

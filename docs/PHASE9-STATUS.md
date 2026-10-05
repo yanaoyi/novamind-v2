@@ -71,6 +71,27 @@
 
 ## 给下一个会话的接手建议（按序）
 
+## 待办：真实向量召回验收（需要 embeddings Key）
+
+**状态**：向量路的**代码与单测已就绪**，唯一缺的是"用真实向量模型跑一次召回验收"。
+
+已完成（`v2.1.0-dev` 上）：
+
+* pgvector 0.8.0 已安装并启用（源码编译，apt 无包）；迁移 `0021` 给 `chunks` 加了 `embedding vector(1024)`
+* `Gateway.Embed`：OpenAI 兼容 `/embeddings`，32 条分批、5xx/429 重试、返回顺序按 index 严格对齐
+* `model_providers` 增 `embed_api_base` / `embed_model_name`（迁移 `0022`），**embed_api_base 同样过 SSRF 校验**
+* `ResolveEmbedConfig`：空值回退（`embed_api_base → api_base`、`embed_model_name → BAAI/bge-large-zh-v1.5`）
+
+缺什么：
+
+1. **索引任务补写向量**（切块后分批调 `Embed`，批间 200ms 限速；失败走任务重试）
+2. **检索向量路**（`ORDER BY embedding <=> $1 LIMIT topK*2`）并把它与 BM25 的排名一起交给 `FuseRRF`（融合接口早已就位）
+3. **真实向量召回验收**：复用 `scripts/smoke-phase9-retrieval.sh` 的 100 章语料，跑"写向量 → 向量/混合检索 → 5 个 query 命中率"，与 BM25 的 5/5 做对比并记录
+
+为什么卡住：**DeepSeek 没有 `/embeddings` 端点**，当前挂着的验证账号跑不了向量。需要 BOSS 提供一个支持 embeddings 的 Key（OpenAI / 智谱 / 硅基流动 / 本地 BGE 任一）；拿到后我会：配置到 provider → 跑验收 → 把结果记进本文件与 CHANGELOG → 交付前照例 `purge`。
+
+在此之前，第 1、2 项我会先实现并用**假上游**做单测（验证分批、限速、向量路与 BM25 的融合、以及"没有向量时自动跳过向量路"），确保代码路径可信；只有第 3 项标记为待 Key。
+
 1. 先读：`Phase9-任务书.md` → 本文件 → `docs/CHANGELOG.md`（2026-10-05 几条）→ `AGENTS.md`（Git 规则）
 2. 做 §9.2 接线：`context.AssembleForChapter` 接进 `GenerateChapterDraft` 与一致性检查，prompt 模板 version+1，**跑 e2e 37/37** 再提交
 3. 补 §9.1 剩余来源（大纲节点/世界规则/人物/事件）与**增量索引**（按 ref 重建）

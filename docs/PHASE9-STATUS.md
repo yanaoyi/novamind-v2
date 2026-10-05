@@ -1,6 +1,36 @@
 # Phase 9 进度与交接（Context Engine + Retrieval + Memory）
 
-> 更新：2026-10-05 ｜ 分支：`phase9`（main 未受影响）｜ 冻结基线：tag `v0.9.0-mvp`
+> 更新：2026-10-05（晚）｜ 开发分支：**`v2.1.0-dev`**（与 `phase9` 同步）｜ 冻结基线：tag **`v2.0.0`**（原 `v0.9.0-mvp` 同点）
+> 命名对齐：按《20261005-chatgpt-NovaMind_V2_修订任务清单v1》§18 —— v2.0.0 冻结 MVP，v2.1.0-dev 上做 P0 四项。
+
+## 与 ChatGPT 版《修订任务清单 v1》的差异（2026-10-05 新增）
+
+清单与 Phase 9 任务书同源，但也提出了几条**额外要求**，逐条记下避免漏项：
+
+| 清单要求 | 当前状态 |
+|---|---|
+| P0-1 至少 **20 条固定检索测试样例** | ✅ 已补：`internal/retrieval/search_cases_test.go`（12 块固定语料、20 条 query，含跨章伏笔串联与多词复合；另有"样例数不得少于 20"的守卫用例） |
+| P0-1 **Embedding + pgvector + 向量检索** | ⛔ 阻塞（本机 PG15 装不了 pgvector）→ 当前 BM25-only + RRF 框架已就位，向量路接入点留好 |
+| P0-2 Context Engine 覆盖 **generate/continue/rewrite/expand/analyze/consistency 六条链路** | ⏳ 只做了预算与组装模块；**接线未做**（注意清单要求**改写/扩写**也走 Context Engine，比 Phase 9 任务书写得更宽） |
+| P0-3 快照字段要含 `model` / `prompt_version` / `retrieved_sources` / `token_budget` / `author_instruction` | ⏳ 表与服务已就绪，**接线时按这份字段清单组装 payload**（当前 JSONB 结构自由，接线时必须对齐） |
+| P1 **PostgreSQL 版本统一（16 + pgvector）** | ❌ 未做：本机 15.19 vs docker pg16 不一致；**与 pgvector 阻塞是同一件事**，需 BOSS 决策（给 sudo / 上 Docker / 维持 BM25-only） |
+| P1 任务系统文档统一（PG queue，非 Redis/Asynq） | ⏳ 需检查并修正 `ARCHITECTURE.md` 里可能残留的 Redis/Asynq 描述 |
+| P1 Docker 真正部署验证 | ⏳ 未做（本机无 Docker） |
+| P1 状态措辞（不再写"主体全部完成"） | ⏳ 按清单建议格式重写 `CODEX_STATE.md` 口径 |
+| P1 JSON Schema **七类**（Character/World/Timeline/Event/Outline/Consistency/Memory Fact） | ⏳ 未开始（Phase 9 §9.5 只要求 fact_extract，清单扩到七类） |
+| P1 Prompt Injection **分层 + 测试集** | 🟡 已有用户内容边界标记；分层顺序与注入测试集待补 |
+| P2 二创剧情 / 素材（统一进 Retrieval）/ 知识库 | ⏳ 未开始 |
+| Agent | ✅ 与清单一致：**暂缓** |
+
+## 本期新发现并修掉的真缺陷（2026-10-05 晚）
+
+**引入 `chapter_generate.v2` 导致"写本章"渲染失败**（自己埋的，已修）：
+
+* 模板引擎设置 `missingkey=error`，且**按 name 取最新版** → v2 一进仓库就对 `chapter_generate` 生效，而调用方还没传新增的 `RetrievedOriginal`/`RetrievedCreative` → 写本章会直接渲染失败；
+* 当时 37/37 的 e2e 是在加 v2 **之前**跑的，没有任何证据暴露它；
+* 修法：同一提交内补齐两个模板变量（当前为空串，接线时换成 `FormatRetrieval` 的结果）；
+* 复验：真实模型 e2e **37/37** 恢复通过；
+* **教训（已写进提交信息）**：在 `missingkey=error` 下，"模板先行、调用方后补"不是渐进增强，而是静默故障——引入新模板必须同一提交补齐变量。
 > 任务书：根目录 `Phase9-任务书.md`（本节按它的 9.1→9.6 编号对照）
 
 ## 前置检查结论（任务书要求不许跳过）
